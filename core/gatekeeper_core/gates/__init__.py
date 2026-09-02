@@ -4,7 +4,7 @@ Kontrakt jest jeden i celowo wąski: `Gate.run(ChangeContext) -> GateResult`.
 Nowa bramka nie wymaga dotykania rdzenia (TOOLS.md §9) — dosłownie: bramki
 rejestrują się przez entry points (grupa `gatekeeper.gates`), nie przez
 wpisanie do listy importów tutaj. Ten pakiet (`gatekeeper`) rejestruje przez
-ten sam mechanizm swoje własne dziesięć bramek (`pyproject.toml`) — rdzeń
+ten sam mechanizm swoje własne jedenaście bramek (`pyproject.toml`) — rdzeń
 je swój własny dogfood, więc mechanizm jest udowodniony niezależnie od tego,
 czy jakikolwiek zewnętrzny pakiet z bramkami jest w ogóle zainstalowany.
 """

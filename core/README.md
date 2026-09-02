@@ -5,7 +5,7 @@ Silnik bramy jakości dla kodu generowanego przez agentów LLM — **rdzeń**, w
 Sam w sobie nie ocenia żadnego konkretnego języka — dostarcza:
 
 - `core/` — `ChangeContext` (git), `Finding`/`GateResult`/`Decision`, silnik polityki (`policy/gates.yaml`, bez `eval`), raport do PR, ślad przebiegów w SQLite, metryki, sandbox (izolacja sieci/pamięci/czasu), orchestrator (fale bramek wg zależności, budżety, ścieżka szybka dla docs-only).
-- `gates/` — dziesięć bramek: `G0.provenance`, `G0.scope`, `G3.secrets` (w pełni language-agnostic) oraz pięć **agregatorów** (`G1.static`, `G1.deps`, `G3.sca`, `G3.sast`, `G2.cross_verify`/`G2.test_sanity`/`G2.diff_coverage`) — te ostatnie nie mają żadnej logiki językowej, tylko pętlę po zainstalowanych dostawcach poziomu 2.
+- `gates/` — jedenaście bramek: `G0.provenance`, `G0.scope`, `G3.secrets` (w pełni language-agnostic) oraz pięć **agregatorów** (`G1.static`, `G1.deps`, `G3.sca`, `G3.sast`, `G2.cross_verify`/`G2.test_sanity`/`G2.diff_coverage`) — te ostatnie nie mają żadnej logiki językowej, tylko pętlę po zainstalowanych dostawcach poziomu 2.
 - `core/plugins.py` — kontrakty pluginów: `StaticChecker`, `EcosystemProvider`, `TestToolchain`, `SemgrepRulePackProvider`.
 - CLI (`gatekeeper run/policy/calibrate/verdict/incident/metrics`).
 
@@ -13,7 +13,7 @@ Sam w sobie nie ocenia żadnego konkretnego języka — dostarcza:
 
 Dwa poziomy:
 
-1. **`gatekeeper.gates`** (entry points) — rejestruje całe bramki. Ten pakiet rejestruje przez tę grupę własnych dziesięć bramek; pack językowy może w przyszłości dodać nową bramkę bez dotykania tego repo.
+1. **`gatekeeper.gates`** (entry points) — rejestruje całe bramki. Ten pakiet rejestruje przez tę grupę własne jedenaście bramek; pack językowy może w przyszłości dodać nową bramkę bez dotykania tego repo.
 2. **Cztery mniejsze grupy** — dostawca *wewnątrz* jednej logicznej bramki, żeby `G1.static` (itd.) zostało jednym gate ID niezależnie od liczby zainstalowanych pack'ów:
 
    | Grupa | Protokół | Kto odkrywa | Kto dostarcza |

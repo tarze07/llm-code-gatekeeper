@@ -38,16 +38,19 @@ from .runner import describe_isolation
 NOT_CHECKED = [
     "testy mutacyjne, flaky-testy, contract-diff (G2) — kamień 4, w toku "
     "(G2.test_sanity i G2.diff_coverage zbudowane)",
-    "G2.cross_verify (nowe testy przeciw kodowi sprzed zmiany) — tylko Python; "
-    "adapter TS/JS (vitest/jest) i C# (dotnet test) w planie",
+    "G2.cross_verify (nowe testy przeciw kodowi sprzed zmiany) — Python i C#; "
+    "adapter TS/JS (vitest/jest) w planie",
     "IaC i licencje (G3) — kamień 3 w toku; SCA sam w sobie obejmuje "
     "PyPI/npm/NuGet, poza tym zakresem zależności to jeszcze dług",
+    "CRAP (złożoność × brak pokrycia) — wymaga G2.diff_coverage bez `warn_only`; "
+    "G1.complexity mierzy samą złożoność już dziś (PLAN-G1-complexity.md §8)",
     "review semantyczny LLM (G4) — kamień 5",
     "gotowość wdrożeniowa: migracje, rollback, obserwowalność (G6) — kamień 6",
 ]
 
 #: Zależności między bramkami. Klucz uruchamia się dopiero po wartościach.
 DEPENDENCIES: dict[str, tuple[str, ...]] = {
+    "G1.complexity": ("G0.scope", "G0.provenance"),
     "G1.deps": ("G0.scope", "G0.provenance"),
     "G1.static": ("G0.scope", "G0.provenance"),
     "G3.secrets": ("G0.scope", "G0.provenance"),

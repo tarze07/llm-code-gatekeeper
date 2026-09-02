@@ -201,3 +201,50 @@ class SemgrepRulePackProvider(Protocol):
     pack_id: str
 
     def rules_dir(self) -> Path: ...
+
+
+# --------------------------------------------------------------- G1.complexity
+
+
+@dataclass(frozen=True)
+class MethodComplexity:
+    """Złożoność cyklomatyczna (McCabe) jednej metody/funkcji. Kształt zgodny
+    z PLAN-G1-complexity.md §2.2 (csharp-pack)."""
+
+    file: str
+    #: Kwalifikowana nazwa, np. `"mod.Klasa.metoda"` — nie sam identyfikator,
+    #: bo dwie metody o tej samej nazwie w różnych klasach muszą się dało
+    #: rozróżnić w raporcie.
+    name: str
+    lineno: int
+    end_lineno: int
+    complexity: int
+    #: Linie niepuste w ciele — fakt poboczny, próg v1 go nie używa
+    #: (PLAN-G1-complexity.md §8: NLOC czeka na kalibrację).
+    nloc: int = 0
+
+
+@dataclass
+class ComplexityOutcome:
+    methods: list[MethodComplexity] = field(default_factory=list)
+    #: Klucze już z prefiksem analizatora (np. `"complexity.python_files_checked"`)
+    #: — `ComplexityAnalyzer.empty_facts()` i `analyze()` muszą się zgadzać co do kluczy.
+    facts: dict[str, Any] = field(default_factory=dict)
+    #: Ustawione => bramka-agregator zwraca `GateResult(status="error")`.
+    error: str | None = None
+
+
+class ComplexityAnalyzer(Protocol):
+    """Złożoność cyklomatyczna wszystkich funkcji/metod jednego języka na
+    zmienionych plikach — G1.complexity (PLAN-G1-complexity.md)."""
+
+    #: Namespace faktów — NIE gate id (ten zostaje jeden: `G1.complexity`).
+    analyzer_id: str
+    #: Wartości `ChangedFile.language`, które ten analizator obsługuje.
+    languages: tuple[str, ...]
+
+    def empty_facts(self) -> dict[str, Any]: ...
+
+    def analyze(
+        self, change: ChangeContext, config: dict[str, Any], gate_id: str, budget_s: float
+    ) -> ComplexityOutcome: ...

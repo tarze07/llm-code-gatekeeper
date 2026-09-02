@@ -48,6 +48,14 @@ thresholds:
   sca.vulnerable_package_count:
     max: 0
     message: "Nowo dodana zależność ma znaną podatność."
+  complexity.max:
+    max: 10
+    message: >-
+      Funkcja w diffie przekracza złożoność cyklomatyczną 10 —
+      rozbij na strażników (Uncle Bob / G1.complexity).
+  complexity.over_threshold_count:
+    max: 0
+    message: "W diffie są funkcje powyżej progu złożoności."
 
 human_review_required_when:
   - paths_match:
@@ -72,6 +80,9 @@ warn_only:
   - G3.sca
 
 gates:
+  G1.complexity:
+    max_method: 10
+    include_tests: false
   G1.deps:
     min_age_days: 90
     internal_prefixes: []
