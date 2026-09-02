@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gatekeeper.core.change import (
+from gatekeeper_core.core.change import (
     ChangeContext,
     glob_to_regex,
     matches_any,

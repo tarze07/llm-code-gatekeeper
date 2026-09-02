@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import subprocess
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-
-from gatekeeper.deps.registries import PackageInfo
 
 
 class Repo:
@@ -51,27 +48,3 @@ def repo(tmp_path: Path) -> Repo:
     r.write("src/app.py", "def hello():\n    return 'hi'\n")
     r.commit("initial")
     return r
-
-
-class FakeRegistry:
-    """Rejestr sterowany słownikiem — testy nie dotykają sieci."""
-
-    def __init__(self, ecosystem: str, packages: dict[str, dict]) -> None:
-        self.ecosystem = ecosystem
-        self.packages = packages
-        self.calls: list[str] = []
-
-    def fetch(self, name: str) -> PackageInfo:
-        self.calls.append(name)
-        spec = self.packages.get(name.lower())
-        if spec is None:
-            return PackageInfo(self.ecosystem, name, exists=False)
-        age_days = spec.get("age_days", 1000)
-        return PackageInfo(
-            ecosystem=self.ecosystem,
-            name=name,
-            exists=True,
-            first_release=datetime.now(UTC) - timedelta(days=age_days),
-            latest_release=datetime.now(UTC),
-            repo_url=spec.get("repo_url", "https://github.com/example/example"),
-        )

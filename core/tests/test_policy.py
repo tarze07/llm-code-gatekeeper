@@ -4,8 +4,8 @@ from datetime import date, timedelta
 
 import pytest
 
-from gatekeeper.core.finding import Finding, GateResult, Severity, Verdict
-from gatekeeper.core.policy import Exemption, Expression, Policy, PolicyError
+from gatekeeper_core.core.finding import Finding, GateResult, Severity, Verdict
+from gatekeeper_core.core.policy import Exemption, Expression, Policy, PolicyError
 
 POLICY = {
     "version": 1,
@@ -92,7 +92,7 @@ def test_czysty_przebieg_daje_pass():
 
 
 def test_paths_match_kieruje_do_czlowieka(repo):
-    from gatekeeper.core.change import ChangeContext
+    from gatekeeper_core.core.change import ChangeContext
 
     repo.checkout("feature", create=True)
     repo.write("src/auth/login.py", "def login():\n    return True\n")

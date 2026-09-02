@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from gatekeeper.adapters import gitleaks
-from gatekeeper.core.change import ChangeContext
-from gatekeeper.core.finding import Decision, RunResult, Verdict
-from gatekeeper.core.report import render_markdown
-from gatekeeper.gates.g3_secrets import SecretsGate
+from gatekeeper_core.adapters import gitleaks
+from gatekeeper_core.core.change import ChangeContext
+from gatekeeper_core.core.finding import Decision, RunResult, Verdict
+from gatekeeper_core.core.report import render_markdown
+from gatekeeper_core.gates.g3_secrets import SecretsGate
 
 GOLDEN = Path(__file__).parent / "data" / "gitleaks_report.json"
 SECRET = "AKIAIOSFODNN7EXAMPLE"
@@ -49,7 +49,7 @@ def test_sekret_nigdy_nie_trafia_do_raportu_w_jawnej_postaci():
 
 
 def _result_with(finding):
-    from gatekeeper.core.finding import GateResult
+    from gatekeeper_core.core.finding import GateResult
 
     return GateResult(gate="G3.secrets", status="fail", findings=[finding])
 

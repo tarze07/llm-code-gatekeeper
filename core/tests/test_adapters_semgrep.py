@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gatekeeper.adapters.semgrep import parse_semgrep
-from gatekeeper.core.finding import Severity
+from gatekeeper_core.adapters.semgrep import parse_semgrep
+from gatekeeper_core.core.finding import Severity
 
 GOLDEN = Path(__file__).parent / "data" / "semgrep_never_output.json"
 REPO = Path(__file__).parent.parent

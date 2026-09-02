@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import time
 
-from gatekeeper.core.change import ChangeContext
-from gatekeeper.core.finding import GateResult, Verdict
-from gatekeeper.core.orchestrator import build_plan, run_gates
-from gatekeeper.core.policy import Policy
-from gatekeeper.gates import Gate
-from gatekeeper.gates.g0_scope import ScopeGuard
+from gatekeeper_core.core.change import ChangeContext
+from gatekeeper_core.core.finding import GateResult, Verdict
+from gatekeeper_core.core.orchestrator import build_plan, run_gates
+from gatekeeper_core.core.policy import Policy
+from gatekeeper_core.gates import Gate
+from gatekeeper_core.gates.g0_scope import ScopeGuard
 
 
 class Stub(Gate):

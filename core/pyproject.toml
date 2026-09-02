@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-code-gatekeeper-core"
+version = "0.1.0"
+description = "Silnik bramy jakości dla kodu generowanego przez agentów LLM: orchestrator, policy, plugin API"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+# `semgrep` uruchamiany jest jako podproces (`core.runner.Sandbox`), nie jako
+# biblioteka Pythona — brak go nie wywraca instalacji, `G3.sast` zgłasza
+# `error` z jasnym komunikatem.
+gates = [
+    "semgrep>=1.70",
+]
+
+[project.scripts]
+gatekeeper = "gatekeeper_core.cli:main"
+
+# Bramki rejestrują się przez entry points, nie przez listę importów w
+# `gatekeeper_core/gates/__init__.py` — ten pakiet rejestruje tu swoje
+# własne dziesięć bramek (dogfooding mechanizmu pluginów, patrz
+# `core/plugins.py` i `gatekeeper_core/gates/__init__.py::all_gates()`).
+# Pack'i językowe (llm-code-gatekeeper, -ts, -csharp) NIE dodają tu nic
+# nowego — dokładają dostawców poziomu 2 (patrz grupy niżej), nie nowe
+# gate ID.
+[project.entry-points."gatekeeper.gates"]
+"G0.provenance" = "gatekeeper_core.gates.g0_provenance:Provenance"
+"G0.scope" = "gatekeeper_core.gates.g0_scope:ScopeGuard"
+"G1.deps" = "gatekeeper_core.gates.g1_deps:DepGuard"
+"G1.static" = "gatekeeper_core.gates.g1_static:StaticGuard"
+"G2.cross_verify" = "gatekeeper_core.gates.g2_crossverify:CrossVerify"
+"G2.test_sanity" = "gatekeeper_core.gates.g2_test_sanity:TestSanity"
+"G2.diff_coverage" = "gatekeeper_core.gates.g2_diff_coverage:DiffCoverage"
+"G3.sast" = "gatekeeper_core.gates.g3_sast:SastGuard"
+"G3.sca" = "gatekeeper_core.gates.g3_sca:ScaGuard"
+"G3.secrets" = "gatekeeper_core.gates.g3_secrets:SecretsGate"
+
+# Reguła uniwersalna (json/yaml — nie dotyczy żadnego konkretnego języka
+# celu, więc żyje w core, nie w pack'u): wildcardowa polityka IAM.
+[project.entry-points."gatekeeper.semgrep_rule_packs"]
+core = "gatekeeper_core.adapters.semgrep:CoreRulePack"
+
+# Manifest+rejestr+typosquat+SCA per ekosystem pakietów (`deps/ecosystems.py`)
+# żyje w core, nie w pack'ach: G1.deps/G3.sca są bramkami core-owymi, a to
+# jest wyłącznie ich infrastruktura — pack językowy niczego tu nie dokłada.
+[project.entry-points."gatekeeper.dep_ecosystems"]
+pypi = "gatekeeper_core.deps.ecosystems:PyPIEcosystem"
+npm = "gatekeeper_core.deps.ecosystems:NpmEcosystem"
+nuget = "gatekeeper_core.deps.ecosystems:NuGetEcosystem"
+
+[tool.setuptools.packages.find]
+include = ["gatekeeper_core*"]
+
+[tool.setuptools.package-data]
+gatekeeper_core = ["rules/semgrep/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# typer buduje interfejs CLI z wartości domyślnych — B008 nie ma tu zastosowania
+"gatekeeper_core/cli.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true

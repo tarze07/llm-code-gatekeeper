@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from gatekeeper.core.change import ChangeContext
-from gatekeeper.gates.g0_scope import ScopeGuard
+from gatekeeper_core.core.change import ChangeContext
+from gatekeeper_core.gates.g0_scope import ScopeGuard
 
 
 def _scope_map(repo, mapping: str) -> None:

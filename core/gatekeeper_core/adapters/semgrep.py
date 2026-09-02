@@ -9,6 +9,7 @@ pozytywny.
 from __future__ import annotations
 
 import json
+from importlib.resources import files
 from pathlib import Path
 
 from ..core.finding import Finding, Severity
@@ -16,12 +17,6 @@ from ..core.runner import Sandbox
 from .base import relative_to_repo, run_tool
 
 SEMGREP = "semgrep"
-#: Ważne tylko dopóki `gatekeeper` jest monolitem: po fizycznym rozbiciu na
-#: pack'i per język ta stała znika — każdy pack niesie własny
-#: `rules/semgrep/never.yaml` jako `package-data`, odkrywany przez
-#: `importlib.resources`, nie przez wspinanie się po `__file__.parent`
-#: (dzisiejszy sposób nie przeżyłby instalacji z wheela).
-RULES_DIR = Path(__file__).resolve().parent.parent.parent / "rules" / "semgrep"
 
 SEVERITY = {
     "ERROR": Severity.CRITICAL,
@@ -30,16 +25,25 @@ SEVERITY = {
 }
 
 
-class MonolithRulePack:
-    """Jedyny dziś zarejestrowany `SemgrepRulePackProvider` (patrz
-    `core/plugins.py`) — niesie CAŁY `rules/semgrep/` jednym plikiem, bo
-    repo jeszcze nie jest rozbite na pack'i per język. Gdy to nastąpi, każdy
-    pack rejestruje własny provider zamiast tego."""
+class CoreRulePack:
+    """`SemgrepRulePackProvider` (`core/plugins.py`) tego pakietu — niesie
+    jedyną regułę semgrep, która nie dotyczy żadnego konkretnego języka celu
+    (`no-wildcard-iam-policy`, `languages: [json, yaml]`). Reguły per język
+    (Python/TS/JS/C#) rejestrują analogiczne providery pack'i, patrz
+    `llm-code-gatekeeper`/`-ts`/`-csharp`.
 
-    pack_id = "monolith"
+    Odkrywane przez `importlib.resources`, nie przez wspinanie się po
+    `__file__.parent` — dzisiejszy sposób przeżywa instalację z wheela,
+    dawny (przed podziałem repo) nie przeżywał."""
+
+    pack_id = "core"
 
     def rules_dir(self) -> Path:
-        return RULES_DIR
+        # Instalacja "normalna" (editable, z gita, z kołem) rozpakowuje pakiet
+        # na dysk — `Traversable` jest wtedy zwykłą `Path`. Ten pakiet nigdy
+        # nie jest dystrybuowany jako zipapp, więc nie ma tu przypadku, w
+        # którym trzeba by wypakować zasób do katalogu tymczasowego.
+        return Path(str(files("gatekeeper_core") / "rules" / "semgrep"))
 
 
 def parse_semgrep(payload: str, repo: Path, gate: str) -> list[Finding]:
@@ -78,7 +82,7 @@ def run_semgrep(
     repo: Path,
     sandbox: Sandbox,
     gate: str,
-    config: Path | str | list[Path | str] = RULES_DIR,
+    config: Path | str | list[Path | str] | None = None,
     targets: list[str] | None = None,
     timeout_s: float = 300.0,
     max_memory_mb: int = 2000,
@@ -86,7 +90,11 @@ def run_semgrep(
     """`config` przyjmuje jeden katalog reguł albo listę — semgrep sam scala
     wiele `--config` w jeden przebieg, więc agregacja pack'ów
     (`SemgrepRulePackProvider`, `gates/g3_sast.py`) nie wymaga N uruchomień
-    narzędzia, tylko N flag w jednym."""
+    narzędzia, tylko N flag w jednym. Domyślnie (`None`) tylko `CoreRulePack`
+    tego pakietu — w praktyce `g3_sast.py` zawsze podaje `config` jawnie,
+    zebrane z wszystkich zainstalowanych dostawców."""
+    if config is None:
+        config = CoreRulePack().rules_dir()
     configs = config if isinstance(config, list) else [config]
     command = [
         SEMGREP,

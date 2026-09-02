@@ -1,0 +1,25 @@
+# Reguły „nigdy" uniwersalne — nie dotyczą żadnego konkretnego języka celu
+# (JSON/YAML: manifesty IAM, Terraform, CloudFormation), więc żyją w core,
+# nie w pack'u językowym. Reguły per język (Python/TS/JS/C#) rejestrują
+# analogiczne SemgrepRulePackProvider pack'i (`llm-code-gatekeeper`,
+# `llm-code-gatekeeper-ts`, `llm-code-gatekeeper-csharp`).
+#
+# Uruchomienie testów: semgrep --test --config gatekeeper_core/rules/semgrep tests/data
+
+rules:
+  - id: no-wildcard-iam-policy
+    languages: [json, yaml]
+    severity: ERROR
+    message: Polityka uprawnień z wildcardem.
+    metadata:
+      cwe: "CWE-732: Incorrect Permission Assignment"
+      failure_scenario: >-
+        Rola dostaje wszystkie operacje na wszystkich zasobach, więc przejęcie
+        dowolnego procesu działającego z tą rolą oznacza pełny dostęp do konta —
+        łącznie z kasowaniem kopii zapasowych i czytaniem danych osobowych.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              {"Effect": "Allow", "Action": "*", ...}
+          - pattern: |
+              {"Effect": "Allow", "Action": "*", "Resource": "*", ...}

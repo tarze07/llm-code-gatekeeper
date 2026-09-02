@@ -12,14 +12,14 @@ from pathlib import Path
 
 import pytest
 
-from gatekeeper.calibration import (
+from gatekeeper_core.calibration import (
     Case,
     Expectation,
     _build_case_repo,
     _check,
     load_cases,
 )
-from gatekeeper.core.finding import Decision, GateResult, Reason, RunResult, Verdict
+from gatekeeper_core.core.finding import Decision, GateResult, Reason, RunResult, Verdict
 
 
 def _run(verdict: Verdict, reasons=(), warnings=()) -> RunResult:
@@ -38,25 +38,21 @@ def _case(**expect_kwargs) -> Case:
 
 
 def test_wczytywanie_prawdziwego_pliku_cases_yaml():
+    """Core dziedziczy tylko przypadki niezależne od zainstalowanych pack'ów
+    (G0/G3.secrets) — reszta (typosquat/SCA/SAST/G2 per język) żyje w
+    `calibration/cases.yaml` każdego pack'a, patrz komentarz na górze pliku."""
     cases = load_cases(Path("calibration/cases.yaml"))
     assert {c.name for c in cases} == {
-        "halucynowany-pakiet",
-        "halucynowany-pakiet-npm",
         "czysty-pr",
-        "eval-na-wejsciu",
         "diff-zbyt-duzy",
         "sekret-w-diffie",
-        "test-bez-dowodu",
-        "test-bez-asercji",
-        "rozgalezienie-bez-testu",
     }
-    hp = next(c for c in cases if c.name == "halucynowany-pakiet")
-    assert hp.expect.verdict is Verdict.BLOCK
-    assert hp.expect.blocking_rules == ("deps.unknown_package",)
+    clean = next(c for c in cases if c.name == "czysty-pr")
+    assert clean.expect.verdict is Verdict.PASS
 
-    eval_case = next(c for c in cases if c.name == "eval-na-wejsciu")
-    assert eval_case.requires_tools == ("semgrep", "gitleaks")
-    assert eval_case.expect.warning_rules == ("sast.critical_count",)
+    big_diff = next(c for c in cases if c.name == "diff-zbyt-duzy")
+    assert big_diff.expect.verdict is Verdict.BLOCK
+    assert big_diff.expect.blocking_rules == ("diff.effective_lines",)
 
 
 def test_check_zgodny_werdykt_i_reguly_przechodzi():

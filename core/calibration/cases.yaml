@@ -1,0 +1,44 @@
+# Zestaw kalibracyjny core-a: wyłącznie przypadki niezależne od zainstalowanych
+# pack'ów językowych (G0.scope, G3.secrets — gate'y w pełni core-owe, bez
+# żadnego dostawcy poziomu 2). Pełny zestaw (typosquat/SCA/SAST/G2 per język)
+# żyje w calibration/cases.yaml każdego pack'a — tam, gdzie odpowiednie
+# EcosystemProvider/StaticChecker/TestToolchain/SemgrepRulePackProvider są
+# faktycznie zainstalowane.
+#
+# Uruchomienie: `gatekeeper calibrate`
+
+cases:
+  - name: czysty-pr
+    description: >-
+      Mały, poprawny PR bez żadnych defektów. Zero fałszywych alarmów —
+      to jest test na to, czy brama w ogóle nadaje się do codziennej pracy.
+      Wymaga gitleaksa: bez niego G3.secrets zgłasza `error` (brak narzędzia
+      to brak dowodu, nie zielona brama) i werdykt uczciwie spada do
+      PASS-WITH-REVIEW — to nie jest fałszywy alarm tego przypadku, tylko
+      niekompletne środowisko, w którym go uruchomiono.
+    fixture: czysty-pr
+    requires_tools: [gitleaks]
+    expect:
+      verdict: PASS
+
+  - name: diff-zbyt-duzy
+    description: >-
+      500-liniowy plik w jednym PR-ze — najskuteczniejsza pojedyncza reguła
+      w systemie (TOOLS.md §2.2). Musi blokować niezależnie od treści zmiany.
+    fixture: diff-zbyt-duzy
+    expect:
+      verdict: BLOCK
+      blocking_rules: [diff.effective_lines]
+
+  - name: sekret-w-diffie
+    description: >-
+      Agent zostawia klucz AWS w diffie (syntetyczny klucz w poprawnym
+      formacie, nie prawdziwy sekret — kanoniczny przykład z dokumentacji
+      AWS, `AKIAIOSFODNN7EXAMPLE`, jest celowo na globalnej allowliście
+      gitleaksa i nie nadaje się do tego fixture'u). G3.secrets nie jest
+      w `warn_only`, więc musi blokować naprawdę, nie tylko ostrzegać.
+    fixture: sekret-w-diffie
+    requires_tools: [gitleaks]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [secrets.found_in_diff]

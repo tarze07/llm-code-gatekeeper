@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gatekeeper.adapters.dotnet_projects import (
+from gatekeeper_core.adapters.dotnet_projects import (
     find_project_for,
     parse_dotnet_list_vulnerable,
     projects_for,
 )
-from gatekeeper.core.finding import Severity
+from gatekeeper_core.core.finding import Severity
 
 VULN_GOLDEN = Path(__file__).parent / "data" / "dotnet_list_vulnerable.json"
 REPO = Path("/repo")

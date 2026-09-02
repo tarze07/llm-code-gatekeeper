@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from gatekeeper.core.finding import Finding, Severity, compute_fingerprint
+from gatekeeper_core.core.finding import Finding, Severity, compute_fingerprint
 
 
 def make(**kwargs) -> Finding:

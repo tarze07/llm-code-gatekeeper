@@ -4,7 +4,7 @@ import sys
 
 import pytest
 
-from gatekeeper.core.runner import (
+from gatekeeper_core.core.runner import (
     Sandbox,
     SandboxPolicy,
     SandboxUnavailable,
@@ -103,7 +103,7 @@ def test_brak_programu_jest_jawnym_bledem(tmp_path):
 
 
 def test_wymagana_izolacja_przerywa_gdy_niedostepna(tmp_path, monkeypatch):
-    monkeypatch.setattr("gatekeeper.core.runner.network_isolation_available", lambda: False)
+    monkeypatch.setattr("gatekeeper_core.core.runner.network_isolation_available", lambda: False)
     sandbox = Sandbox(SandboxPolicy(require_isolation=True))
 
     with pytest.raises(SandboxUnavailable, match="brak izolacji sieci"):
@@ -111,7 +111,7 @@ def test_wymagana_izolacja_przerywa_gdy_niedostepna(tmp_path, monkeypatch):
 
 
 def test_bez_wymogu_izolacji_proces_dziala_ale_wynik_o_tym_mowi(tmp_path, monkeypatch):
-    monkeypatch.setattr("gatekeeper.core.runner.network_isolation_available", lambda: False)
+    monkeypatch.setattr("gatekeeper_core.core.runner.network_isolation_available", lambda: False)
 
     result = Sandbox().run(python("print('ok')"), cwd=tmp_path)
 

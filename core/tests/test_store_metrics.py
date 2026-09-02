@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from gatekeeper.core import metrics
-from gatekeeper.core.finding import (
+from gatekeeper_core.core import metrics
+from gatekeeper_core.core.finding import (
     Decision,
     Finding,
     GateResult,
@@ -14,7 +14,7 @@ from gatekeeper.core.finding import (
     Severity,
     Verdict,
 )
-from gatekeeper.core.store import Store
+from gatekeeper_core.core.store import Store
 
 
 def make_run(run_id: str, verdict: Verdict, findings: list[Finding] | None = None) -> RunResult:

@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gatekeeper.adapters.sca import parse_npm_audit, parse_pip_audit
-from gatekeeper.core.finding import Severity
+from gatekeeper_core.adapters.sca import parse_npm_audit, parse_pip_audit
+from gatekeeper_core.core.finding import Severity
 
 VULNERABLE = Path(__file__).parent / "data" / "pip_audit_vulnerable.json"
 CLEAN = Path(__file__).parent / "data" / "pip_audit_clean.json"
