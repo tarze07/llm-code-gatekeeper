@@ -9,7 +9,7 @@ Dostarcza:
 
 Manifest+rejestr+typosquat+SCA dla NuGet (`G1.deps`/`G3.sca`) **nie** jest tu — `NuGetEcosystem` żyje w core (`llm-code-gatekeeper-core`) i działa nawet bez tego pack'a zainstalowanego. Odnajdywanie projektów (`find_project_for`/`projects_for`), które `CsharpStaticChecker` też potrzebuje, żyje w `gatekeeper_core.adapters.dotnet_projects` — współdzielone z `NuGetEcosystem.scan_sca`, patrz README core-a.
 
-`G2.cross_verify`/`G2.test_sanity`/`G2.diff_coverage` (weryfikacja krzyżowa testów) nie mają tu odpowiednika — brak zarejestrowanego `TestToolchain` dla C# to `skipped`, nie błąd. Native helper oparty o Roslyn jest zaplanowany jako osobne zlecenie (Faza 3), nie część tego repo dziś.
+`G2.cross_verify`/`G2.test_sanity`/`G2.diff_coverage` (weryfikacja krzyżowa testów) nie mają tu odpowiednika — brak zarejestrowanego `TestToolchain` dla C# to `skipped`, nie błąd. Native helper oparty o Roslyn jest zaplanowany jako osobne zlecenie (Faza 3), nie część tego repo dziś — plan architektury i kolejność budowy: 📄 [PLAN-G2.md](PLAN-G2.md).
 
 `calibration/cases.yaml` startuje pusty — zero przypadków C# istniało przed podziałem monolitu; jawny, zaakceptowany dług.
 
