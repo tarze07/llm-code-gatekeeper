@@ -38,15 +38,22 @@ def _case(**expect_kwargs) -> Case:
 
 
 def test_wczytywanie_prawdziwego_pliku_cases_yaml():
-    """Core dziedziczy tylko przypadki niezależne od zainstalowanych pack'ów
-    (G0/G3.secrets) — reszta (typosquat/SCA/SAST/G2 per język) żyje w
+    """Core dziedziczy przypadki niezależne od zainstalowanych pack'ów: gate'y
+    w pełni core-owe (G0/G3.secrets) i G1.deps/G3.sca (PyPI/npm/NuGet żyją tu,
+    nie w pack'ach) — reszta (static/testowe/SAST per język) żyje w
     `calibration/cases.yaml` każdego pack'a, patrz komentarz na górze pliku."""
     cases = load_cases(Path("calibration/cases.yaml"))
     assert {c.name for c in cases} == {
+        "halucynowany-pakiet",
+        "halucynowany-pakiet-npm",
         "czysty-pr",
         "diff-zbyt-duzy",
         "sekret-w-diffie",
     }
+    hp = next(c for c in cases if c.name == "halucynowany-pakiet")
+    assert hp.expect.verdict is Verdict.BLOCK
+    assert hp.expect.blocking_rules == ("deps.unknown_package",)
+
     clean = next(c for c in cases if c.name == "czysty-pr")
     assert clean.expect.verdict is Verdict.PASS
 

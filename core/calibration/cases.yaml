@@ -1,13 +1,36 @@
-# Zestaw kalibracyjny core-a: wyłącznie przypadki niezależne od zainstalowanych
-# pack'ów językowych (G0.scope, G3.secrets — gate'y w pełni core-owe, bez
-# żadnego dostawcy poziomu 2). Pełny zestaw (typosquat/SCA/SAST/G2 per język)
-# żyje w calibration/cases.yaml każdego pack'a — tam, gdzie odpowiednie
-# EcosystemProvider/StaticChecker/TestToolchain/SemgrepRulePackProvider są
-# faktycznie zainstalowane.
+# Zestaw kalibracyjny core-a: przypadki niezależne od zainstalowanych pack'ów
+# językowych. Obejmuje to nie tylko gate'y w pełni core-owe bez żadnego
+# dostawcy poziomu 2 (G0.scope, G3.secrets), ale też G1.deps/G3.sca —
+# EcosystemProvider dla PyPI/npm/NuGet żyje w tym repo (`deps/ecosystems.py`),
+# więc `halucynowany-pakiet(-npm)` działa bez żadnego language-pack'a
+# zainstalowanego. Static/testowe/SAST przypadki per język żyją w
+# calibration/cases.yaml każdego pack'a — tam, gdzie odpowiedni
+# StaticChecker/TestToolchain/SemgrepRulePackProvider jest faktycznie
+# zainstalowany.
 #
 # Uruchomienie: `gatekeeper calibrate`
 
 cases:
+  - name: halucynowany-pakiet
+    description: >-
+      Agent dodaje zależność, której nie ma w PyPI — najkosztowniejsza klasa
+      defektu z PLAN.md §1 repo głównego. Musi blokować. Testuje wyłącznie
+      G1.deps (PyPIEcosystem), nie żaden language-pack.
+    fixture: halucynowany-pakiet
+    expect:
+      verdict: BLOCK
+      blocking_rules: [deps.unknown_package]
+
+  - name: halucynowany-pakiet-npm
+    description: >-
+      Ten sam defekt co `halucynowany-pakiet`, ale w ekosystemie npm — dowód,
+      że dep-guard nie jest zawężony do PyPI. Musi blokować. Testuje
+      wyłącznie G1.deps (NpmEcosystem), nie llm-code-gatekeeper-ts.
+    fixture: halucynowany-pakiet-npm
+    expect:
+      verdict: BLOCK
+      blocking_rules: [deps.unknown_package]
+
   - name: czysty-pr
     description: >-
       Mały, poprawny PR bez żadnych defektów. Zero fałszywych alarmów —

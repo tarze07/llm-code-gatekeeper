@@ -64,7 +64,7 @@ nuget = "gatekeeper_core.deps.ecosystems:NuGetEcosystem"
 include = ["gatekeeper_core*"]
 
 [tool.setuptools.package-data]
-gatekeeper_core = ["rules/semgrep/*.yaml"]
+gatekeeper_core = ["rules/semgrep/*.yaml", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

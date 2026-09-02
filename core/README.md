@@ -40,7 +40,7 @@ Każdy instaluje ten pakiet jako zależność i rejestruje swojego `StaticChecke
 ```bash
 pip install -e ".[dev,gates]"
 gatekeeper policy lint --policy policy/gates.yaml
-gatekeeper calibrate   # 3 przypadki core-only: czysty-pr, diff-zbyt-duzy, sekret-w-diffie
+gatekeeper calibrate   # 5 przypadków core-only, w tym PyPI i npm (patrz kalibracja/cases.yaml)
 ```
 
 Pełny zestaw kalibracyjny (typosquat/SCA/SAST/G2 per język) żyje w `calibration/` każdego pack'a — tam, gdzie odpowiedni dostawca faktycznie jest zainstalowany.
