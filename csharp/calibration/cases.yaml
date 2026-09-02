@@ -1,0 +1,10 @@
+# Zestaw kalibracyjny csharp-packu: pusty na start — zero przypadkow C#
+# istnialo juz przed podzialem (jawny, zaakceptowany dlug, patrz PLAN.md
+# repo glownego). Manifest+rejestr+typosquat+SCA NuGet (G1.deps/G3.sca) jest
+# w pelni core-owy i dziala bez tego pack'a - kalibracja tamtej warstwy
+# zyje w calibration/cases.yaml core-a, nie tutaj.
+#
+# Uruchomienie: `gatekeeper calibrate` (wymaga zainstalowanego
+# `llm-code-gatekeeper-core`)
+
+cases: []

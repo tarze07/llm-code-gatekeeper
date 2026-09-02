@@ -30,12 +30,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..core.change import ChangeContext
-from ..core.finding import Finding, Severity
-from ..core.plugins import StaticCheckOutcome
-from ..core.runner import Sandbox, SandboxPolicy
-from .base import ToolFailed, ToolMissing, parse_compiler_diagnostics, run_tool
-from .dotnet_projects import DOTNET, projects_for
+from gatekeeper_core.adapters.base import (
+    ToolFailed,
+    ToolMissing,
+    parse_compiler_diagnostics,
+    run_tool,
+)
+from gatekeeper_core.adapters.dotnet_projects import DOTNET, projects_for
+from gatekeeper_core.core.change import ChangeContext
+from gatekeeper_core.core.finding import Finding, Severity
+from gatekeeper_core.core.plugins import StaticCheckOutcome
+from gatekeeper_core.core.runner import Sandbox, SandboxPolicy
 
 
 def dotnet_build_scenario(level: str, code: str, message: str) -> str:

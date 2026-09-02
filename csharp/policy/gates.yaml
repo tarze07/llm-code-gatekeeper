@@ -1,0 +1,86 @@
+# Polityka bramy jakości — wersja core-only (bez zainstalowanego pack'a
+# językowego). W praktyce `llm-code-gatekeeper-core` prawie nigdy nie
+# uruchamia się sam — ten plik służy testom/kalibracji core-a i jako
+# punkt startowy, z którego każdy pack (`llm-code-gatekeeper`, `-ts`,
+# `-csharp`) kopiuje i rozszerza własną wersję o knobs swoich checkerów.
+#
+# Zasady:
+#   * plik jest wersjonowany w repo i chroniony przez CODEOWNERS,
+#   * agent NIE ma uprawnień do jego modyfikacji — jeżeli oceniany może zmienić
+#     kryteria oceny, reszta systemu nie ma znaczenia (PLAN.md §4),
+#   * `gatekeeper policy lint` odrzuca literówki w nazwach faktów; listę
+#     dozwolonych faktów daje `gatekeeper policy facts` (zależy od
+#     zainstalowanych pluginów — core-only zna mniej faktów niż pełny pack).
+version: 1
+
+blocking:
+  - secrets.found_in_diff
+  - deps.unknown_package
+  - deps.typosquat_suspect
+  - tests.pass_on_pre_change_code
+
+thresholds:
+  diff.effective_lines:
+    max: 400
+    message: "Diff jest zbyt duży, żeby dało się go rzetelnie zrecenzować — rozbij PR."
+  diff.effective_files:
+    max: 15
+    message: "Zbyt wiele plików w jednej zmianie — rozbij PR."
+  deps.new_package_count:
+    max: 3
+    on_violation: warn
+  diff.out_of_scope_files:
+    max: 0
+    on_violation: review
+    message: "Zmiana dotyka plików spoza zadeklarowanego zakresu ticketu."
+  static.high_severity_count:
+    max: 0
+    message: "Static checker zgłasza defekt w zmienionych liniach (nie styl — realny błąd)."
+  sanity.blocking_count:
+    max: 0
+    message: "Nowy test nie dowodzi niczego — brak asercji albo asercja na stałą (G2.test_sanity)."
+  coverage.diff_ratio:
+    min: 0.80
+    message: "Nowe linie produkcyjne słabo pokryte testami całego zestawu (G2.diff_coverage)."
+  sast.critical_count:
+    max: 0
+    message: "Reguła „nigdy” trafiła w zmienionych liniach."
+  sca.vulnerable_package_count:
+    max: 0
+    message: "Nowo dodana zależność ma znaną podatność."
+
+human_review_required_when:
+  - paths_match:
+      - "**/auth/**"
+      - "**/payments/**"
+      - "**/migrations/**"
+      - "infra/**"
+      - ".github/workflows/**"
+      - "policy/**"
+  - deps.new_external_package
+  - deps.too_young
+
+on_gate_error: review
+max_findings_reported: 10
+
+warn_only:
+  - G2.cross_verify
+  - G2.test_sanity
+  - G2.diff_coverage
+  - G1.static
+  - G3.sast
+  - G3.sca
+
+gates:
+  G1.deps:
+    min_age_days: 90
+    internal_prefixes: []
+    allow_packages: []
+  G3.secrets:
+    require_tool: true
+  G3.sast:
+    keep_env: []
+    max_memory_mb: 2000
+  G3.sca:
+    require_tool: true
+    keep_env: []

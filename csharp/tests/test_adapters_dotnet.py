@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gatekeeper.adapters.dotnet import parse_dotnet_build
-from gatekeeper.core.finding import Severity
+from gatekeeper_core.core.finding import Severity
+
+from gatekeeper_csharp.adapters.dotnet import parse_dotnet_build
 
 BUILD_GOLDEN = Path(__file__).parent / "data" / "dotnet_build_output.txt"
 REPO = Path("/repo")

@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-code-gatekeeper-csharp"
+version = "0.1.0"
+description = "Pack C# dla llm-code-gatekeeper-core: dotnet build (G1.static), reguły „nigdy” SAST"
+requires-python = ">=3.12"
+dependencies = [
+    "llm-code-gatekeeper-core>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.entry-points."gatekeeper.static_checkers"]
+csharp = "gatekeeper_csharp.adapters.dotnet:CsharpStaticChecker"
+
+[project.entry-points."gatekeeper.semgrep_rule_packs"]
+csharp = "gatekeeper_csharp.adapters.rulepack:CsharpRulePack"
+
+[tool.setuptools.packages.find]
+include = ["gatekeeper_csharp*"]
+
+[tool.setuptools.package-data]
+gatekeeper_csharp = ["rules/semgrep/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
