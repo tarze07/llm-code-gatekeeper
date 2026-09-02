@@ -17,11 +17,9 @@ from __future__ import annotations
 
 import functools
 from dataclasses import dataclass
-from pathlib import Path
+from importlib.resources import files
 
 from .manifests import NPM, NUGET, PYPI, normalize
-
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 _HOMOGLYPHS = {
     "а": "a",  # cyrylica
@@ -88,11 +86,11 @@ def popular_packages(ecosystem: str) -> frozenset[str]:
     filename = {PYPI: "top_pypi.txt", NPM: "top_npm.txt", NUGET: "top_nuget.txt"}.get(ecosystem)
     if not filename:
         return frozenset()
-    path = DATA_DIR / filename
-    if not path.exists():
+    resource = files("gatekeeper_core") / "data" / filename
+    if not resource.is_file():
         return frozenset()
     names = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in resource.read_text(encoding="utf-8").splitlines():
         line = line.split("#", 1)[0].strip()
         if line:
             names.append(normalize(ecosystem, line))
