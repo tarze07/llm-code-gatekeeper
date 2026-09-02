@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-code-gatekeeper-ts"
-version = "0.1.0"
-description = "Pack TS/JS dla llm-code-gatekeeper-core: tsc/eslint (G1.static), reguły „nigdy” SAST"
+version = "0.2.0"
+description = "Pack TS/JS dla llm-code-gatekeeper-core: tsc/eslint (G1.static), reguły „nigdy” SAST, złożoność cyklomatyczna (G1.complexity)"
 requires-python = ">=3.12"
 dependencies = [
     "llm-code-gatekeeper-core>=0.1.0",
@@ -21,6 +21,9 @@ ts_js = "gatekeeper_ts.adapters.linters:TsJsStaticChecker"
 
 [project.entry-points."gatekeeper.semgrep_rule_packs"]
 ts = "gatekeeper_ts.adapters.rulepack:TsRulePack"
+
+[project.entry-points."gatekeeper.complexity_analyzers"]
+ts = "gatekeeper_ts.adapters.complexity:TsComplexityAnalyzer"
 
 [tool.setuptools.packages.find]
 include = ["gatekeeper_ts*"]

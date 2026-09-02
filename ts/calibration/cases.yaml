@@ -1,14 +1,22 @@
-# Zestaw kalibracyjny ts-packu: pusty na start.
+# Zestaw kalibracyjny ts-packu.
 #
 # Przypadek analogiczny do PyPI (`halucynowany-pakiet-npm`, niepoprawny pakiet
 # npm) NIE żyje tutaj — testuje wyłącznie G1.deps/G3.sca, które są w pełni
 # core-owe (npm/PyPI/NuGet rejestrowane przez `llm-code-gatekeeper-core`
-# samo, patrz jego `calibration/cases.yaml`). Ten pack niesie tylko
-# `TsJsStaticChecker` (G1.static: tsc/eslint) i regułę SAST specyficzną dla
-# TS/JS — żaden istniejący fixture kalibracyjny sprzed podziału nie testował
-# wyłącznie tej warstwy, więc start jest pusty (jawny, zaakceptowany dług).
+# samo, patrz jego `calibration/cases.yaml`).
 #
 # Uruchomienie: `gatekeeper calibrate` (wymaga zainstalowanego
-# `llm-code-gatekeeper-core`)
+# `llm-code-gatekeeper-core`, `eslint` i `@typescript-eslint/parser`)
 
-cases: []
+cases:
+  - name: zlozonosc-powyzej-progu
+    description: >-
+      Nowa funkcja z 10 zagnieżdżonymi `if` (M=11) — powyżej progu McCabe
+      10 (G1.complexity, TsComplexityAnalyzer, reguła `complexity` eslinta
+      z progiem 1). G1.complexity NIE jest w `warn_only` — musi blokować
+      naprawdę, nie tylko ostrzegać (analogicznie do python-packu).
+    fixture: zlozonosc-powyzej-progu
+    requires_tools: [eslint]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [complexity.max]
