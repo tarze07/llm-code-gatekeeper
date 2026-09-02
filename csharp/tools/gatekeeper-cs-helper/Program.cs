@@ -9,7 +9,8 @@ var jsonOptions = new JsonSerializerOptions { WriteIndented = false };
 
 if (args.Length < 2 || args[1] != "--files")
 {
-    Console.Error.WriteLine("użycie: gatekeeper-cs-helper <discover|lint> --files <plik1.cs> [plik2.cs ...]");
+    Console.Error.WriteLine(
+        "użycie: gatekeeper-cs-helper <discover|lint|complexity> --files <plik1.cs> [plik2.cs ...]");
     return 2;
 }
 
@@ -24,7 +25,10 @@ switch (command)
     case "lint":
         Console.WriteLine(JsonSerializer.Serialize(QualityLint.Lint(files), jsonOptions));
         return 0;
+    case "complexity":
+        Console.WriteLine(JsonSerializer.Serialize(Complexity.Measure(files), jsonOptions));
+        return 0;
     default:
-        Console.Error.WriteLine($"nieznana komenda: {command} (oczekiwano discover|lint)");
+        Console.Error.WriteLine($"nieznana komenda: {command} (oczekiwano discover|lint|complexity)");
         return 2;
 }

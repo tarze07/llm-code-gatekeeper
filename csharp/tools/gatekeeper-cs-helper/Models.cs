@@ -38,3 +38,17 @@ public sealed record QualityIssue(
 public sealed record LintOutput(
     [property: JsonPropertyName("issues")] IReadOnlyList<QualityIssue> Issues
 );
+
+/// <summary>Odpowiednik <c>MethodComplexity</c> (core/plugins.py).</summary>
+public sealed record MethodComplexity(
+    [property: JsonPropertyName("file")] string File,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("lineno")] int Lineno,
+    [property: JsonPropertyName("end_lineno")] int EndLineno,
+    [property: JsonPropertyName("complexity")] int ComplexityValue,
+    [property: JsonPropertyName("nloc")] int Nloc
+);
+
+public sealed record ComplexityOutput(
+    [property: JsonPropertyName("methods")] IReadOnlyList<MethodComplexity> Methods
+);

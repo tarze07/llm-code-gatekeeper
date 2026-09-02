@@ -19,3 +19,15 @@ cases:
     expect:
       verdict: PASS
       warning_rules: [tests.pass_on_pre_change_code]
+
+  - name: zlozonosc-powyzej-progu
+    description: >-
+      Nowa metoda z 10 zagnieżdżonymi `if` (M=11) — powyżej progu McCabe
+      10 (G1.complexity, CsharpComplexityAnalyzer, `gatekeeper-cs-helper
+      complexity`). G1.complexity NIE jest w `warn_only` — musi blokować
+      naprawdę, nie tylko ostrzegać (analogicznie do python/ts-packu).
+    fixture: zlozonosc-powyzej-progu
+    requires_tools: [gatekeeper-cs-helper]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [complexity.max]
