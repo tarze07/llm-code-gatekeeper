@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-code-gatekeeper-csharp"
-version = "0.1.0"
-description = "Pack C# dla llm-code-gatekeeper-core: dotnet build (G1.static), reguły „nigdy” SAST"
+version = "0.2.0"
+description = "Pack C# dla llm-code-gatekeeper-core: dotnet build (G1.static), reguły „nigdy” SAST, G2.cross_verify/test_sanity/diff_coverage"
 requires-python = ">=3.12"
 dependencies = [
     "llm-code-gatekeeper-core>=0.1.0",
@@ -21,6 +21,9 @@ csharp = "gatekeeper_csharp.adapters.dotnet:CsharpStaticChecker"
 
 [project.entry-points."gatekeeper.semgrep_rule_packs"]
 csharp = "gatekeeper_csharp.adapters.rulepack:CsharpRulePack"
+
+[project.entry-points."gatekeeper.test_toolchains"]
+csharp = "gatekeeper_csharp.testing.toolchain:CsharpTestToolchain"
 
 [tool.setuptools.packages.find]
 include = ["gatekeeper_csharp*"]

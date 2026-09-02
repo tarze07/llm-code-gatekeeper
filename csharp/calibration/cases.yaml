@@ -1,10 +1,21 @@
-# Zestaw kalibracyjny csharp-packu: pusty na start — zero przypadkow C#
-# istnialo juz przed podzialem (jawny, zaakceptowany dlug, patrz PLAN.md
-# repo glownego). Manifest+rejestr+typosquat+SCA NuGet (G1.deps/G3.sca) jest
-# w pelni core-owy i dziala bez tego pack'a - kalibracja tamtej warstwy
-# zyje w calibration/cases.yaml core-a, nie tutaj.
+# Zestaw kalibracyjny csharp-packu. Manifest+rejestr+typosquat+SCA NuGet
+# (G1.deps/G3.sca) jest w pelni core-owy i dziala bez tego pack'a -
+# kalibracja tamtej warstwy zyje w calibration/cases.yaml core-a, nie tutaj.
 #
 # Uruchomienie: `gatekeeper calibrate` (wymaga zainstalowanego
-# `llm-code-gatekeeper-core`)
+# `llm-code-gatekeeper-core` i `gatekeeper-cs-helper`, PLAN-G2.md)
 
-cases: []
+cases:
+  - name: test-bez-dowodu
+    description: >-
+      Nowy test asertuje zachowanie, które w tym PR-ze się nie zmieniło —
+      musi przejść na kodzie sprzed zmiany, czyli wyzwolić
+      `tests.pass_on_pre_change_code` (G2.cross_verify, CsharpTestToolchain).
+      G2.cross_verify jest w `warn_only`, więc oczekiwany werdykt to PASS
+      z ostrzeżeniem, nie BLOCK — analogicznie do `test-bez-dowodu` w
+      python-packu.
+    fixture: test-bez-dowodu
+    requires_tools: [dotnet, gatekeeper-cs-helper]
+    expect:
+      verdict: PASS
+      warning_rules: [tests.pass_on_pre_change_code]

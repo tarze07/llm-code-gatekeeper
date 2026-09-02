@@ -48,3 +48,64 @@ def repo(tmp_path: Path) -> Repo:
     r.write("src/App.cs", "namespace App;\npublic class Program {}\n")
     r.commit("initial")
     return r
+
+
+#: Minimalne .csproj napisane ręcznie (nie przez `dotnet new`) — testy G2.*
+#: wołają prawdziwy `dotnet build`/`dotnet test` wielokrotnie, więc unikanie
+#: kosztu scaffoldowania per test naprawdę się liczy (`dotnet new` to ~1-2s
+#: samo w sobie, tests/GatekeeperCsHelper.Tests obok tego zresztą pokazuje
+#: ten sam kompromis: fixture jako tekst, nie żywy projekt).
+_LIB_CSPROJ = """<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>
+"""
+
+_TEST_CSPROJ = """<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\\..\\src\\Demo\\Demo.csproj" />
+  </ItemGroup>
+</Project>
+"""
+
+
+@pytest.fixture
+def dotnet_repo(tmp_path: Path) -> Repo:
+    """Repo z projektem `src/Demo/Demo.csproj` + `tests/Demo.Tests/Demo.Tests.csproj`
+    (referencja ustawiona), zawierające jedną klasę `Calc` z metodą `Cena`
+    bez rabatu i jeden test-placeholder — baza pod scenariusze G2.*."""
+    path = tmp_path / "repo"
+    path.mkdir(parents=True, exist_ok=True)
+    r = Repo(path)
+    r.write(".gitignore", "bin/\nobj/\n")
+    r.write("src/Demo/Demo.csproj", _LIB_CSPROJ)
+    r.write("src/Demo/Calc.cs", "namespace Demo;\n\npublic class Calc\n{\n"
+             "    public int Cena(int x, double rabat = 0.0) => x;\n}\n")
+    r.write("tests/Demo.Tests/Demo.Tests.csproj", _TEST_CSPROJ)
+    r.write(
+        "tests/Demo.Tests/CalcTests.cs",
+        "using Xunit;\nusing Demo;\n\nnamespace Demo.Tests;\n\n"
+        "public class CalcTests\n{\n"
+        "    [Fact]\n    public void Placeholder() { Assert.True(true); }\n}\n",
+    )
+    r.commit("baza: Calc bez rabatu")
+    return r
