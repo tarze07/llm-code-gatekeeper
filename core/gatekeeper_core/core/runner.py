@@ -115,7 +115,7 @@ class Sandbox:
             raise SandboxUnavailable(f"nie znaleziono programu: {argv[0]}")
         if not want_network:
             if network_isolation_available():
-                argv = [*NETNS_PREFIX, *argv]
+                argv = _wrap_isolated(argv)
                 isolation = "network-namespace"
             elif self.policy.require_isolation:
                 raise SandboxUnavailable(
@@ -171,6 +171,28 @@ class Sandbox:
 
 
 NETNS_PREFIX = ("unshare", "--user", "--map-root-user", "--net", "--")
+
+#: `unshare --net` daje świeżą przestrzeń sieciową z interfejsem `lo`
+#: obecnym, ale **wyłączonym** — narzędzia komunikujące się z własnym procesem
+#: potomnym po loopbacku (np. `dotnet test`: `vstest.console` ↔ `testhost`
+#: przez lokalny socket TCP, nawet bez żadnego dostępu do sieci zewnętrznej)
+#: wiszą, aż upłynie ich własny timeout połączenia — mylące, bo wygląda na
+#: awarię narzędzia, nie na artefakt izolacji. `ip link set lo up` w środku
+#: nowej przestrzeni nazw (root tam dzięki `--map-root-user`) naprawia to,
+#: nie osłabiając izolacji od sieci zewnętrznej — `lo` nie prowadzi poza
+#: przestrzeń nazw. Brak `ip` (rzadkie) po cichu zostawia `lo` bez zmian,
+#: zachowanie sprzed tej poprawki.
+_BRING_UP_LOOPBACK = "ip link set lo up >/dev/null 2>&1"
+
+
+def _wrap_isolated(argv: list[str]) -> list[str]:
+    return [
+        *NETNS_PREFIX,
+        "sh",
+        "-c",
+        f'{_BRING_UP_LOOPBACK}; exec "$0" "$@"',
+        *argv,
+    ]
 
 
 @functools.lru_cache(maxsize=1)
