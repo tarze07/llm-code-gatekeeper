@@ -1,6 +1,6 @@
 # llm-code-gatekeeper-core
 
-Silnik bramy jakości dla kodu generowanego przez agentów LLM — **rdzeń**, wydzielony z [`llm-code-gatekeeper`](https://github.com/tarze07/llm-code-gatekeeper) tak, żeby jedna poprawka orchestratora/policy/store nie wymagała ręcznej propagacji do wszystkich pack'ów językowych.
+Silnik bramy jakości dla kodu generowanego przez agentów LLM — **rdzeń**, wydzielony z [`llm-code-gatekeeper-python`](https://github.com/tarze07/llm-code-gatekeeper-python) tak, żeby jedna poprawka orchestratora/policy/store nie wymagała ręcznej propagacji do wszystkich pack'ów językowych.
 
 Sam w sobie nie ocenia żadnego konkretnego języka — dostarcza:
 
@@ -29,7 +29,7 @@ Bez zainstalowanego pack'a językowego bramki-agregatory nie zgłaszają błędu
 
 ## Pack'i językowe
 
-- [`llm-code-gatekeeper`](https://github.com/tarze07/llm-code-gatekeeper) — Python (ruff/mypy, testy przez `ast`)
+- [`llm-code-gatekeeper-python`](https://github.com/tarze07/llm-code-gatekeeper-python) — Python (ruff/mypy, testy przez `ast`)
 - [`llm-code-gatekeeper-ts`](https://github.com/tarze07/llm-code-gatekeeper-ts) — TS/JS (tsc/eslint)
 - [`llm-code-gatekeeper-csharp`](https://github.com/tarze07/llm-code-gatekeeper-csharp) — C# (`dotnet build`)
 
