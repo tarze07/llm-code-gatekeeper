@@ -1,6 +1,8 @@
 # Plan: G2.cross_verify / G2.test_sanity / G2.diff_coverage dla C#
 
-Dokument towarzyszący [`README.md`](README.md). README mówi, co ten pack dziś dostarcza (`G1.static`, `G3.sast`). Ten dokument mówi, jak domknąć brakującą rodzinę bramek — jedyną, której ten pack jeszcze nie ma — analogicznie do stylu [`python/TOOLS.md`](../python/TOOLS.md): interfejs, algorytm, pułapki, koszt.
+> **Status (2026-09-02): zaimplementowane.** Kroki 1–5 z §6 gotowe i zweryfikowane (realny `dotnet test`, nie mocki) — `tools/gatekeeper-cs-helper/`, `gatekeeper_csharp/testing/`, rejestracja pod `gatekeeper.test_toolchains`, pierwszy przypadek kalibracyjny. Krok 6 (NUnit/MSTest) zostaje jako przyszłe rozszerzenie zakresu, nie blokuje niczego dzisiaj. Dokument zostaje jako zapis decyzji projektowych — kod jest źródłem prawdy o szczegółach implementacji.
+
+Dokument towarzyszący [`README.md`](README.md). README mówi, co ten pack dziś dostarcza. Ten dokument mówi, jak zbudowano tę rodzinę bramek — analogicznie do stylu [`python/TOOLS.md`](../python/TOOLS.md): interfejs, algorytm, pułapki, koszt.
 
 Rozpoznanie zweryfikowane technicznie (nie z pamięci) 2026-09; źródła w tekście.
 
