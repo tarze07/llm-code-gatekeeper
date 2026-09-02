@@ -1,0 +1,14 @@
+# Zestaw kalibracyjny ts-packu: pusty na start.
+#
+# Przypadek analogiczny do PyPI (`halucynowany-pakiet-npm`, niepoprawny pakiet
+# npm) NIE żyje tutaj — testuje wyłącznie G1.deps/G3.sca, które są w pełni
+# core-owe (npm/PyPI/NuGet rejestrowane przez `llm-code-gatekeeper-core`
+# samo, patrz jego `calibration/cases.yaml`). Ten pack niesie tylko
+# `TsJsStaticChecker` (G1.static: tsc/eslint) i regułę SAST specyficzną dla
+# TS/JS — żaden istniejący fixture kalibracyjny sprzed podziału nie testował
+# wyłącznie tej warstwy, więc start jest pusty (jawny, zaakceptowany dług).
+#
+# Uruchomienie: `gatekeeper calibrate` (wymaga zainstalowanego
+# `llm-code-gatekeeper-core`)
+
+cases: []

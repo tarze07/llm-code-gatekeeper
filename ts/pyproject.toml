@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-code-gatekeeper-ts"
+version = "0.1.0"
+description = "Pack TS/JS dla llm-code-gatekeeper-core: tsc/eslint (G1.static), reguły „nigdy” SAST"
+requires-python = ">=3.12"
+dependencies = [
+    "llm-code-gatekeeper-core>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.entry-points."gatekeeper.static_checkers"]
+ts_js = "gatekeeper_ts.adapters.linters:TsJsStaticChecker"
+
+[project.entry-points."gatekeeper.semgrep_rule_packs"]
+ts = "gatekeeper_ts.adapters.rulepack:TsRulePack"
+
+[tool.setuptools.packages.find]
+include = ["gatekeeper_ts*"]
+
+[tool.setuptools.package-data]
+gatekeeper_ts = ["rules/semgrep/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
