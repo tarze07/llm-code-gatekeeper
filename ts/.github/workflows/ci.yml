@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Zależności
+        run: |
+          pip install --quiet "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
+          pip install --quiet -e ".[dev]"
+          npm install --global typescript eslint
+
+      - name: ruff
+        run: ruff check gatekeeper_ts tests
+
+      - name: pytest
+        run: pytest -q
+
+      - name: semgrep --test
+        run: |
+          pip install --quiet semgrep
+          semgrep --test --config gatekeeper_ts/rules/semgrep rules/semgrep/tests
