@@ -1,0 +1,27 @@
+# Granica bezpieczeństwa całego systemu: jeżeli oceniany może zmienić kryteria
+# oceny, reszta nie ma znaczenia (core/PLAN.md §4).
+#
+# Agenci LLM nie mają uprawnień do tych ścieżek. Wymaga włączenia
+# "Require review from Code Owners" w ochronie gałęzi — samo CODEOWNERS
+# niczego nie egzekwuje.
+#
+# W monorepo GitHub czyta wyłącznie ten jeden plik (korzeń, `.github/` albo
+# `docs/`), dlatego cztery pliki per pack zostały tu scalone.
+#
+# UWAGA: `@wlasciciel-bramy` to nadal placeholder, nie istniejący handle —
+# dopóki nie zostanie podmieniony, ten plik niczego nie chroni (REVIEW.md §5, P0).
+
+/.github/                @wlasciciel-bramy
+
+/core/policy/            @wlasciciel-bramy
+/core/gatekeeper_core/   @wlasciciel-bramy
+
+/python/policy/          @wlasciciel-bramy
+/python/rules/           @wlasciciel-bramy
+/python/gatekeeper_python/  @wlasciciel-bramy
+
+/ts/policy/              @wlasciciel-bramy
+/ts/gatekeeper_ts/       @wlasciciel-bramy
+
+/csharp/policy/          @wlasciciel-bramy
+/csharp/gatekeeper_csharp/  @wlasciciel-bramy
