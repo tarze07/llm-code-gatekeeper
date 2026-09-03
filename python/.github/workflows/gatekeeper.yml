@@ -41,17 +41,21 @@ jobs:
       # - uses: actions/setup-dotnet@v4
       #   with: { dotnet-version: "8.0.x" }
       # - run: dotnet restore   # bramka sama nie ściąga pakietów NuGet
+      #
+      # Dołóż odpowiedni pack, jeśli oceniane repo zawiera TS/JS albo C# —
+      # sam ten workflow instaluje tylko llm-code-gatekeeper-python:
+      # - run: pip install --quiet "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper-ts.git"
+      # - run: pip install --quiet "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper-csharp.git"
 
       - name: Instalacja bramy
-        run: pip install --quiet .
-
-      - name: Instalacja zależności testowych projektu i narzędzi bramek
-        # `dev` — zależności projektu (wymagane przez G2.cross_verify: bramka
-        # uruchamia testy z PR-a przeciw kodowi sprzed zmiany, bez nich
-        # zgłosi błąd zamiast cichego „przeszło"). `gates` — ruff/mypy/semgrep/
-        # pip-audit, których G1.static/G3.sast/G3.sca potrzebują jako
-        # podprocesów. Dostosuj komendę `dev` do swojego projektu.
-        run: pip install --quiet -e ".[dev,gates]"
+        # CLI (`gatekeeper`) żyje w llm-code-gatekeeper-core, instalowany tu
+        # tranzytywnie jako zależność tego pack'a — nie ma osobnej linii.
+        # `gates` — ruff/mypy/diff-cover, których G1.static/G2.diff_coverage
+        # potrzebują jako podprocesów; semgrep/pip-audit/gitleaks instalowane
+        # osobno niżej (core-owe, nie zależności tego pack'a).
+        run: |
+          pip install --quiet semgrep pip-audit
+          pip install --quiet -e ".[dev,gates]"
 
       - name: Instalacja gitleaksa
         env:
@@ -94,7 +98,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: scripts/post_pr_comment.sh gatekeeper-report.md
+        # skrypt jest core-owy (llm-code-gatekeeper-core/scripts/), nie tego
+        # pack'a — pobierany, nie kopiowany, żeby nie rozjeżdżał się z core.
+        run: |
+          curl -sSL -o post_pr_comment.sh \
+            https://raw.githubusercontent.com/tarze07/llm-code-gatekeeper-core/main/scripts/post_pr_comment.sh
+          chmod +x post_pr_comment.sh
+          ./post_pr_comment.sh gatekeeper-report.md
 
       - name: Decyzja
         if: steps.gate.outcome == 'failure'

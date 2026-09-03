@@ -13,16 +13,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
 
+      # llm-code-gatekeeper-core nie jest na PyPI - instalacja z git.
+      - run: pip install --quiet "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
       - run: pip install --quiet -e ".[dev,gates]"
 
-      - name: Instalacja gitleaksa (testy integracyjne bramki G3)
+      - name: Instalacja gitleaksa (testy integracyjne bramki G3.secrets, core-owa)
         env:
           GITLEAKS_VERSION: "8.21.2"
         run: |
@@ -31,18 +27,14 @@ jobs:
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
 
-      # tsc/eslint dla testów integracyjnych G1.static na TS/JS — globalnie,
-      # bo testy działają na fixture'ach bez własnego package.json/lockfile'a.
-      # Bez tego kroku testy TS/C# w test_gate_static.py po prostu skipują
-      # (pytest.mark.skipif) — to nie jest wymóg twardy, tylko lepsze pokrycie.
-      - run: npm install --global typescript eslint
+      - run: pip install --quiet semgrep
 
-      - run: ruff check gatekeeper tests scripts
+      - run: ruff check gatekeeper_python tests
       - run: pytest -q
       - run: gatekeeper policy lint --policy policy/gates.yaml
       # Reguła bez testu negatywnego prędzej czy później zaczyna blokować
-      # poprawny kod — to jest ten test, uruchamiany na każdym PR-ze do repo bramy.
-      - run: semgrep --test --config rules/semgrep rules/semgrep/tests
+      # poprawny kod — to jest ten test, uruchamiany na każdym PR-ze do tego pack'a.
+      - run: semgrep --test --config gatekeeper_python/rules/semgrep rules/semgrep/tests
       # Zestaw kalibracyjny: celowo zepsute/czyste PR-y przeciw polityce z tego
       # repo. Łapie regresję w regułach, zanim złapie ją produkcja (PLAN.md §6).
       - run: gatekeeper calibrate
