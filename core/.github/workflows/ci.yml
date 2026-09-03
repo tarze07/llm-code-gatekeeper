@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Zależności
+        run: pip install --quiet -e ".[dev,gates]"
+
+      - name: gitleaks (potrzebny G3.secrets)
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+
+      - name: ruff
+        run: ruff check gatekeeper_core tests
+
+      - name: mypy --strict
+        run: mypy gatekeeper_core --strict
+
+      - name: pytest
+        run: pytest -q
+
+      - name: policy lint
+        run: gatekeeper policy lint --policy policy/gates.yaml
+
+      - name: calibrate
+        run: gatekeeper calibrate
