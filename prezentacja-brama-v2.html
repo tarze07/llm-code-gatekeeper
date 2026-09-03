@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bramka jakości kodu z LLM — teoria, stan, użycie</title>
+<style>
+:root {
+  --bg: #0a0e14;
+  --bg-2: #0f141c;
+  --surface: #131a23;
+  --surface-2: #1a2330;
+  --border: #1f2837;
+  --border-strong: #364256;
+  --text: #e8edf5;
+  --text-muted: #8896ad;
+  --text-dim: #5a6478;
+  --accent: #22d3ee;
+  --accent-2: #a78bfa;
+  --accent-soft: rgba(34, 211, 238, 0.10);
+  --accent-glow: rgba(34, 211, 238, 0.35);
+  --ok: #4ade80;
+  --ok-soft: rgba(74, 222, 128, 0.12);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.12);
+  --no: #f87171;
+  --no-soft: rgba(248, 113, 113, 0.12);
+  --mgr: #a78bfa;
+  --mgr-soft: rgba(167, 139, 250, 0.12);
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background:
+    radial-gradient(ellipse 70% 50% at 15% 0%, rgba(34,211,238,0.08), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 85% 100%, rgba(167,139,250,0.06), transparent 70%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.025) 1px, transparent 0);
+  background-size: 28px 28px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.deck { position: relative; height: 100%; z-index: 1; }
+
+.slide {
+  position: absolute; inset: 0;
+  display: none;
+  flex-direction: column;
+  padding: 56px 72px 64px;
+  overflow: auto;
+}
+.slide.on { display: flex; animation: slideIn 0.35s ease; }
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.eyebrow::before {
+  content: "";
+  width: 28px;
+  height: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+h1 {
+  font-size: 56px;
+  line-height: 1.06;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin-bottom: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #b8c5d6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+h2 {
+  font-size: 36px;
+  line-height: 1.18;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 22px;
+  color: var(--text);
+}
+
+h3 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 20px 0 10px;
+  font-weight: 600;
+}
+
+p, li {
+  font-size: 16.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+li { margin: 5px 0; }
+
+.lede {
+  font-size: 21px;
+  color: var(--text-muted);
+  max-width: 920px;
+  margin-top: 18px;
+  line-height: 1.55;
+}
+.mute { color: var(--text-muted); }
+.sm { font-size: 14px; line-height: 1.5; }
+
+ul { margin: 8px 0 8px 22px; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--surface-2);
+  color: var(--accent);
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+}
+
+pre {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.55;
+  background: linear-gradient(180deg, #06090f, #0a0e14);
+  color: var(--text);
+  padding: 18px 22px;
+  border-radius: 10px;
+  overflow-x: auto;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+}
+pre code {
+  background: none; border: none; padding: 0;
+  color: inherit; font-size: inherit;
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14.5px;
+  margin: 12px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+th, td {
+  border-bottom: 1px solid var(--border);
+  padding: 11px 14px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--bg-2);
+}
+tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--surface-2); }
+
+.grid { display: grid; gap: 14px; margin: 14px 0; }
+.g2 { grid-template-columns: 1fr 1fr; }
+.g3 { grid-template-columns: 1fr 1fr 1fr; }
+.g4 { grid-template-columns: repeat(4, 1fr); }
+
+.box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  transition: border-color 0.2s;
+}
+.box:hover { border-color: var(--border-strong); }
+.box h4 {
+  font-size: 18px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.box p, .box li { font-size: 15px; }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 5px;
+  margin-right: 6px;
+}
+.tag::before {
+  content: "";
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.tag.mgr { background: var(--mgr-soft); color: var(--mgr); border: 1px solid rgba(167,139,250,0.25); }
+.tag.eng { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(34,211,238,0.25); }
+.tag.both { background: rgba(148,163,184,0.10); color: var(--text-muted); border: 1px solid var(--border); }
+
+.ok { color: var(--ok); font-weight: 600; }
+.no { color: var(--no); font-weight: 600; }
+.warn { color: var(--warn); font-weight: 600; }
+
+.num {
+  font-family: var(--mono);
+  font-size: 46px;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 10px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+/* Chain (G0–G6) */
+.chain {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: 20px 0 24px;
+  padding: 0 8px;
+  position: relative;
+}
+.chain-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  text-align: center;
+}
+.chain-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 26px;
+  left: calc(50% + 32px);
+  right: calc(-50% + 32px);
+  height: 1px;
+  background: var(--border-strong);
+}
+.chain-step.on:not(:last-child)::after {
+  background: linear-gradient(90deg, var(--accent), var(--border-strong));
+  box-shadow: 0 0 6px rgba(34,211,238,0.3);
+}
+.chain-dot {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--bg);
+  border: 2px solid var(--border-strong);
+  color: var(--text-dim);
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s;
+}
+.chain-step.on .chain-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  box-shadow: 0 0 24px var(--accent-glow), inset 0 0 0 4px var(--bg);
+}
+.chain-step.off .chain-dot {
+  border-style: dashed;
+}
+.chain-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 12px;
+  line-height: 1.4;
+  max-width: 110px;
+}
+.chain-step.on .chain-label { color: var(--text); }
+.chain-step.off .chain-label { opacity: 0.6; }
+
+/* Verdict cards (slide 7) */
+.verdict-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 24px 22px;
+  position: relative;
+  overflow: hidden;
+}
+.verdict-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.verdict-card.pass::before { background: var(--ok); }
+.verdict-card.review::before { background: var(--warn); }
+.verdict-card.block::before { background: var(--no); }
+.verdict-card .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+.verdict-card .status::before {
+  content: "";
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+.verdict-card.pass .status { color: var(--ok); }
+.verdict-card.review .status { color: var(--warn); }
+.verdict-card.block .status { color: var(--no); }
+.verdict-card h4 {
+  font-size: 22px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.verdict-card p { font-size: 14px; color: var(--text-muted); }
+
+.bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  width: 0;
+  transition: width 0.25s ease;
+  z-index: 100;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+#hud {
+  position: fixed;
+  bottom: 16px;
+  right: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  letter-spacing: 1px;
+  z-index: 100;
+}
+#hud::before {
+  content: "■ ";
+  color: var(--accent);
+}
+
+#hint {
+  position: fixed;
+  bottom: 16px;
+  left: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+  z-index: 100;
+}
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; flex: 1; }
+.split .col { padding: 4px 4px 0 0; }
+
+.rule {
+  border-left: 2px solid var(--accent);
+  padding: 12px 0 12px 18px;
+  margin: 16px 0 20px;
+  font-size: 19px;
+  color: var(--text);
+  font-weight: 500;
+  background: linear-gradient(90deg, var(--accent-soft), transparent 70%);
+  border-radius: 0 6px 6px 0;
+  line-height: 1.45;
+}
+
+.foot {
+  margin-top: auto;
+  padding-top: 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+}
+
+@media (max-width: 980px) {
+  .slide { padding: 32px 24px 56px; }
+  h1 { font-size: 36px; }
+  h2 { font-size: 26px; }
+  .g2, .g3, .g4, .split { grid-template-columns: 1fr; }
+  .chain {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .chain-step { flex-direction: row; gap: 14px; align-items: center; }
+  .chain-step:not(:last-child)::after {
+    top: 60px; left: 26px; right: auto;
+    width: 1px; height: 14px;
+  }
+  .chain-label { margin-top: 0; text-align: left; max-width: none; }
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    overflow: visible;
+  }
+  body::before { display: none; }
+  .slide {
+    position: relative;
+    display: flex !important;
+    page-break-after: always;
+    min-height: 100vh;
+    overflow: visible;
+    color: black;
+  }
+  .box, .verdict-card, table {
+    background: white !important;
+    border-color: #ccc !important;
+    color: black !important;
+  }
+  pre { background: #f5f5f5 !important; color: black !important; border-color: #ccc !important; }
+  code { background: #f5f5f5 !important; color: #006080 !important; border-color: #ccc !important; }
+  #hud, #hint, .bar { display: none; }
+  h1 { color: black !important; -webkit-text-fill-color: black !important; background: none !important; }
+  .eyebrow, h3, .chain-dot, .tag.eng, .verdict-card.pass .status, .num { color: #006080 !important; }
+  .chain-step.on .chain-dot { background: #006080 !important; color: white !important; }
+  .ok { color: #006400 !important; }
+  .no { color: #8b0000 !important; }
+  .warn { color: #8b6500 !important; }
+  .tag.mgr { color: #5b21b6 !important; }
+  .rule { background: none !important; border-left-color: #006080 !important; color: black !important; }
+}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="deck">
+
+<section class="slide on">
+  <div class="eyebrow">llm-code-gatekeeper · 2026-09</div>
+  <h1>Czy kod z agenta<br>może iść na produkcję?</h1>
+  <p class="lede">Automatyczna brama jakości: nie pyta, czy testy są zielone — pyta, czy zmianę wolno wpuścić. Teoria defektów LLM, stan G0–G3, instrukcja użycia.</p>
+  <p style="margin-top:28px">
+    <span class="tag both">wspólny deck</span>
+    <span class="tag mgr">manager</span>
+    <span class="tag eng">inżynier</span>
+  </p>
+  <div class="grid g3" style="margin-top:40px">
+    <div class="box"><div class="num">01</div><h4>Teoria</h4><p class="mute">Dlaczego klasyczny CI przepuszcza kod z LLM i jaki model zagrożeń to naprawia.</p></div>
+    <div class="box"><div class="num">02</div><h4>Co jest zrobione</h4><p class="mute">Silnik + 3 packi. 11 bramek. Python i C# z dowodem testów. TS bez G2.</p></div>
+    <div class="box"><div class="num">03</div><h4>Jak użyć</h4><p class="mute">Jedno polecenie na PR. Polityka w repo. Trzy werdykty. Pętla z agentem.</p></div>
+  </div>
+  <p class="foot">← → spacja · home/end · klik lewa–prawa krawędź</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Jak czytać ten deck</div>
+  <h2>Jedna prezentacja, dwa poziomy decyzji</h2>
+  <div class="split">
+    <div class="col">
+      <span class="tag mgr">manager</span>
+      <h3>Pytania, na które tu odpowiadamy</h3>
+      <ul>
+        <li>Jaki ryzyko zamykamy, którego nie zamyka obecne CI?</li>
+        <li>Co jest gotowe do adopcji, a co jest obietnicą?</li>
+        <li>Ile to kosztuje zespół i co trzeba zmienić w procesie?</li>
+        <li>Kiedy wolno traktować zielony Check Run jako ochronę?</li>
+      </ul>
+      <p class="mute sm" style="margin-top:16px">Skrót: brama przesuwa uwagę człowieka tam, gdzie jest potrzebna, i blokuje klasy błędów, które maszyna łapie taniej.</p>
+    </div>
+    <div class="col">
+      <span class="tag eng">inżynier</span>
+      <h3>Pytania, na które tu odpowiadamy</h3>
+      <ul>
+        <li>Jaki jest model defektów i łańcuch G0–G6?</li>
+        <li>Które bramki żyją w core, które w packu językowym?</li>
+        <li>Jak zainstalować, skonfigurować politykę i czytać raport?</li>
+        <li>Co fail-closed oznacza w praktyce (brak narzędzia ≠ pass)?</li>
+      </ul>
+      <p class="mute sm" style="margin-top:16px">Skrót: polityka jest kodem, dowód jest obowiązkowy, luki są nazwane w raporcie jako <code>not_checked</code>.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Problem</div>
+  <h2>Kod z LLM zwykle „działa”. To jest problem.</h2>
+  <div class="grid g2">
+    <div class="box">
+      <span class="tag mgr">manager</span>
+      <h4>Co się psuje w organizacji</h4>
+      <p>Zespół dostaje więcej PR-ów niż da się przeczytać. Recenzent klika „approve”, bo testy są zielone i diff „wygląda na kod”. Defekt wychodzi na produkcji albo w kolejnym sprincie — i nikt nie umie powiedzieć, który model go wpuścił.</p>
+      <p class="mute" style="margin-top:10px">Brama nie zastępuje człowieka. Zastępuje złudzenie, że zielone CI = bezpieczny merge.</p>
+    </div>
+    <div class="box">
+      <span class="tag eng">inżynier</span>
+      <h4>Dlaczego pipeline tego nie łapie</h4>
+      <p>Klasyczny CI zakłada, że testy, lockfile i opis PR są niezależnym dowodem. Przy agencie wszystkie pochodzą od tego samego autora co kod. Coverage rośnie. Testy asertują to, co kod robi. CI instaluje pakiet, który agent wymyślił.</p>
+      <p class="mute" style="margin-top:10px">Trzeba weryfikować artefakty, którym normalnie ufamy.</p>
+    </div>
+  </div>
+  <p class="rule">Nie-cel: zastąpić code review. Cel: zablokować to, co maszyna łapie pewniej, i dać człowiekowi raport zamiast surowego diffa.</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Teoria · model zagrożeń</div>
+  <h2>Klasy defektów, które przechodzą przez CI</h2>
+  <table>
+    <tr><th>Klasa</th><th>Objaw</th><th>Dlaczego CI milczy</th></tr>
+    <tr><td>Halucynowana zależność</td><td>import pakietu, którego nie ma — albo typosquat</td><td>lockfile powstał razem z kodem</td></tr>
+    <tr><td>Testy pod implementację</td><td>90% pokrycia, asercje powtarzają kod</td><td>coverage rośnie, testy zielone</td></tr>
+    <tr><td>Testy-atrapy</td><td><code>assert True</code>, echo mocka, brak asercji</td><td>zielone</td></tr>
+    <tr><td>Zakres większy niż zlecenie</td><td>agent „przy okazji” przepisuje moduł obok</td><td>diff poprawny składniowo</td></tr>
+    <tr><td>Sekrety w fixture'ach</td><td>token API w teście „na chwilę”</td><td>skanery bywają wyłączone dla testów</td></tr>
+    <tr><td>Cicha zmiana kontraktu</td><td>inne pole w API, testy zaktualizowane</td><td>ten sam autor zmienił obie strony</td></tr>
+    <tr><td>Nadmierne uprawnienia</td><td>TLS verify off, <code>shell=True</code>, IAM <code>*</code></td><td>to poprawny, kompilujący się kod</td></tr>
+  </table>
+  <p class="mute sm" style="margin-top:14px">Pełna lista w PLAN.md obejmuje też dryf architektoniczny, puste ścieżki błędów i licencje. Brama G0–G3 celuje w pierwsze siedem — najtańsze i najbardziej deterministyczne.</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Teoria · aksjomat</div>
+  <h2>Jedno założenie, na którym stoi reszta</h2>
+  <p class="rule">Testy, lockfile, konfiguracja i opis PR pochodzą od tego samego autora co kod — więc żadnego z nich nie wolno traktować jako niezależnego dowodu.</p>
+  <div class="grid g3">
+    <div class="box">
+      <h4>Skutek dla testów</h4>
+      <p class="mute">Zielony test nic nie znaczy, dopóki nie udowodnimy, że pada na kodzie <b>sprzed</b> zmiany. Inaczej test ozdabia implementację.</p>
+    </div>
+    <div class="box">
+      <h4>Skutek dla zależności</h4>
+      <p class="mute">Manifest nie jest źródłem prawdy. Pakiet musi istnieć w rejestrze, nie być młody i nie być homoglifem popularnej nazwy.</p>
+    </div>
+    <div class="box">
+      <h4>Skutek dla polityki</h4>
+      <p class="mute">Kryteria oceny leżą w ocenianym repo i agent nie może ich „naprawić”. CODEOWNERS + branch protection to granica bezpieczeństwa, nie formalność.</p>
+    </div>
+  </div>
+  <p style="margin-top:20px">Stąd kolejność bramek: <b>najtańsze i najbardziej deterministyczne najpierw</b>. Recenzent LLM (G4) jest drogi i niedeterministyczny — nie wolno nim przykrywać dziur, które tanie bramki już umieją strzec.</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Teoria · łańcuch</div>
+  <h2>G0 → G6: od higieny do wdrożenia</h2>
+  <div class="chain">
+    <div class="chain-step on"><div class="chain-dot">G0</div><div class="chain-label">pochodzenie<br>i zakres</div></div>
+    <div class="chain-step on"><div class="chain-dot">G1</div><div class="chain-label">statyka, deps,<br>złożoność</div></div>
+    <div class="chain-step on"><div class="chain-dot">G2</div><div class="chain-label">dowód<br>behawioralny</div></div>
+    <div class="chain-step on"><div class="chain-dot">G3</div><div class="chain-label">sekrety, SAST,<br>SCA</div></div>
+    <div class="chain-step off"><div class="chain-dot">G4</div><div class="chain-label">panel LLM<br>— plan</div></div>
+    <div class="chain-step off"><div class="chain-dot">G5</div><div class="chain-label">człowiek<br>— plan</div></div>
+    <div class="chain-step off"><div class="chain-dot">G6</div><div class="chain-label">gotowość deploy<br>— plan</div></div>
+  </div>
+  <div class="grid g2">
+    <div class="box">
+      <span class="tag mgr">manager</span>
+      <h4>Co to znaczy dla procesu</h4>
+      <p>Faza 1 (G0+G1+G3) daje ok. 60% wartości przy ~20% kosztu. G2 jest najtrudniejsza i najbardziej wartościowa — tu ginie „zielone, ale puste”. G4 włączamy do blokowania dopiero przy precyzji &gt;80% na kalibracji. Pełny łańcuch to ~3 miesiące; pierwsza wartość po ~3 tygodniach.</p>
+    </div>
+    <div class="box">
+      <span class="tag eng">inżynier</span>
+      <h4>Co jest w silniku dziś</h4>
+      <p>Zbudowane: G0, G1 (w tym complexity), G2 (Python + C#), G3. Niezbudowane: mutacje, flaky, kontrakty, IaC, licencje, G4 panel, G5 jako polityka człowieka poza <code>human_review_required_when</code>, G6 checklist wdrożeniowy.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Decyzja</div>
+  <h2>Trzy werdykty, zero „score 82/100”</h2>
+  <div class="grid g3">
+    <div class="verdict-card pass">
+      <div class="status">PASS</div>
+      <h4 class="ok">Zielone światło</h4>
+      <p>Bramki zielone, dowody zebrane. Kod wyjścia <code>0</code>.</p>
+    </div>
+    <div class="verdict-card review">
+      <div class="status">PASS-WITH-REVIEW</div>
+      <h4 class="warn">Człowiek zerka</h4>
+      <p>Nie blokuję, ale raport mówi gdzie. Kod <code>0</code> (albo <code>2</code> przy <code>--fail-on review</code>).</p>
+    </div>
+    <div class="verdict-card block">
+      <div class="status">BLOCK</div>
+      <h4 class="no">Twardy stop</h4>
+      <p>Z uzasadnieniem, scenariuszem awarii i fingerprintem. Kod <code>1</code>.</p>
+    </div>
+  </div>
+  <h3>Filozofia: fail-closed</h3>
+  <ul>
+    <li>brak narzędzia → <code>error</code>, nie cichy pass</li>
+    <li>brak dowodu → <code>on_gate_error: review</code>, nigdy fałszywie zielony Check Run</li>
+    <li>raport jawnie wymienia <code>not_checked</code></li>
+    <li>każde znalezisko <b>musi</b> mieć scenariusz awarii — bez niego obiekt się nie tworzy</li>
+    <li>fingerprint bez numeru linii — wyciszenie przeżywa rebase</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Stan · co jest zrobione</div>
+  <h2>Faza 1 ukończona: silnik + 3 packi</h2>
+  <div class="grid g4">
+    <div class="box"><h4>core</h4><p class="sm">orchestrator, CLI, polityka, sandbox, 11 bramek jako dispatch, PyPI/npm/NuGet</p><p class="sm mute"><code>gatekeeper_core</code></p></div>
+    <div class="box"><h4>python</h4><p class="sm">ruff/mypy, G2 przez ast + pytest, 6 reguł SAST, complexity McCabe</p><p class="sm mute"><code>gatekeeper_python</code></p></div>
+    <div class="box"><h4>ts / js</h4><p class="sm">tsc/eslint, 4 reguły SAST, complexity przez eslint. G2 świadomie odłożone.</p><p class="sm mute"><code>gatekeeper_ts</code></p></div>
+    <div class="box"><h4>csharp</h4><p class="sm">dotnet build, helper Roslyn, G2 xUnit, 4 reguły SAST</p><p class="sm mute"><code>gatekeeper_csharp</code></p></div>
+  </div>
+  <table>
+    <tr><th>Weryfikacja</th><th>Wynik</th></tr>
+    <tr><td>Każde repo osobno: ruff, mypy --strict, pytest, policy lint, calibrate</td><td class="ok">zielone</td></tr>
+    <tr><td>Core: semgrep --test + 5/5 przypadków kalibracyjnych (PyPI i npm)</td><td class="ok">62 testy</td></tr>
+    <tr><td>SAST per język (semgrep --test)</td><td class="ok">6 / 4 / 4</td></tr>
+    <tr><td>Mieszany diff Python+TS+C# jednym <code>gatekeeper run</code></td><td class="ok">PASS, każdy checker odpalony</td></tr>
+  </table>
+  <p class="mute sm">Cztery niezależne repozytoria GitHub. Pakiety jeszcze nie są na PyPI — instalacja z gita.</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Stan · 11 bramek</div>
+  <h2>G0–G3: co konkretnie stoi na straży</h2>
+  <table>
+    <tr><th>Bramka</th><th>Pytanie</th><th>Gdzie</th></tr>
+    <tr><td><code>G0.provenance</code></td><td>Kto / jakim modelem to napisał? (trailery commitów)</td><td>core</td></tr>
+    <tr><td><code>G0.scope</code></td><td>Czy diff da się zrecenzować? Limit 400 linii / 15 plików (efektywnych)</td><td>core</td></tr>
+    <tr><td><code>G1.deps</code></td><td>Czy nowy pakiet istnieje, nie jest młody, nie jest typosquatem?</td><td>core</td></tr>
+    <tr><td><code>G1.static</code></td><td>Czy zmienione linie kompilują się i przechodzą lint/typy?</td><td>packi</td></tr>
+    <tr><td><code>G1.complexity</code></td><td>Czy funkcja w diffie ma McCabe ≤ 10?</td><td>3 packi</td></tr>
+    <tr><td><code>G2.cross_verify</code></td><td>Czy nowe testy padają na starym kodzie?</td><td>Py + C#</td></tr>
+    <tr><td><code>G2.test_sanity</code></td><td>Czy test ma asercję, która coś znaczy?</td><td>Py + C#</td></tr>
+    <tr><td><code>G2.diff_coverage</code></td><td>Czy nowe linie produkcyjne mają ≥ 80% pokrycia?</td><td>Py + C#</td></tr>
+    <tr><td><code>G3.secrets</code></td><td>Czy w diffie (także testach) jest sekret?</td><td>core</td></tr>
+    <tr><td><code>G3.sast</code></td><td>Czy ktoś wyłączył TLS / skleił SQL / odpalił eval?</td><td>packi</td></tr>
+    <tr><td><code>G3.sca</code></td><td>Czy nowa zależność ma znaną podatność?</td><td>core</td></tr>
+  </table>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Stan · parytet języków</div>
+  <h2>Nie każdy język ma ten sam dowód</h2>
+  <table>
+    <tr><th></th><th>Python</th><th>TS / JS</th><th>C#</th></tr>
+    <tr><td>G1.static</td><td class="ok">ruff + mypy</td><td class="ok">tsc + eslint</td><td class="ok">dotnet build</td></tr>
+    <tr><td>G1.complexity</td><td class="ok">ast / McCabe</td><td class="ok">eslint complexity</td><td class="ok">Roslyn helper</td></tr>
+    <tr><td>G2.* (testy jako dowód)</td><td class="ok">pełne</td><td class="no">skipped</td><td class="ok">xUnit + helper</td></tr>
+    <tr><td>G3.sast „nigdy”</td><td class="ok">6 reguł</td><td class="ok">4 reguły</td><td class="ok">4 reguły</td></tr>
+    <tr><td>G1.deps / G3.sca</td><td class="ok">PyPI + pip-audit</td><td class="ok">npm + npm audit</td><td class="ok">NuGet + list --vulnerable</td></tr>
+  </table>
+  <div class="box" style="margin-top:18px">
+    <h4>Najważniejsza zbudowana bramka: G2.cross_verify</h4>
+    <p>Nowe testy z PR lecą na worktree ze <b>starym</b> kodem. Overlay tylko plików testowych. Jeśli test przechodzi — nie dowodzi zmiany. Detekcja <code>pip install -e</code> (izolacja zepsuta → error). Markery <code>characterization</code> / <code>test_backfill</code> z licznikiem nadużyć. TS: brak TestToolchain = <code>skipped</code> w raporcie, nie udawany pass.</p>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Architektura · dla inżynierów</div>
+  <h2>Core nie importuje packów. Packi się dorejestrują.</h2>
+  <p style="margin-bottom:14px">Dwupoziomowe entry points (<code>importlib.metadata</code>). Polityka referencuje gate ID jako string — dlatego <code>G1.static</code> zostaje jedną bramką niezależnie od liczby języków w PR.</p>
+  <table>
+    <tr><th>Grupa</th><th>Co wpuszcza</th><th>Po co</th></tr>
+    <tr><td><code>gatekeeper.gates</code></td><td>całe bramki (core: 11)</td><td>pack może dodać nową bramkę bez patcha w core</td></tr>
+    <tr><td><code>gatekeeper.static_checkers</code></td><td>ruff/mypy, tsc/eslint, dotnet</td><td>agregator G1.static</td></tr>
+    <tr><td><code>gatekeeper.test_toolchains</code></td><td>pytest/ast, Roslyn+xUnit</td><td>agregator G2.*</td></tr>
+    <tr><td><code>gatekeeper.semgrep_rule_packs</code></td><td>reguły per język</td><td>agregator G3.sast</td></tr>
+    <tr><td><code>gatekeeper.dep_ecosystems</code></td><td>PyPI, npm, NuGet</td><td>zostaje w core — to parsery manifestów, nie kompilatory</td></tr>
+  </table>
+  <p class="mute sm" style="margin-top:12px">Sandbox: jedyny <code>subprocess</code> w <code>runner.py</code>. Scrub TOKEN/SECRET, <code>unshare --net</code> bez roota, RLIMIT, allowlista env. Linux. Brak ContainerSandbox. Raport mówi, jaka izolacja faktycznie była.</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Użycie · start w 5 krokach</div>
+  <h2>Scenariusz A — ręcznie, na gałęzi agenta</h2>
+  <div class="grid g2">
+    <div>
+      <p><b>1.</b> Zainstaluj core + packi języków, które naprawdę są w repo (z GitHuba, nie PyPI).</p>
+      <p style="margin-top:10px"><b>2.</b> Doinstaluj narzędzia bramek: ruff/mypy, gitleaks, ewentualnie tsc/eslint, .NET SDK.</p>
+      <p style="margin-top:10px"><b>3.</b> Upewnij się, że testy ocenianego projektu w ogóle się zbierają (<code>pytest --collect-only</code> / <code>dotnet test</code>).</p>
+      <p style="margin-top:10px"><b>4.</b> Skopiuj <code>policy/gates.yaml</code> i <code>exceptions.yaml</code> do <b>ocenianego</b> repo. Chroń <code>policy/</code> przez CODEOWNERS.</p>
+      <p style="margin-top:10px"><b>5.</b> Stojąc na gałęzi agenta:</p>
+      <pre>gatekeeper policy lint --policy policy/gates.yaml
+gatekeeper run --repo . --base origin/main</pre>
+    </div>
+    <div class="box">
+      <span class="tag mgr">manager</span>
+      <h4>Ile to rusza zespół</h4>
+      <p>Jednorazowo: instalacja, kopia polityki, wpis w CI. Potem zero nowego rytuału — brama odpala się na PR.</p>
+      <p style="margin-top:10px">Pierwszy tydzień: tryb ostrzeżeń (szablon ma <code>warn_only</code> na G1.static / G2 / G3.sast / G3.sca). Potem zdejmij <code>warn_only</code>, zanim Check Run stanie się required.</p>
+      <p class="mute" style="margin-top:10px">Dopóki <code>warn_only</code> zostaje, brama komentuje, nie chroni. Naprawdę blokuje wtedy: sekret, nieistniejący pakiet, typosquat, zbyt duży diff.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Użycie · instalacja</div>
+  <h2>Core zawsze. Pack tylko dla języków w repo.</h2>
+  <pre>pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
+pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper-python.git"
+pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper-ts.git"
+pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper-csharp.git"</pre>
+  <table>
+    <tr><th>Stos</th><th>Dodatkowo poza pipem</th></tr>
+    <tr><td>Python</td><td><code>pip install ruff mypy</code> · gitleaks jako binarka Go</td></tr>
+    <tr><td>TS/JS</td><td><code>typescript</code>, <code>eslint</code>, parser TS — najlepiej devDependency projektu. Potrzebny <code>tsconfig.json</code> / config eslint.</td></tr>
+    <tr><td>C#</td><td>.NET SDK 8+ · <code>dotnet restore</code> już zrobiony (brama nie ściąga pakietów) · <code>gatekeeper-cs-helper</code> z <code>dotnet pack</code> (jeszcze nie na NuGet.org)</td></tr>
+  </table>
+  <p class="sm mute" style="margin-top:10px">Mieszany PR: jedno wywołanie, jeden raport. <code>G1.static</code> / <code>G1.complexity</code> / <code>G3.sast</code> sumują checker każdego zainstalowanego języka. Core bez packa i tak pilnuje G0, sekretów i deps/SCA.</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Użycie · raport i pętla</div>
+  <h2>Co robić z werdyktem</h2>
+  <div class="grid g2">
+    <div class="box">
+      <h4>Czytanie raportu</h4>
+      <ul>
+        <li>każde znalezisko = plik + fakt + bramka + fingerprint + <b>scenariusz awarii</b></li>
+        <li><code>przebieg</code> w nagłówku → <code>gatekeeper incident</code></li>
+        <li>fingerprint → <code>gatekeeper verdict … --false-positive</code></li>
+        <li>bramka w <code>warn-only</code> failuje, ale nie blokuje merge</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>Pętla z agentem</h4>
+      <p>Nie poprawiaj ręcznie. Wklej raport agentowi jako zadanie. <b>Maks. 2–3 rundy</b>, potem człowiek — inaczej pętla produkuje obejścia.</p>
+      <p class="mute" style="margin-top:8px">Fałszywy alarm: nie wyłączaj reguły. Oznacz verdict + wyjątek w <code>exceptions.yaml</code> z właścicielem i datą wygaśnięcia.</p>
+    </div>
+  </div>
+  <h3>Ściąga CLI</h3>
+  <pre>gatekeeper run --base main
+gatekeeper run --gate G1.deps
+gatekeeper run --base main --fail-on review
+gatekeeper policy lint --policy policy/gates.yaml
+gatekeeper policy facts
+gatekeeper calibrate
+gatekeeper verdict &lt;fingerprint&gt; --false-positive --note "…"
+gatekeeper metrics</pre>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Użycie · polityka i CI</div>
+  <h2>Kryteria oceny są kodem w ocenianym repo</h2>
+  <div class="grid g2">
+    <div>
+      <p class="sm">Szablon: <code>core/policy/gates.yaml</code>. Blocking to fakty, nie „score”. Progi: diff, coverage, complexity, SAST, SCA. Ścieżki wrażliwe (<code>auth/</code>, <code>payments/</code>, <code>migrations/</code>, <code>policy/</code>) wymuszają review.</p>
+      <pre style="font-size:12.5px">blocking:
+  - secrets.found_in_diff
+  - deps.unknown_package
+  - deps.typosquat_suspect
+  - tests.pass_on_pre_change_code
+
+warn_only:          # zdejmij przed required check
+  - G1.static
+  - G2.cross_verify
+  - G3.sast
+  - G3.sca</pre>
+    </div>
+    <div class="box">
+      <span class="tag both">CI</span>
+      <h4>Scenariusz B — przy każdym PR</h4>
+      <p>Szablon workflow: <code>python/.github/workflows/gatekeeper.yml</code> (uniwersalny, mimo katalogu). Check Run z werdyktem. Docs-only idzie ścieżką szybką, sekrety i tak.</p>
+      <p style="margin-top:10px"><b>Granica:</b> agent bez uprawnień do <code>policy/</code> i <code>.github/</code>. Placeholder <code>@wlasciciel-bramy</code> nic nie egzekwuje — trzeba prawdziwych owners i branch protection.</p>
+      <p class="mute" style="margin-top:10px">W AGENTS.md: trailer <code>Generated-By: narzędzie/model</code> — bez tego nie policzysz defektów per model.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Uczciwy stan · decyzja</div>
+  <h2>Co wolno obiecać organizacji dziś</h2>
+  <div class="grid g2">
+    <div class="box" style="border-top:3px solid var(--ok)">
+      <h4 class="ok">Gotowe do adopcji</h4>
+      <ul>
+        <li>halucynowane pakiety i typosquat (PyPI/npm/NuGet)</li>
+        <li>limity rozmiaru PR i sekrety także w testach</li>
+        <li>static/SAST na zmienionych liniach, 3 języki</li>
+        <li>dowód testów dla Pythona i C#</li>
+        <li>polityka jako YAML, ślad w SQLite, kalibracja core 5/5</li>
+      </ul>
+    </div>
+    <div class="box" style="border-top:3px solid var(--warn)">
+      <h4 class="warn">Nie obiecuj jeszcze</h4>
+      <ul>
+        <li>że domyślny szablon <b>blokuje</b> static/SAST/SCA/G2 — nie blokuje</li>
+        <li>dowodu behawioralnego dla TypeScriptu</li>
+        <li>recenzenta LLM (G4), deploy checklist (G6)</li>
+        <li>twardej izolacji poza Linuxem / kontenerem</li>
+        <li>instalacji z PyPI i wypchniętego CI (token bez scope workflow)</li>
+      </ul>
+    </div>
+  </div>
+  <p class="rule" style="margin-top:18px">Następny krok nie jest nową bramką. Jest zdjęciem <code>warn_only</code> i naprawą CODEOWNERS — potem G2 dla TS, potem dopiero G4.</p>
+  <p class="foot">Źródła: core/PLAN.md · README.md · USAGE.md · python/USAGE.md · PODSUMOWANIE.md · REVIEW.md · core/README.md</p>
+</section>
+
+</div>
+<div id="hint">← → spacja · home/end · klik krawędź</div>
+<div id="hud">01 / 16</div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let i = 0;
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('on', k === i));
+    document.getElementById('hud').textContent =
+      String(i + 1).padStart(2, '0') + ' / ' + String(slides.length).padStart(2, '0');
+    document.getElementById('bar').style.width = ((i + 1) / slides.length * 100) + '%';
+  }
+  addEventListener('keydown', e => {
+    if (['ArrowRight', 'ArrowDown', ' ', 'PageDown'].includes(e.key)) { e.preventDefault(); show(i + 1); }
+    if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); show(i - 1); }
+    if (e.key === 'Home') show(0);
+    if (e.key === 'End') show(slides.length - 1);
+  });
+  addEventListener('click', e => {
+    if (e.target.closest('a, pre, code, .verdict-card')) return;
+    if (e.clientX > innerWidth * 0.72) show(i + 1);
+    else if (e.clientX < innerWidth * 0.28) show(i - 1);
+  });
+  show(0);
+</script>
+</body>
+</html>

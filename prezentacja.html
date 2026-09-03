@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llm-code-gatekeeper — prezentacja</title>
+<style>
+  :root{
+    --bg:#0d1117; --bg2:#161b22; --panel:#1c2430; --line:#30363d;
+    --fg:#e6edf3; --dim:#8b949e; --accent:#58a6ff; --green:#3fb950;
+    --amber:#d29922; --red:#f85149; --purple:#bc8cff; --mono:ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
+  .slide{position:absolute;inset:0;display:none;flex-direction:column;padding:56px 76px;overflow-y:auto}
+  .slide.active{display:flex}
+  .slide h1{font-size:52px;line-height:1.15;margin-bottom:14px}
+  .slide h2{font-size:38px;margin-bottom:24px;border-bottom:2px solid var(--accent);padding-bottom:10px}
+  .slide h3{font-size:22px;margin:18px 0 10px;color:var(--accent)}
+  p,li{font-size:19px;line-height:1.55;color:var(--fg)}
+  .dim{color:var(--dim)}
+  .small{font-size:15px}
+  ul{margin:10px 0 10px 26px}
+  li{margin-bottom:8px}
+  code{font-family:var(--mono);font-size:0.88em;background:#21262d;padding:2px 7px;border-radius:5px;color:#79c0ff}
+  pre{font-family:var(--mono);font-size:15.5px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:16px 20px;margin:12px 0;overflow-x:auto;color:#a5d6ff;line-height:1.5}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:17px}
+  th,td{border:1px solid var(--line);padding:9px 13px;text-align:left}
+  th{background:var(--bg2);color:var(--accent);font-weight:600}
+  .pill{display:inline-block;padding:3px 12px;border-radius:999px;font-size:14px;font-weight:600;margin:2px 4px 2px 0}
+  .pill.b{background:#123352;color:var(--accent)}
+  .pill.g{background:#12351a;color:var(--green)}
+  .pill.a{background:#3a2e08;color:var(--amber)}
+  .pill.r{background:#43111a;color:var(--red)}
+  .pill.p{background:#2c1a4a;color:var(--purple)}
+  .cards{display:grid;gap:16px;margin:14px 0}
+  .cards.c2{grid-template-columns:1fr 1fr}
+  .cards.c3{grid-template-columns:1fr 1fr 1fr}
+  .cards.c4{grid-template-columns:repeat(4,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+  .card h4{font-size:19px;color:var(--accent);margin-bottom:8px}
+  .card p,.card li{font-size:15.5px}
+  .foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font-size:14px;display:flex;justify-content:space-between}
+  .hl{color:var(--green);font-weight:600}
+  .warn{color:var(--amber);font-weight:600}
+  .bad{color:var(--red);font-weight:600}
+  .center{text-align:center;justify-content:center}
+  .kicker{color:var(--accent);text-transform:uppercase;letter-spacing:3px;font-size:15px;margin-bottom:18px}
+  #hud{position:fixed;bottom:14px;right:20px;color:var(--dim);font-size:13px;font-family:var(--mono)}
+  #bar{position:fixed;top:0;left:0;height:3px;background:var(--accent);width:0;transition:width .2s}
+  @media(max-width:900px){.slide{padding:28px}.cards.c4,.cards.c3,.cards.c2{grid-template-columns:1fr}.slide h1{font-size:34px}.slide h2{font-size:26px}}
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<!-- 1. Tytuł -->
+<section class="slide center active">
+  <div class="kicker">Bramka jakości dla kodu z agentów LLM</div>
+  <h1>llm-code-gatekeeper</h1>
+  <p class="dim" style="font-size:24px;max-width:900px;margin:10px auto">
+    Silnik + 3 packi językowe. Nie pyta „czy testy są zielone” —
+    pyta, <b>czy zmiana może iść na produkcję</b>.
+  </p>
+  <p style="margin-top:30px">
+    <span class="pill b">core</span><span class="pill g">python</span><span class="pill a">ts / js</span><span class="pill r">c#</span>
+  </p>
+  <p class="dim small" style="margin-top:34px">Prezentacja na podstawie: README.md · PODSUMOWANIE.md · USAGE.md · REVIEW.md (2026-09-02)</p>
+</section>
+
+<!-- 2. Problem -->
+<section class="slide">
+  <h2>Problem: kod z LLM zwykle „działa” — i to jest problem</h2>
+  <p>Klasyczny CI łapie <i>„kod nie działa”</i>. Kod z agentów LLM zwykle działa — a i tak wycieka do produkcji przez:</p>
+  <div class="cards c2">
+    <div class="card"><h4>halucynowane pakiety</h4><p class="dim">import istnieje tylko w wyobraźni modelu — albo to typosquat / slopsquat</p></div>
+    <div class="card"><h4>testy-atrapy</h4><p class="dim">nowe testy niczego nie dowodzą: brak asercji, asercja na stałą, echo mocka</p></div>
+    <div class="card"><h4>sekrety w fixture'ach</h4><p class="dim">token API wpięty „na próbę” w pliku testowym</p></div>
+    <div class="card"><h4>diff poza zakresem</h4><p class="dim">agent „przy okazji” przepisuje połowę repo</p></div>
+  </div>
+  <h3>Założenie projektowe (prawdziwe)</h3>
+  <p class="dim" style="max-width:1000px">Testy, lockfile, konfiguracja i opis PR pochodzą od <b>tego samego autora co kod</b> — więc żadnego z nich nie wolno traktować jako niezależnego dowodu.</p>
+</section>
+
+<!-- 3. Werdykt systemu -->
+<section class="slide">
+  <h2>Jak brama decyduje</h2>
+  <p>Jedno polecenie na cały PR — niezależnie od liczby języków w diffie:</p>
+  <pre>gatekeeper run --repo /ścieżka/do/repo --base origin/main</pre>
+  <div class="cards c3">
+    <div class="card"><h4 style="color:var(--green)">PASS</h4><p class="dim">wszystkie bramki zielone, dowody zebrane</p></div>
+    <div class="card"><h4 style="color:var(--amber)">PASS-WITH-REVIEW</h4><p class="dim">przechodzi, ale wymaga człowieka przy merge</p></div>
+    <div class="card"><h4 style="color:var(--red)">BLOCK</h4><p class="dim">twarde stop z uzasadnieniem i fingerprintami</p></div>
+  </div>
+  <h3>Filozofia: fail-closed, nie fail-open</h3>
+  <ul>
+    <li>brak narzędzia → <code>error</code>, nie cichy <code>pass</code></li>
+    <li>brak dowodu → <code>on_gate_error: review</code>, nigdy zielony Check Run</li>
+    <li>raport jawnie wymienia <code>not_checked</code></li>
+    <li>ślad przebiegów w SQLite, fingerprint <b>bez numeru linii</b> — wyciszenia przeżywają rebase</li>
+  </ul>
+</section>
+
+<!-- 4. Architektura 4 repo -->
+<section class="slide">
+  <h2>Architektura: 4 repozytoria, nie 3</h2>
+  <p>Jeden monolit Pythona podzielono <code>git filter-repo</code> (zachowana historia) na wspólny rdzeń i trzy cienkie packi językowe:</p>
+  <div class="cards c4">
+    <div class="card"><h4>core</h4><p>silnik, CLI, 11 bramek, PyPI/npm/NuGet<br><code>gatekeeper_core</code></p></div>
+    <div class="card"><h4>python</h4><p>ruff / mypy, testy przez <code>ast</code>, SAST Pythona<br><code>gatekeeper_python</code></p></div>
+    <div class="card"><h4>ts</h4><p>tsc / eslint, SAST TS/JS<br><code>gatekeeper_ts</code></p></div>
+    <div class="card"><h4>csharp</h4><p><code>dotnet build</code>, helper Roslyn, SAST C#<br><code>gatekeeper_csharp</code></p></div>
+  </div>
+  <h3>Dlaczego PyPI/npm/NuGet zostały w core?</h3>
+  <p class="dim">Manifest + rejestr + typosquat + SCA nie mają logiki specyficznej dla kompilatora — to czysta infrastruktura bramek <code>G1.deps</code>/<code>G3.sca</code>. Rozbicie na 3 kopie tylko duplikowałoby parsery manifestów.</p>
+</section>
+
+<!-- 5. Entry points -->
+<section class="slide">
+  <h2>Montaż: dwupoziomowe entry points</h2>
+  <p>Packi dorejestrowują się przez <code>importlib.metadata</code> — core nie importuje żadnego packa wprost:</p>
+  <table>
+    <tr><th>Poziom / grupa</th><th>Co rejestruje</th><th>Efekt</th></tr>
+    <tr><td><code>gatekeeper.gates</code></td><td>całe bramki (core rejestruje swoje 11)</td><td>pack może dodać <b>nową bramkę</b> bez patcha w core</td></tr>
+    <tr><td><code>gatekeeper.static_checkers</code></td><td rowspan="4">dostawcy <i>wewnątrz</i> jednej logicznej bramki-agregatora</td><td rowspan="4"><code>G1.static</code>, <code>G1.deps</code>, <code>G3.sast</code>, <code>G2.*</code> pozostają <b>jednym gate ID</b> niezależnie od liczby packów — polityka referencuje je jako stringi</td></tr>
+    <tr><td><code>gatekeeper.dep_ecosystems</code></td></tr>
+    <tr><td><code>gatekeeper.test_toolchains</code></td></tr>
+    <tr><td><code>gatekeeper.semgrep_rule_packs</code></td></tr>
+  </table>
+  <p class="dim small">Weryfikacja mieszanego stosu: wszystkie 4 pakiety w jednym venv → <code>entry_points(group="gatekeeper.gates")</code> daje spójny zestaw 11 gate ID.</p>
+</section>
+
+<!-- 6. Bramki -->
+<section class="slide">
+  <h2>11 bramek: G0 – G3</h2>
+  <table>
+    <tr><th>Bramka</th><th>Co sprawdza</th><th>Gdzie żyje</th></tr>
+    <tr><td><code>G0.provenance</code> / <code>G0.scope</code></td><td>pochodzenie zmiany, diff w zakresie, limit rozmiaru</td><td>core (language-agnostic)</td></tr>
+    <tr><td><code>G1.deps</code></td><td>rejestr: istnienie, wiek, typosquat pakietu</td><td>core (PyPI / npm / NuGet)</td></tr>
+    <tr><td><code>G1.static</code></td><td>lint / typy / build na zmienionych liniach</td><td>agregator + packi</td></tr>
+    <tr><td><code>G1.complexity</code></td><td>złożoność cyklomatyczna McCabe (M &gt; 10 → block)</td><td>core + wszystkie 3 packi</td></tr>
+    <tr><td><code>G2.cross_verify</code></td><td>nowe testy uruchomione przeciw kodowi <b>sprzed</b> zmiany</td><td>agregator + packi</td></tr>
+    <tr><td><code>G2.test_sanity</code></td><td>linter jakości testów (brak asercji, assert na stałą…)</td><td>agregator + packi</td></tr>
+    <tr><td><code>G2.diff_coverage</code></td><td>branch-aware pokrycie różnicowe (diff-cover)</td><td>agregator + packi</td></tr>
+    <tr><td><code>G3.secrets</code></td><td>gitleaks — także na testach i fixture'ach</td><td>core</td></tr>
+    <tr><td><code>G3.sast</code></td><td>reguły „nigdy” (eval, shell=True, TLS wyłączony…)</td><td>agregator + packi</td></tr>
+    <tr><td><code>G3.sca</code></td><td>pip-audit / npm audit / dotnet --vulnerable</td><td>core</td></tr>
+  </table>
+  <p class="dim small">Planowe, niezaimplementowane: <code>G4</code> (panel LLM) → <code>G5</code> (człowiek) → <code>G6</code> (deploy).</p>
+</section>
+
+<!-- 7. Co dostajesz per język -->
+<section class="slide">
+  <h2>Pokrycie per język</h2>
+  <table>
+    <tr><th>Bramka</th><th>Python</th><th>TS / JS</th><th>C#</th></tr>
+    <tr><td>G1.static</td><td class="hl">ruff + mypy</td><td class="hl">tsc + eslint</td><td class="hl">dotnet build (Roslyn = ruff+mypy naraz)</td></tr>
+    <tr><td>G1.complexity</td><td class="hl">ast / McCabe</td><td class="hl">reguła eslint</td><td class="hl">gatekeeper-cs-helper (Roslyn)</td></tr>
+    <tr><td>G2.cross_verify / test_sanity / diff_coverage</td><td class="hl">pełne (ast + coverage.py)</td><td class="bad">brak → skipped</td><td class="hl">helper Roslyn + xUnit + diff-cover</td></tr>
+    <tr><td>G3.sast („nigdy”)</td><td class="hl">6 reguł</td><td class="hl">4 reguły</td><td class="hl">4 reguły</td></tr>
+    <tr><td>G1.deps / G3.sca</td><td class="hl">PyPI + pip-audit</td><td class="hl">npm + npm audit</td><td class="hl">NuGet + dotnet list --vulnerable</td></tr>
+  </table>
+  <h3>Najważniejsza bramka: G2.cross_verify</h3>
+  <p class="dim">Nowe testy z PR-a lecą na worktree ze <b>starym</b> kodem — test, który niczego nie dowodzi, nie ma prawa przejść. Overlay tylko plików testowych, detekcja <code>pip install -e</code> (izolacja zepsuta → error), markery <code>characterization</code>/<code>test_backfill</code> z licznikiem nadużyć.</p>
+</section>
+
+<!-- 8. Sandbox -->
+<section class="slide">
+  <h2>Bezpieczeństwo: brama wykonuje kod z PR-a</h2>
+  <p>Jedyny punkt <code>subprocess</code> (<code>runner.py</code>) to świadoma granica bezpieczeństwa:</p>
+  <div class="cards c2">
+    <div class="card"><h4>Izolacja procesu</h4><ul>
+      <li>scrub zmiennych <code>TOKEN/SECRET/PASSWORD</code></li>
+      <li><code>unshare --net</code> — sieć off bez roota</li>
+      <li>RLIMIT pamięci i czasu, zabijanie grupy procesów</li>
+      <li><code>keep_env</code> jako allowlista, nie denylista</li>
+    </ul></div>
+    <div class="card"><h4>Uczciwość raportu</h4><ul>
+      <li><code>describe_isolation()</code> — raport mówi, jaka izolacja faktycznie była</li>
+      <li>sekrety redagowane w findings (osobny test)</li>
+      <li>overlay G2 nie kopiuje produkcji do base worktree</li>
+      <li><code>only_changed_lines</code> — wdrożenie na starym repo nie zabija projektu</li>
+    </ul></div>
+  </div>
+  <p class="warn">Nierozwiązane: brak ContainerSandbox (Linux-only), macOS/Windows bez netns, <code>require_isolation: false</code> jako default.</p>
+</section>
+
+<!-- 9. Weryfikacja -->
+<section class="slide">
+  <h2>Weryfikacja (stan po Fazie 1)</h2>
+  <ul>
+    <li>Każde repo z osobna: <code>ruff</code> + <code>mypy --strict</code> + <code>pytest</code> + <code>policy lint</code> + <code>calibrate</code> — <span class="hl">zielone</span></li>
+    <li>Core dodatkowo: <code>semgrep --test</code> + <span class="hl">5/5</span> przypadków kalibracyjnych (PyPI i npm), <span class="hl">62 testy</span></li>
+    <li>Reguły SAST per język: <span class="hl">6/4/4</span> semgrep --test (python / ts / csharp)</li>
+    <li>Wszystkie 4 naraz: spójne 11 gate ID; mieszany diff Python+TS+C# jednym <code>gatekeeper run</code> → <span class="hl">PASS</span>, każdy checker realnie odpalony jednym wywołaniem</li>
+    <li>C#: nowy helper Roslyn <code>gatekeeper-cs-helper</code> — G2.* istnieje dziś dla Pythona i C#; TS/JS świadomie odłożone (brak toolchainu = <code>skipped</code>, nie błąd)</li>
+  </ul>
+  <h3>Nowe po Fazie 1</h3>
+  <p><span class="pill g">G2.* dla C#</span> <span class="pill b">G1.complexity — we wszystkich 3 packach jednocześnie</span></p>
+</section>
+
+<!-- 10. Review: P0 -->
+<section class="slide">
+  <h2>Review — znaleziska krytyczne (P0)</h2>
+  <div class="card" style="border-left:4px solid var(--red)">
+    <h4 style="color:var(--red)">P0 — domyślna polityka prawie nic nie blokuje</h4>
+    <p><code>G1.static</code>, <code>G3.sast</code>, <code>G3.sca</code>, <code>G2.*</code> są w <code>warn_only</code>. Naprawdę blokuje tylko: sekret, nieistniejący pakiet, typosquat, diff &gt; 400 linii / 15 plików. Zespół może dostać zielony Check Run i uznać, że brama „chroni”.</p>
+  </div>
+  <div class="card" style="border-left:4px solid var(--red);margin-top:14px">
+    <h4 style="color:var(--red)">P0 — CODEOWNERS to atrapa</h4>
+    <p><code>/policy/ @wlasciciel-bramy</code> — placeholder, nie handle. Granica „agent nie zmienia kryteriów oceny” nie istnieje dopóki consuming repo nie włączy branch protection.</p>
+  </div>
+  <h3>Największe ryzyko</h3>
+  <p class="dim">„Nie budować G4, dopóki domyślna polityka nie blokuje G1/G3. Inaczej drogi, niedeterministyczny recenzent przykryje dziury, których tanie bramki już umieją strzec.”</p>
+</section>
+
+<!-- 11. Review: P1/P2 -->
+<section class="slide">
+  <h2>Review — pozostałe znaleziska (P1 / P2)</h2>
+  <div class="cards c2">
+    <div class="card"><h4 style="color:var(--amber)">P1</h4><ul>
+      <li><code>allow_packages</code> normalizuje zawsze jako PyPI → martwa dla npm/NuGet</li>
+      <li>eslint/tsc fail-open przy śmieciowym outputcie (<code>JSONDecodeError → []</code>)</li>
+      <li><code>G1.static</code> przerywa na pierwszym errorze checkera</li>
+      <li>sandbox bez kontenera, Linux-only</li>
+    </ul></div>
+    <div class="card"><h4>P2</h4><ul>
+      <li>podwójna rejestracja bramek (@register + entry points)</li>
+      <li>dryf szablonów <code>gates.yaml</code> między 4 repo</li>
+      <li>brak górnego boundu zależności <code>core&gt;=0.1.0</code></li>
+      <li>homoglify typosquatu niepełne; CI nie wypchnięte (token bez scope <code>workflow</code>)</li>
+    </ul></div>
+  </div>
+  <h3>Jakość kodu — mocne strony</h3>
+  <p class="dim">Python 3.12, mypy <code>--strict</code>, ruff; komentarze tłumaczą <i>dlaczego</i>, nie <i>co</i>; testy na zachowanie, nie na mocki (golden files semgrep/gitleaks/pip-audit); kalibracja jako regresja samej bramy.</p>
+</section>
+
+<!-- 12. Werdykt -->
+<section class="slide">
+  <h2>Werdykt review</h2>
+  <div class="cards c2">
+    <div class="card" style="border-left:4px solid var(--green)">
+      <h4>Jako fundament badawczo-inżynierski</h4>
+      <p style="font-size:40px;color:var(--green)">7.5 / 10</p>
+      <p class="dim">„Nie jest to kolejny wrapper na Semgrep. Jest model defektów specyficznych dla agentów i silnik, który ten model egzekwuje uczciwie: brak dowodu ≠ pass, luki są nazwane, polityka jest kodem.”</p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--amber)">
+      <h4>Jako gotowy gate w CI</h4>
+      <p style="font-size:40px;color:var(--amber)">5 / 10</p>
+      <p class="dim">Domyślnie nie blokuje static/SAST/SCA/testów; TS nie ma dowodu behawioralnego; ochrona policy/ papierowa; izolacja procesów nie twarda.</p>
+    </div>
+  </div>
+  <h3>Najlepsza następna kroka — wg recenzenta</h3>
+  <p>Nie nowa bramka, tylko <b>włączenie tych, które już są</b>, plus naprawa P0/P1.</p>
+</section>
+
+<!-- 13. Roadmapa -->
+<section class="slide">
+  <h2>Droga dalej</h2>
+  <h3>Zmienić teraz (mały koszt, duży efekt)</h3>
+  <ul>
+    <li>rozdzielić <code>gates.yaml</code> na <span class="pill a">warn-only</span> (adopcja) i <span class="pill g">enforcing</span> (produkcja)</li>
+    <li>naprawić <code>allow_packages</code> — normalizacja per ekosystem</li>
+    <li><code>JSONDecodeError → []</code> zamienić na <code>ToolFailed</code> (fail-closed)</li>
+    <li>CODEOWNERS: prawdziwe handle albo usunąć plik</li>
+    <li>pin <code>core&gt;=0.1.0,&lt;0.2</code>, wypchnąć CI (<code>gh auth refresh -s workflow</code>)</li>
+  </ul>
+  <h3>Odłożone (nazwać długiem)</h3>
+  <p class="dim">TestToolchain dla TS (TypeScript Compiler API), kalibracja C#, G4 (panel LLM — dopiero po zdjęciu warn_only i precyzji &gt;80% na kalibracji), mutacje/flaky/kontrakty, ContainerSandbox, publikacja na PyPI.</p>
+  <p class="dim small" style="margin-top:26px">Źródła: README.md · PODSUMOWANIE.md · USAGE.md · REVIEW.md · core/README.md — /home/tarze07/poligon/llm-code-gatekeeper</p>
+</section>
+
+<div id="hud">1 / 13</div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')];let i=0;
+  function show(n){i=Math.max(0,Math.min(slides.length-1,n));slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    document.getElementById('hud').textContent=(i+1)+' / '+slides.length;
+    document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';}
+  addEventListener('keydown',e=>{if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();show(i+1)}
+    if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();show(i-1)}
+    if(e.key==='Home')show(0); if(e.key==='End')show(slides.length-1);});
+  addEventListener('click',e=>{if(e.clientX>innerWidth*0.7)show(i+1);else if(e.clientX<innerWidth*0.3)show(i-1)});
+  show(0);
+</script>
+</body>
+</html>
