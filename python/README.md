@@ -1,6 +1,6 @@
 # llm-code-gatekeeper-python
 
-Pack **Python** dla [`llm-code-gatekeeper-core`](https://github.com/tarze07/llm-code-gatekeeper-core) — silnika bramy jakości dla kodu generowanego przez agentów LLM (Codex, Claude Code, Cursor, Devin…).
+Pack **Python** dla [`llm-code-gatekeeper-core`](../core/README.md) — silnika bramy jakości dla kodu generowanego przez agentów LLM (Codex, Claude Code, Cursor, Devin…).
 
 Odpowiada na pytanie: **czy ta zmiana może pójść na produkcję?** — decyzją `PASS` / `PASS-WITH-REVIEW` / `BLOCK`, z uzasadnieniem i śladem audytowym.
 
@@ -8,10 +8,10 @@ Odpowiada na pytanie: **czy ta zmiana może pójść na produkcję?** — decyzj
 
 System jest podzielony na wspólny rdzeń + cienkie pack'i per język, złożone przez [entry points](https://packaging.python.org/en/latest/specifications/entry-points/), nie przez import wprost:
 
-- **[`llm-code-gatekeeper-core`](https://github.com/tarze07/llm-code-gatekeeper-core)** — silnik: `ChangeContext`, model `Finding`/`GateResult`/`Decision`, polityka, CLI (`gatekeeper`), 11 bramek G0–G3 jako logika dispatchu, manifest+rejestr+typosquat+SCA dla PyPI/npm/NuGet (język-agnostyczne, więc żyją tu, nie w pack'ach).
+- **[`llm-code-gatekeeper-core`](../core/README.md)** — silnik: `ChangeContext`, model `Finding`/`GateResult`/`Decision`, polityka, CLI (`gatekeeper`), 11 bramek G0–G3 jako logika dispatchu, manifest+rejestr+typosquat+SCA dla PyPI/npm/NuGet (język-agnostyczne, więc żyją tu, nie w pack'ach).
 - **`llm-code-gatekeeper-python`** (to repo) — Python: `ruff`+`mypy` (`G1.static`), złożoność cyklomatyczna przez `ast` (`G1.complexity`), testy przez `ast` (`G2.cross_verify`/`G2.test_sanity`/`G2.diff_coverage`), reguły „nigdy" specyficzne dla Pythona (`G3.sast`).
-- **[`llm-code-gatekeeper-ts`](https://github.com/tarze07/llm-code-gatekeeper-ts)** — TS/JS: `tsc`+`eslint` (`G1.static`), reguły „nigdy" TS/JS.
-- **[`llm-code-gatekeeper-csharp`](https://github.com/tarze07/llm-code-gatekeeper-csharp)** — C#: `dotnet build` (`G1.static`), reguły „nigdy" C#.
+- **[`llm-code-gatekeeper-ts`](../ts/README.md)** — TS/JS: `tsc`+`eslint` (`G1.static`), reguły „nigdy" TS/JS.
+- **[`llm-code-gatekeeper-csharp`](../csharp/README.md)** — C#: `dotnet build` (`G1.static`), reguły „nigdy" C#.
 
 Instalujesz core + pack(i) dla języków w ocenianym repo — `gatekeeper.gates`/`gatekeeper.static_checkers`/`gatekeeper.semgrep_rule_packs`/`gatekeeper.test_toolchains`/`gatekeeper.dep_ecosystems` (entry points) same się odnajdują, jeden `gatekeeper run` obsługuje mieszany diff (np. Python + TS w jednym PR-ze) bez żadnej konfiguracji.
 
@@ -64,4 +64,4 @@ Pełna instrukcja krok po kroku — [USAGE.md](USAGE.md).
 
 Kody wyjścia: `0` = PASS, `1` = BLOCK, `2` = PASS-WITH-REVIEW przy `--fail-on review`, `3` = błąd użycia.
 
-Integracja z GitHubem: [`.github/workflows/gatekeeper.yml`](.github/workflows/gatekeeper.yml) + [`scripts/post_pr_comment.sh`](https://github.com/tarze07/llm-code-gatekeeper-core/blob/main/scripts/post_pr_comment.sh) (core-owy).
+Integracja z GitHubem: [`.github/workflows/gatekeeper.yml`](.github/workflows/gatekeeper.yml) + [`scripts/post_pr_comment.sh`](../core/scripts/post_pr_comment.sh) (core-owy).

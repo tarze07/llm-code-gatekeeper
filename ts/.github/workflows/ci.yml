@@ -21,7 +21,7 @@ jobs:
 
       - name: Zależności
         run: |
-          pip install --quiet "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
+          pip install --quiet "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=core"
           pip install --quiet -e ".[dev]"
           npm install --global typescript eslint
 

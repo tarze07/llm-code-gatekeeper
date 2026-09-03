@@ -1,6 +1,6 @@
 # llm-code-gatekeeper-core
 
-Silnik bramy jakości dla kodu generowanego przez agentów LLM — **rdzeń**, wydzielony z [`llm-code-gatekeeper-python`](https://github.com/tarze07/llm-code-gatekeeper-python) tak, żeby jedna poprawka orchestratora/policy/store nie wymagała ręcznej propagacji do wszystkich pack'ów językowych.
+Silnik bramy jakości dla kodu generowanego przez agentów LLM — **rdzeń**, wydzielony z [`llm-code-gatekeeper-python`](../python/README.md) tak, żeby jedna poprawka orchestratora/policy/store nie wymagała ręcznej propagacji do wszystkich pack'ów językowych.
 
 Sam w sobie nie ocenia żadnego konkretnego języka — dostarcza:
 
@@ -29,9 +29,9 @@ Bez zainstalowanego pack'a językowego bramki-agregatory nie zgłaszają błędu
 
 ## Pack'i językowe
 
-- [`llm-code-gatekeeper-python`](https://github.com/tarze07/llm-code-gatekeeper-python) — Python (ruff/mypy, testy przez `ast`)
-- [`llm-code-gatekeeper-ts`](https://github.com/tarze07/llm-code-gatekeeper-ts) — TS/JS (tsc/eslint)
-- [`llm-code-gatekeeper-csharp`](https://github.com/tarze07/llm-code-gatekeeper-csharp) — C# (`dotnet build`)
+- [`llm-code-gatekeeper-python`](../python/README.md) — Python (ruff/mypy, testy przez `ast`)
+- [`llm-code-gatekeeper-ts`](../ts/README.md) — TS/JS (tsc/eslint)
+- [`llm-code-gatekeeper-csharp`](../csharp/README.md) — C# (`dotnet build`)
 
 Każdy instaluje ten pakiet jako zależność i rejestruje swojego `StaticChecker`/`TestToolchain`/`SemgrepRulePackProvider` przez powyższe grupy entry points — bez patcha w tym repo. Dostawców `dep_ecosystems` (PyPI/npm/NuGet) żaden pack nie rejestruje — są już tutaj.
 

@@ -15,7 +15,7 @@ jobs:
           python-version: "3.12"
 
       # llm-code-gatekeeper-core nie jest na PyPI - instalacja z git.
-      - run: pip install --quiet "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
+      - run: pip install --quiet "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=core"
       - run: pip install --quiet -e ".[dev,gates]"
 
       - name: Instalacja gitleaksa (testy integracyjne bramki G3.secrets, core-owa)

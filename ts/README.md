@@ -1,6 +1,6 @@
 # llm-code-gatekeeper-ts
 
-Pack TS/JS dla [`llm-code-gatekeeper-core`](https://github.com/tarze07/llm-code-gatekeeper-core) — instaluje się razem z core i rejestruje się przez entry points, bez patcha w core.
+Pack TS/JS dla [`llm-code-gatekeeper-core`](../core/README.md) — instaluje się razem z core i rejestruje się przez entry points, bez patcha w core.
 
 Dostarcza:
 

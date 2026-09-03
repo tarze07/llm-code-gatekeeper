@@ -1,5 +1,7 @@
 # Podsumowanie: podział llm-code-gatekeeper na 4 repozytoria
 
+> **Status (2026-09-03): fizyczny podział cofnięty, podział logiczny został.** Cztery repozytoria opisane niżej zostały scalone z powrotem w jedno (`github.com/tarze07/llm-code-gatekeeper`) — `core/`, `python/`, `ts/`, `csharp/` są dziś katalogami, nie osobnymi remote'ami. Wszystko, co ten dokument mówi o **architekturze** (dwupoziomowe entry points, jeden gate ID niezależnie od liczby packów, granica core↔pack), zostaje w mocy bez zmian: packi nadal są osobnymi pakietami Pythona, nadal instalowanymi osobno, a core nadal nie importuje żadnego z nich. Zmieniła się wyłącznie liczba repozytoriów na GitHubie i URL instalacyjny (`git+…/llm-code-gatekeeper.git#subdirectory=<pack>`). Historia każdego z czterech repo zachowana w scaleniu (`git log -- core/`).
+
 ## Punkt wyjścia
 
 `llm-code-gatekeeper` było jednym monorepo Pythona obsługującym trzy języki docelowe (Python, TS/JS, C#) przez wspólny silnik oceny PR-ów (`gatekeeper run` → `PASS`/`PASS-WITH-REVIEW`/`BLOCK`). Padło pytanie: czy da się to rozdzielić na osobne repozytoria per język, bez rozbijania jednego logicznego zestawu bramek (`G0.*`–`G3.*`) na duplikaty.
@@ -17,12 +19,12 @@ Odkrycie po drodze, które zmieniło pierwotny plan: manifest+rejestr+typosquat+
 
 | Repo | Zawartość | Pakiet Python |
 |---|---|---|
-| [`llm-code-gatekeeper-core`](https://github.com/tarze07/llm-code-gatekeeper-core) | silnik, CLI, 11 bramek jako dispatch, PyPI/npm/NuGet | `gatekeeper_core` |
-| [`llm-code-gatekeeper-python`](https://github.com/tarze07/llm-code-gatekeeper-python) | ruff/mypy, testy przez `ast` (G2.*), reguły SAST Pythona | `gatekeeper_python` |
-| [`llm-code-gatekeeper-ts`](https://github.com/tarze07/llm-code-gatekeeper-ts) | tsc/eslint, reguły SAST TS/JS | `gatekeeper_ts` |
-| [`llm-code-gatekeeper-csharp`](https://github.com/tarze07/llm-code-gatekeeper-csharp) | `dotnet build`, reguły SAST C# | `gatekeeper_csharp` |
+| [`llm-code-gatekeeper-core`](core/) | silnik, CLI, 11 bramek jako dispatch, PyPI/npm/NuGet | `gatekeeper_core` |
+| [`llm-code-gatekeeper-python`](python/) | ruff/mypy, testy przez `ast` (G2.*), reguły SAST Pythona | `gatekeeper_python` |
+| [`llm-code-gatekeeper-ts`](ts/) | tsc/eslint, reguły SAST TS/JS | `gatekeeper_ts` |
+| [`llm-code-gatekeeper-csharp`](csharp/) | `dotnet build`, reguły SAST C# | `gatekeeper_csharp` |
 
-Historia git zachowana (`git filter-repo`, nie snapshot) dla każdego pliku, który miał realnych poprzedników w monolicie. Lokalnie wszystkie cztery leżą jako rodzeństwo w tym katalogu (`core/`, `python/`, `ts/`, `csharp/`) — każdy to osobne repo z własnym `origin`, opisane w [README.md](README.md).
+Historia git zachowana (`git filter-repo`, nie snapshot) dla każdego pliku, który miał realnych poprzedników w monolicie — i przeżyła też późniejsze scalenie z powrotem do jednego repo (patrz nota na górze). Wszystkie cztery leżą jako rodzeństwo w [README.md](README.md).
 
 ## Weryfikacja
 

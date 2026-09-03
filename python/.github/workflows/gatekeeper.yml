@@ -44,8 +44,8 @@ jobs:
       #
       # Dołóż odpowiedni pack, jeśli oceniane repo zawiera TS/JS albo C# —
       # sam ten workflow instaluje tylko llm-code-gatekeeper-python:
-      # - run: pip install --quiet "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper-ts.git"
-      # - run: pip install --quiet "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper-csharp.git"
+      # - run: pip install --quiet "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=ts"
+      # - run: pip install --quiet "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=csharp"
 
       - name: Instalacja bramy
         # CLI (`gatekeeper`) żyje w llm-code-gatekeeper-core, instalowany tu

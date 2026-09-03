@@ -745,10 +745,10 @@ gatekeeper run --repo . --base origin/main</pre>
 <section class="slide">
   <div class="eyebrow">Użycie · instalacja</div>
   <h2>Core zawsze. Pack tylko dla języków w repo.</h2>
-  <pre>pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
-pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper-python.git"
-pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper-ts.git"
-pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper-csharp.git"</pre>
+  <pre>pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=core"
+pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=python"
+pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=ts"
+pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=csharp"</pre>
   <table>
     <tr><th>Stos</th><th>Dodatkowo poza pipem</th></tr>
     <tr><td>Python</td><td><code>pip install ruff mypy</code> · gitleaks jako binarka Go</td></tr>

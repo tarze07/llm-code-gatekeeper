@@ -9,8 +9,8 @@ Pełny opis mechanizmu (entry points, dwa poziomy dispatchu) — [`core/README.m
 ## Python
 
 ```bash
-pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
-pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper-python.git"
+pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=core"
+pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=python"
 pip install ruff mypy   # narzędzia, które G1.static uruchamia jako podproces — nie są zależnością pip pack'a
 ```
 
@@ -39,8 +39,8 @@ Co dostajesz z pack'a `llm-code-gatekeeper-python`:
 ## JavaScript / TypeScript
 
 ```bash
-pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
-pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper-ts.git"
+pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=core"
+pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=ts"
 npm install --global typescript eslint @typescript-eslint/parser   # binarki/parsery, nie zależności pip
 ```
 
@@ -68,8 +68,8 @@ Co dostajesz z pack'a `llm-code-gatekeeper-ts`:
 ## C#
 
 ```bash
-pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
-pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper-csharp.git"
+pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=core"
+pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=csharp"
 # wymaga .NET SDK 8.0+ w PATH; bramka zakłada, że `dotnet restore` już się odbył
 # (sama nie ściąga pakietów — jedyne miejsce w G1 z dostępem do sieci, którego świadomie nie chcemy)
 
@@ -108,10 +108,10 @@ Architektura `G2.*`/`G1.complexity` dla C# (helper Roslyn, decyzje projektowe): 
 Instalujesz core + tyle pack'ów, ile faktycznie masz języków — `gatekeeper run` obsłuży mieszany diff jednym wywołaniem, bez żadnej dodatkowej konfiguracji:
 
 ```bash
-pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
-pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper-python.git"
-pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper-ts.git"
-pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper-csharp.git"
+pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=core"
+pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=python"
+pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=ts"
+pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=csharp"
 ```
 
 `G1.static`, `G1.complexity` i `G3.sast` uruchomią checker/analizator/regułę każdego zainstalowanego języka na plikach, które go dotyczą, i zsumują wynik w jednym `GateResult` — jeden raport na PR, niezależnie od tego, ile języków ten PR dotknął.

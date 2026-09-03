@@ -1,30 +1,30 @@
-# llm-code-gatekeeper — workspace
+# llm-code-gatekeeper
 
-Ten katalog **nie jest repozytorium git** — to lokalny kontener na cztery niezależne repozytoria, z których każde ma własny remote na GitHubie i osobny cykl rozwoju:
+Brama jakości dla kodu generowanego przez agentów LLM. Jedno repozytorium, cztery pakiety Pythona wydawane niezależnie:
 
 ```
 llm-code-gatekeeper/
-├── core/     → github.com/tarze07/llm-code-gatekeeper-core       (silnik + CLI)
-├── python/   → github.com/tarze07/llm-code-gatekeeper-python     (pack Python)
-├── ts/       → github.com/tarze07/llm-code-gatekeeper-ts         (pack TS/JS)
-└── csharp/   → github.com/tarze07/llm-code-gatekeeper-csharp     (pack C#)
+├── core/     llm-code-gatekeeper-core      (silnik + CLI)
+├── python/   llm-code-gatekeeper-python    (pack Python)
+├── ts/       llm-code-gatekeeper-ts        (pack TS/JS)
+└── csharp/   llm-code-gatekeeper-csharp    (pack C#)
 ```
 
-`core` dostarcza silnik (orchestrator, polityka, CLI `gatekeeper`) i 11 bramek jako logikę dispatchu — sam nie zna żadnego konkretnego języka poza PyPI/npm/NuGet (te trzy ekosystemy są język-agnostyczne, więc żyją w core). Każdy pack (`python`/`ts`/`csharp`) dorejestrowuje przez [entry points](https://packaging.python.org/en/latest/specifications/entry-points/) obsługę jednego języka — bez tego mechanizmu core musiałby importować kod każdego pack'a wprost.
+`core` dostarcza silnik (orchestrator, polityka, CLI `gatekeeper`) i 11 bramek jako logikę dispatchu — sam nie zna żadnego konkretnego języka poza PyPI/npm/NuGet (te trzy ekosystemy są język-agnostyczne, więc żyją w core). Każdy pack (`python`/`ts`/`csharp`) dorejestrowuje przez [entry points](https://packaging.python.org/en/latest/specifications/entry-points/) obsługę jednego języka — bez tego mechanizmu core musiałby importować kod każdego pack'a wprost. Wspólne repo nie zmienia tej granicy: packi **nadal** instaluje się osobno i core nadal nie importuje żadnego z nich.
 
-Pełny opis architektury (dwa poziomy grup entry points, kontrakty pluginów) jest w [`core/README.md`](core/README.md) — to on jest właściwym punktem wejścia do zrozumienia systemu; ten plik to wyłącznie ściągawka „jak z tym pracować z tego konkretnego katalogu na dysku".
+Pełny opis architektury (dwa poziomy grup entry points, kontrakty pluginów) jest w [`core/README.md`](core/README.md) — to on jest właściwym punktem wejścia do zrozumienia systemu; ten plik to ściągawka „jak z tym pracować".
 
 ## Używanie bramy na cudzym repo (typowy przypadek)
 
 Nie trzeba klonować niczego z tego katalogu — instaluje się z GitHuba w **ocenianym** repozytorium (żaden z pakietów nie jest jeszcze na PyPI):
 
 ```bash
-pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
+pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=core"
 
 # dołóż pack(i) dla języków, które faktycznie występują w ocenianym repo:
-pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper-python.git"
-pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper-ts.git"
-pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper-csharp.git"
+pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=python"
+pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=ts"
+pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=csharp"
 
 gatekeeper policy lint --policy policy/gates.yaml
 gatekeeper run --repo /ścieżka/do/ocenianego/repo --base origin/main
@@ -34,9 +34,9 @@ gatekeeper run --repo /ścieżka/do/ocenianego/repo --base origin/main
 
 Pełna instrukcja krok po kroku: [`python/USAGE.md`](python/USAGE.md).
 
-## Praca nad samą bramą (rozwój, ten katalog)
+## Praca nad samą bramą (rozwój)
 
-Każde repo ma **własny** `.venv` i własny zestaw testów — nie ma jednego wspólnego środowiska. Do pracy nad jednym pack'iem (np. `python`) z core'em zainstalowanym edytowalnie:
+Każdy pack ma **własny** `.venv` i własny zestaw testów — nie ma jednego wspólnego środowiska dla całego repo. Do pracy nad jednym pack'iem (np. `python`) z core'em zainstalowanym edytowalnie:
 
 ```bash
 cd core && python3 -m venv .venv && source .venv/bin/activate
@@ -62,8 +62,10 @@ python -c "from importlib.metadata import entry_points as ep; print(sorted(e.nam
 
 ## Stan projektu
 
-Faza 1 (silnik pluginowy + fizyczny podział monorepo na 4 repo) jest **ukończona i wypchnięta** — każdy z czterech katalogów jest zsynchronizowany ze swoim `origin/main`.
+Faza 1 (silnik pluginowy + rozdzielenie na core i trzy packi) jest **ukończona**. Kod żył przez chwilę w czterech osobnych repozytoriach; zostały scalone z powrotem w to jedno, z zachowaniem pełnej historii każdego pliku (`git log -- core/` pokazuje 24 commity core'a, nie jeden merge). Granica architektoniczna między core a packami jest w entry pointach, nie w liczbie repozytoriów.
 
-Od tego czasu doszły: `G2.cross_verify`/`test_sanity`/`diff_coverage` dla C# (helper Roslyn, `csharp/tools/gatekeeper-cs-helper`) — istnieją dziś dla Pythona i C#, TS/JS zostaje świadomie odłożone (native helper na TypeScript Compiler API, osobne zlecenie; brak zarejestrowanego `TestToolchain` to `skipped`, nie błąd) — oraz nowa bramka **`G1.complexity`** (złożoność cyklomatyczna, McCabe) z odpowiednikiem we wszystkich trzech pack'ach jednocześnie (`core/PLAN-G1-complexity.md`).
+Od Fazy 1 doszły: `G2.cross_verify`/`test_sanity`/`diff_coverage` dla C# (helper Roslyn, `csharp/tools/gatekeeper-cs-helper`) — istnieją dziś dla Pythona i C#, TS/JS zostaje świadomie odłożone (native helper na TypeScript Compiler API, osobne zlecenie; brak zarejestrowanego `TestToolchain` to `skipped`, nie błąd) — oraz nowa bramka **`G1.complexity`** (złożoność cyklomatyczna, McCabe) z odpowiednikiem we wszystkich trzech pack'ach jednocześnie ([`core/PLAN-G1-complexity.md`](core/PLAN-G1-complexity.md)).
 
-Znany dług: pliki `.github/workflows/ci.yml` (każde repo) i `gatekeeper.yml` (`python/`) są gotowe lokalnie, ale nie wypchnięte — token `gh` używany w tej sesji nie ma scope `workflow`. `gh auth refresh -s workflow`, potem zwykły `git add`+commit+push w każdym katalogu.
+Przegląd stanu i znalezisk: [`REVIEW.md`](REVIEW.md). Zapis podziału na packi: [`PODSUMOWANIE.md`](PODSUMOWANIE.md).
+
+Znany dług: CI. Workflow'y `ci.yml` każdego packa leżą pod `core/.github/workflows/`, `python/.github/workflows/` itd. — w monorepo GitHub Actions czyta wyłącznie **korzeniowy** `.github/workflows/`, więc dopóki nie powstanie tam jeden workflow z matrycą po czterech katalogach, CI nie chodzi. Blokada jest ta sama co wcześniej: token `gh` bez scope `workflow`. Odblokowanie: `gh auth refresh -h github.com -s workflow`.
