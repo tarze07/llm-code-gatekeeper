@@ -1,0 +1,99 @@
+# Zestaw kalibracyjny python-packu: przypadki, które wymagają tego pack'a
+# zainstalowanego (PythonRulePack dla G3.sast, PythonTestToolchain dla G2.*).
+# Gate'y w pełni core-owe (G0, G3.secrets) i G1.deps/G3.sca (PyPI/npm/NuGet)
+# mają własny zestaw w `llm-code-gatekeeper-core` — nie duplikowane tutaj.
+#
+# Uruchomienie: `gatekeeper calibrate` (wymaga zainstalowanego
+# `llm-code-gatekeeper-core`)
+
+cases:
+  - name: eval-na-wejsciu
+    description: >-
+      Nowy kod wykonuje `eval()` na danych z requestu — reguła „nigdy”
+      `no-eval-on-input` (G3.sast, PythonRulePack) musi to złapać. G3.sast
+      jest na razie w `warn_only` (kamień 3, świeża bramka), więc oczekiwany
+      werdykt to PASS z ostrzeżeniem, nie BLOCK — ten przypadek dokumentuje
+      bieżący stan i ma zacząć failować w dniu, w którym ktoś zdejmie
+      `warn_only` bez sprawdzenia, czy reguła rzeczywiście działa.
+    fixture: eval-na-wejsciu
+    requires_tools: [semgrep, gitleaks] # gitleaks: patrz komentarz w core/czysty-pr
+    expect:
+      verdict: PASS
+      warning_rules: [sast.critical_count]
+
+  - name: test-bez-dowodu
+    description: >-
+      Nowy test asertuje zachowanie, które w tym PR-ze się nie zmieniło —
+      klasyczny „test, który niczego nie dowodzi” (PLAN.md §1, TOOLS.md
+      §4.1). Musi przejść na kodzie sprzed zmiany, czyli wyzwolić
+      `tests.pass_on_pre_change_code` (G2.cross_verify, PythonTestToolchain).
+      G2.cross_verify jest na razie w `warn_only` (kamień 3, świeża bramka),
+      więc oczekiwany werdykt to PASS z ostrzeżeniem, nie BLOCK — analogicznie
+      do `eval-na-wejsciu`. Ma zacząć failować w dniu, w którym ktoś zdejmie
+      `warn_only` bez sprawdzenia, czy reguła rzeczywiście działa.
+    fixture: test-bez-dowodu
+    expect:
+      verdict: PASS
+      warning_rules: [tests.pass_on_pre_change_code]
+
+  - name: test-bez-asercji
+    description: >-
+      Nowy test to `assert True` — nie sprawdza niczego, niezależnie od
+      testowanego kodu (TOOLS.md §4.2, G2.test_sanity, PythonTestToolchain).
+      G2.test_sanity jest w `warn_only` (kamień 4, świeża bramka), więc
+      oczekiwany werdykt to PASS z ostrzeżeniem `sanity.blocking_count`, nie
+      BLOCK — ten fixture ma zacząć failować w dniu, w którym ktoś zdejmie
+      `warn_only` bez sprawdzenia, czy reguła rzeczywiście działa.
+    fixture: test-bez-asercji
+    expect:
+      verdict: PASS
+      warning_rules: [sanity.blocking_count]
+
+  - name: zlozonosc-powyzej-progu
+    description: >-
+      Nowa funkcja z 10 zagnieżdżonymi `if` (M=11) — powyżej progu McCabe 10
+      (G1.complexity, PythonComplexityAnalyzer). G1.complexity NIE jest
+      w `warn_only` (PLAN-G1-complexity.md §5.3, przypadek udokumentowany
+      w core-repo) — musi blokować naprawdę, nie tylko ostrzegać.
+    fixture: zlozonosc-powyzej-progu
+    expect:
+      verdict: BLOCK
+      blocking_rules: [complexity.max]
+
+  - name: zlozonosc-straznik
+    description: >-
+      Ta sama logika co `zlozonosc-powyzej-progu`, rozbita na strażnika
+      (`wszystkie_prawdziwe` jako nazwany predykat) — obie funkcje mieszczą
+      się w progu 10 (M=3 i M=2). Musi przejść: G1.complexity mierzy kształt
+      po zmianie, nie karze za samą liczbę parametrów.
+    fixture: zlozonosc-straznik
+    requires_tools: [gitleaks] # patrz komentarz w core/czysty-pr
+    expect:
+      verdict: PASS
+
+  - name: zlozonosc-poza-diffem
+    description: >-
+      W pliku siedzi stara funkcja o M=25 (24 niezależne `if`), diff dotyka
+      tego samego pliku, ale rusza wyłącznie nową, prostą funkcję (M=1) —
+      stara funkcja musi zostać w ciszy (PLAN-G1-complexity.md §4: jednostką
+      jest metoda, nie linia/plik). Bez tego pierwszy przebieg na starym
+      repo zablokowałby każdy PR, który dotyka pliku ze starym długiem.
+    fixture: zlozonosc-poza-diffem
+    expect:
+      verdict: PASS
+
+  - name: rozgalezienie-bez-testu
+    description: >-
+      Nowa funkcja z `if`/`else`, test pokrywa tylko jedną gałąź —
+      `--branch-coverage` w `diff-cover` ma to złapać jako niepokryte, mimo
+      że linia `if` sama w sobie się wykonuje (G2.diff_coverage,
+      PythonTestToolchain, TOOLS.md §4.5). G2.diff_coverage jest w
+      `warn_only` (kamień 4, świeża bramka), więc oczekiwany werdykt to PASS
+      z ostrzeżeniem `coverage.diff_ratio`, nie BLOCK — ten fixture ma
+      zacząć failować w dniu, w którym ktoś zdejmie `warn_only` bez
+      sprawdzenia, czy reguła rzeczywiście działa.
+    fixture: rozgalezienie-bez-testu
+    requires_tools: [diff-cover]
+    expect:
+      verdict: PASS
+      warning_rules: [coverage.diff_ratio]

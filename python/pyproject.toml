@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-code-gatekeeper-python"
+version = "0.3.0"
+description = "Pack Python dla llm-code-gatekeeper-core: ruff/mypy (G1.static), testing/* (G2.*), reguły „nigdy” SAST, złożoność cyklomatyczna (G1.complexity)"
+requires-python = ">=3.12"
+dependencies = [
+    "llm-code-gatekeeper-core>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+# Binaria, które adaptery uruchamiają jako podprocesy (`core.runner.Sandbox`),
+# nie jako biblioteki Pythona. Brak któregoś z nich nie wywraca instalacji —
+# odpowiedni checker/toolchain zgłasza `error` z jasnym komunikatem.
+gates = [
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "types-PyYAML>=6.0",
+    "coverage>=7.0",
+    "diff-cover>=8.0",
+]
+
+# Bramki (G0-G3, jako logika dispatchu) i CLI (`gatekeeper`) żyją w
+# `llm-code-gatekeeper-core` — ten pakiet rejestruje wyłącznie dostawców
+# poziomu 2 (patrz `core/plugins.py` w core-repo).
+[project.entry-points."gatekeeper.semgrep_rule_packs"]
+python = "gatekeeper_python.adapters.semgrep:PythonRulePack"
+
+[project.entry-points."gatekeeper.static_checkers"]
+python = "gatekeeper_python.adapters.linters:PythonStaticChecker"
+
+[project.entry-points."gatekeeper.test_toolchains"]
+python = "gatekeeper_python.testing.toolchain:PythonTestToolchain"
+
+[project.entry-points."gatekeeper.complexity_analyzers"]
+python = "gatekeeper_python.adapters.complexity:PythonComplexityAnalyzer"
+
+[tool.setuptools.packages.find]
+include = ["gatekeeper_python*"]
+
+[tool.setuptools.package-data]
+gatekeeper_python = ["rules/semgrep/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
