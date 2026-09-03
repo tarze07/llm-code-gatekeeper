@@ -68,4 +68,6 @@ Od Fazy 1 doszły: `G2.cross_verify`/`test_sanity`/`diff_coverage` dla C# (helpe
 
 Przegląd stanu i znalezisk: [`REVIEW.md`](REVIEW.md). Zapis podziału na packi: [`PODSUMOWANIE.md`](PODSUMOWANIE.md).
 
-Znany dług: CI. Workflow'y `ci.yml` każdego packa leżą pod `core/.github/workflows/`, `python/.github/workflows/` itd. — w monorepo GitHub Actions czyta wyłącznie **korzeniowy** `.github/workflows/`, więc dopóki nie powstanie tam jeden workflow z matrycą po czterech katalogach, CI nie chodzi. Blokada jest ta sama co wcześniej: token `gh` bez scope `workflow`. Odblokowanie: `gh auth refresh -h github.com -s workflow`.
+CI: `.github/workflows/ci.yml` w korzeniu — cztery joby (`core`, `python`, `ts`, `csharp`), każdy z `working-directory` na swoim katalogu, z core'em instalowanym z checkoutu (`pip install -e ../core`), nie z GitHuba. Dzięki temu PR ruszający core i pack naraz jest testowany razem. Cztery pliki `ci.yml` leżące wcześniej per pack są w monorepo martwe (GitHub Actions czyta wyłącznie korzeń) — zastąpione tym jednym; `python/.github/workflows/gatekeeper.yml` **zostaje**, bo to szablon integracji dla *ocenianego* repo, nie CI tego repo.
+
+Znany dług: ten korzeniowy workflow (i scalony `.github/CODEOWNERS`) leżą w commicie, którego nie da się wypchnąć tokenem bez scope `workflow` — GitHub blokuje każdy push tykający `.github/workflows/` w korzeniu. Odblokowanie: `gh auth refresh -h github.com -s workflow`, potem `git push`. Drugi, niezależny dług: `@wlasciciel-bramy` w CODEOWNERS to nadal placeholder, nie istniejący handle (REVIEW.md §5, P0).

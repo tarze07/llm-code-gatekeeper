@@ -48,4 +48,4 @@ Native helpery `G2.cross_verify`/`test_sanity`/`diff_coverage` dla TS (TypeScrip
 
 ## Otwarty dług
 
-Pliki `.github/workflows/ci.yml` (każde repo) i `gatekeeper.yml` (`python/`) są gotowe i zweryfikowane lokalnie, ale nie wypchnięte na GitHuba — token `gh` używany w tej sesji nie ma scope `workflow`, którego GitHub wymaga do push'a zmieniającego cokolwiek pod `.github/workflows/`. Odblokowanie: `gh auth refresh -h github.com -s workflow` (logowanie przez przeglądarkę), potem zwykły `git add`+commit+push w każdym z czterech katalogów.
+Po scaleniu repo (nota na górze) cztery workflow'y `ci.yml` per pack zostały zastąpione jednym korzeniowym `.github/workflows/ci.yml` z czterema jobami. Dług został ten sam: token `gh` używany w tych sesjach nie ma scope `workflow`, którego GitHub wymaga do push'a zmieniającego cokolwiek pod korzeniowym `.github/workflows/`, więc commit z tym plikiem czeka lokalnie. Odblokowanie: `gh auth refresh -h github.com -s workflow` (logowanie przez przeglądarkę), potem `git push`.
