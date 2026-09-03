@@ -1,0 +1,67 @@
+# Zestaw kalibracyjny core-a: przypadki niezależne od zainstalowanych pack'ów
+# językowych. Obejmuje to nie tylko gate'y w pełni core-owe bez żadnego
+# dostawcy poziomu 2 (G0.scope, G3.secrets), ale też G1.deps/G3.sca —
+# EcosystemProvider dla PyPI/npm/NuGet żyje w tym repo (`deps/ecosystems.py`),
+# więc `halucynowany-pakiet(-npm)` działa bez żadnego language-pack'a
+# zainstalowanego. Static/testowe/SAST przypadki per język żyją w
+# calibration/cases.yaml każdego pack'a — tam, gdzie odpowiedni
+# StaticChecker/TestToolchain/SemgrepRulePackProvider jest faktycznie
+# zainstalowany.
+#
+# Uruchomienie: `gatekeeper calibrate`
+
+cases:
+  - name: halucynowany-pakiet
+    description: >-
+      Agent dodaje zależność, której nie ma w PyPI — najkosztowniejsza klasa
+      defektu z PLAN.md §1 repo głównego. Musi blokować. Testuje wyłącznie
+      G1.deps (PyPIEcosystem), nie żaden language-pack.
+    fixture: halucynowany-pakiet
+    expect:
+      verdict: BLOCK
+      blocking_rules: [deps.unknown_package]
+
+  - name: halucynowany-pakiet-npm
+    description: >-
+      Ten sam defekt co `halucynowany-pakiet`, ale w ekosystemie npm — dowód,
+      że dep-guard nie jest zawężony do PyPI. Musi blokować. Testuje
+      wyłącznie G1.deps (NpmEcosystem), nie llm-code-gatekeeper-ts.
+    fixture: halucynowany-pakiet-npm
+    expect:
+      verdict: BLOCK
+      blocking_rules: [deps.unknown_package]
+
+  - name: czysty-pr
+    description: >-
+      Mały, poprawny PR bez żadnych defektów. Zero fałszywych alarmów —
+      to jest test na to, czy brama w ogóle nadaje się do codziennej pracy.
+      Wymaga gitleaksa: bez niego G3.secrets zgłasza `error` (brak narzędzia
+      to brak dowodu, nie zielona brama) i werdykt uczciwie spada do
+      PASS-WITH-REVIEW — to nie jest fałszywy alarm tego przypadku, tylko
+      niekompletne środowisko, w którym go uruchomiono.
+    fixture: czysty-pr
+    requires_tools: [gitleaks]
+    expect:
+      verdict: PASS
+
+  - name: diff-zbyt-duzy
+    description: >-
+      500-liniowy plik w jednym PR-ze — najskuteczniejsza pojedyncza reguła
+      w systemie (TOOLS.md §2.2). Musi blokować niezależnie od treści zmiany.
+    fixture: diff-zbyt-duzy
+    expect:
+      verdict: BLOCK
+      blocking_rules: [diff.effective_lines]
+
+  - name: sekret-w-diffie
+    description: >-
+      Agent zostawia klucz AWS w diffie (syntetyczny klucz w poprawnym
+      formacie, nie prawdziwy sekret — kanoniczny przykład z dokumentacji
+      AWS, `AKIAIOSFODNN7EXAMPLE`, jest celowo na globalnej allowliście
+      gitleaksa i nie nadaje się do tego fixture'u). G3.secrets nie jest
+      w `warn_only`, więc musi blokować naprawdę, nie tylko ostrzegać.
+    fixture: sekret-w-diffie
+    requires_tools: [gitleaks]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [secrets.found_in_diff]
