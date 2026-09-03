@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Zależności
+        run: |
+          pip install --quiet "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper-core.git"
+          pip install --quiet -e ".[dev]"
+
+      - name: ruff
+        run: ruff check gatekeeper_csharp tests
+
+      - name: pytest
+        run: pytest -q
+
+      - name: semgrep --test
+        run: |
+          pip install --quiet semgrep
+          semgrep --test --config gatekeeper_csharp/rules/semgrep rules/semgrep/tests
