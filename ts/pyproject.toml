@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "llm-code-gatekeeper-ts"
 version = "0.2.0"
-description = "Pack TS/JS dla llm-code-gatekeeper-core: tsc/eslint (G1.static), reguły „nigdy” SAST, złożoność cyklomatyczna (G1.complexity)"
+description = "Pack TS/JS dla llm-code-gatekeeper-core: tsc/eslint (G1.static), reguły „nigdy” SAST, złożoność cyklomatyczna (G1.complexity), G2.* (vitest/jest)"
 requires-python = ">=3.12"
 dependencies = [
     "llm-code-gatekeeper-core>=0.1.0",
@@ -14,6 +14,14 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+]
+
+# Binaria wołane jako podprocesy przez `G2.diff_coverage` (`core.diffcover`),
+# nie biblioteki importowane w kodzie — ta sama konwencja co `gates` w
+# python-packu. Narzędzia npm (tsc/eslint/vitest/jest) tu nie występują:
+# instaluje je oceniane repo, nie pip.
+gates = [
+    "diff-cover>=8.0",
 ]
 
 [project.entry-points."gatekeeper.static_checkers"]
@@ -25,11 +33,16 @@ ts = "gatekeeper_ts.adapters.rulepack:TsRulePack"
 [project.entry-points."gatekeeper.complexity_analyzers"]
 ts = "gatekeeper_ts.adapters.complexity:TsComplexityAnalyzer"
 
+[project.entry-points."gatekeeper.test_toolchains"]
+ts = "gatekeeper_ts.testing.toolchain:TsTestToolchain"
+
 [tool.setuptools.packages.find]
 include = ["gatekeeper_ts*"]
 
 [tool.setuptools.package-data]
-gatekeeper_ts = ["rules/semgrep/*.yaml"]
+# `tools/helper.cjs` musi trafić do koła — bez niego G2.* nie ma czym sparsować
+# testów (odpowiednik `gatekeeper-cs-helper`, tylko bez osobnej instalacji).
+gatekeeper_ts = ["rules/semgrep/*.yaml", "tools/*.cjs"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

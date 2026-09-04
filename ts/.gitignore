@@ -8,3 +8,5 @@ __pycache__/
 .coverage
 htmlcov/
 node_modules/
+build/
+dist/

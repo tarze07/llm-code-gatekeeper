@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -48,3 +50,92 @@ def repo(tmp_path: Path) -> Repo:
     r.write("src/app.ts", "export function hello(): string {\n  return 'hi';\n}\n")
     r.commit("initial")
     return r
+
+
+# --------------------------------------------------------------------------
+# Fixture'y G2.* — testy integracyjne na prawdziwym vitest, nie na mockach
+# (ta sama zasada co `dotnet_repo` w csharp-packu). `npm install` jest
+# **jeden na sesję**, a repozytoria testowe podpinają wynik dowiązaniem —
+# instalacja per test kosztowałaby minuty zamiast sekund.
+# --------------------------------------------------------------------------
+
+_PACKAGE_JSON = """{
+  "name": "fixture",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": {
+    "vitest": "^3.0.0",
+    "@vitest/coverage-v8": "^3.0.0"
+  }
+}
+"""
+
+requires_node = pytest.mark.skipif(
+    shutil.which("node") is None or shutil.which("npm") is None,
+    reason="node/npm niedostępne",
+)
+
+
+@pytest.fixture(scope="session")
+def node_modules(tmp_path_factory: pytest.TempPathFactory) -> Path | None:
+    """Jeden `npm install` na sesję. `None`, gdy npm nie ma albo instalacja
+    padła (brak sieci) — testy integracyjne wtedy skipują, nie czerwienią."""
+    if shutil.which("npm") is None:
+        return None
+    root = tmp_path_factory.mktemp("node-deps")
+    (root / "package.json").write_text(_PACKAGE_JSON, encoding="utf-8")
+    proc = subprocess.run(
+        ["npm", "install", "--silent", "--no-audit", "--no-fund"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    modules = root / "node_modules"
+    return modules if proc.returncode == 0 and modules.is_dir() else None
+
+
+@pytest.fixture
+def ts_repo(tmp_path: Path, node_modules: Path | None) -> Repo:
+    """Repo z vitestem i jedną funkcją `add` w `src/app.ts` — baza pod
+    scenariusze G2.*, analogicznie do `dotnet_repo` w csharp-packu."""
+    if node_modules is None:
+        pytest.skip("brak zainstalowanych zależności npm (npm/sieć niedostępne)")
+    path = tmp_path / "repo"
+    path.mkdir(parents=True, exist_ok=True)
+    r = Repo(path)
+    r.write(".gitignore", "node_modules/\ncoverage/\n")
+    r.write("package.json", _PACKAGE_JSON)
+    r.write(
+        "src/app.ts",
+        "export function add(a: number, b: number): number {\n  return a + b;\n}\n",
+    )
+    r.commit("baza: add")
+    (path / "node_modules").symlink_to(node_modules, target_is_directory=True)
+    return r
+
+
+@lru_cache(maxsize=1)
+def _parser_available() -> bool:
+    """`@typescript-eslint/parser` rozwiązywalny z globalnego `node_modules`
+    — bez niego helper `G2.*` nie ma czym parsować (ten sam warunek, co
+    `gatekeeper-cs-helper` w csharp-packu)."""
+    if shutil.which("node") is None:
+        return False
+    from gatekeeper_ts.node import node_env
+
+    proc = subprocess.run(
+        ["node", "-e", "require('@typescript-eslint/parser')"],
+        env=node_env(),
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    return proc.returncode == 0
+
+
+requires_helper = pytest.mark.skipif(
+    not _parser_available(), reason="node/@typescript-eslint/parser niedostępne"
+)
