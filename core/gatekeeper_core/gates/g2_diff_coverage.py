@@ -27,7 +27,7 @@ from typing import Any
 from ..adapters.base import ToolFailed, ToolMissing
 from ..core.change import ChangeContext
 from ..core.finding import GateResult
-from ..core.plugins import TestToolchain
+from ..core.plugins import TestToolchain, toolchain_languages
 from . import Gate, register
 
 TOOLCHAIN_GROUP = "gatekeeper.test_toolchains"
@@ -61,11 +61,11 @@ class DiffCoverage(Gate):
         notes: list[str] = []
 
         for toolchain in toolchains:
-            language = getattr(toolchain, "language", None)
+            languages = toolchain_languages(toolchain)
             production = [
                 f
                 for f in change.files
-                if not f.test and not f.generated and f.status != "D" and f.language == language
+                if not f.test and not f.generated and f.status != "D" and f.language in languages
             ]
             if not production:
                 continue
