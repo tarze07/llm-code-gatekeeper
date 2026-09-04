@@ -64,7 +64,9 @@ python -c "from importlib.metadata import entry_points as ep; print(sorted(e.nam
 
 Faza 1 (silnik pluginowy + rozdzielenie na core i trzy packi) jest **ukończona**. Kod żył przez chwilę w czterech osobnych repozytoriach; zostały scalone z powrotem w to jedno, z zachowaniem pełnej historii każdego pliku (`git log -- core/` pokazuje 24 commity core'a, nie jeden merge). Granica architektoniczna między core a packami jest w entry pointach, nie w liczbie repozytoriów.
 
-Od Fazy 1 doszły: `G2.cross_verify`/`test_sanity`/`diff_coverage` dla C# (helper Roslyn, `csharp/tools/gatekeeper-cs-helper`) — istnieją dziś dla Pythona i C#, TS/JS zostaje świadomie odłożone (native helper na TypeScript Compiler API, osobne zlecenie; brak zarejestrowanego `TestToolchain` to `skipped`, nie błąd) — oraz nowa bramka **`G1.complexity`** (złożoność cyklomatyczna, McCabe) z odpowiednikiem we wszystkich trzech pack'ach jednocześnie ([`core/PLAN-G1-complexity.md`](core/PLAN-G1-complexity.md)).
+Od Fazy 1 doszły: nowa bramka **`G1.complexity`** (złożoność cyklomatyczna, McCabe) z odpowiednikiem we wszystkich trzech pack'ach ([`core/PLAN-G1-complexity.md`](core/PLAN-G1-complexity.md)) oraz rodzina **`G2.cross_verify`/`test_sanity`/`diff_coverage`** dla C# (helper Roslyn, [`csharp/PLAN-G2.md`](csharp/PLAN-G2.md)) i dla TS/JS (helper ESTree + vitest/jest, [`ts/PLAN-G2.md`](ts/PLAN-G2.md)).
+
+Od 2026-09-04 **wszystkie trzy języki mają komplet G0–G3** — nie ma już języka, dla którego G2.* dawałoby `skipped` z braku toolchaina. Zakres per język jest jednak różny: Python i C# filtrują pojedyncze testy, TS/JS uruchamia całe pliki testowe (uzasadnienie: `ts/PLAN-G2.md` §3.1), a lista obsługiwanych runnerów to pytest / xUnit / vitest+jest — repo na mocha, NUnit czy MSTest dostanie `error`, nie cichy `pass`.
 
 Przegląd stanu i znalezisk: [`REVIEW.md`](REVIEW.md). Zapis podziału na packi: [`PODSUMOWANIE.md`](PODSUMOWANIE.md).
 

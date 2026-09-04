@@ -106,16 +106,27 @@ jobs:
       - name: Zaleznosci
         run: |
           pip install --quiet -e ../core
-          pip install --quiet -e ".[dev]"
+          pip install --quiet -e ".[dev,gates]"
           pip install --quiet semgrep
-          npm install --global typescript eslint
+          # `@typescript-eslint/parser` — G1.complexity (config eslinta) i helper
+          # G2.* (tools/helper.cjs). `vitest` globalnie — przypadek kalibracyjny
+          # `test-bez-dowodu` uruchamia go bez lokalnych `node_modules`.
+          npm install --global typescript eslint @typescript-eslint/parser vitest
 
       - name: ruff
         run: ruff check gatekeeper_ts tests
+      - name: mypy --strict
+        # MYPYPATH: core jest zainstalowany edytowalnie, a mypy nie idzie za
+        # hookiem `__editable__` — bez tego widzi wylacznie brakujace importy.
+        run: MYPYPATH=../core mypy gatekeeper_ts --strict
       - name: pytest
+        # Testy G2.* robia jeden `npm install` na sesje (fixture `node_modules`)
+        # i uruchamiaja prawdziwy vitest — bez sieci po prostu skipuja.
         run: pytest -q
       - name: semgrep --test
         run: semgrep --test --config gatekeeper_ts/rules/semgrep rules/semgrep/tests
+      - name: calibrate
+        run: gatekeeper calibrate
 
   csharp:
     runs-on: ubuntu-latest
@@ -134,7 +145,7 @@ jobs:
       - name: Zaleznosci
         run: |
           pip install --quiet -e ../core
-          pip install --quiet -e ".[dev]"
+          pip install --quiet -e ".[dev,gates]"
           pip install --quiet semgrep
 
       - name: ruff
