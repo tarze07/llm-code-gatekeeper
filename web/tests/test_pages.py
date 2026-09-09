@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from conftest import Panel
+from conftest import GitRepo, Panel
 
 
 def test_pulpit_dziala_bez_zadnych_danych(panel: Panel) -> None:
@@ -147,6 +147,32 @@ def test_archiwizacja_projektu_z_formularza(panel: Panel, demo: tuple[int, str])
     assert "zarchiwizowany" in panel.get("/projekty").text
     # Raport przetrwał archiwizację projektu.
     assert panel.get(f"/api/v1/projects/{project_id}/runs").json()["total"] == 1
+
+
+def test_lista_projektow_prowadzi_do_ustawien(panel: Panel, demo: tuple[int, str]) -> None:
+    """Bez tego linku ścieżkę repozytorium dało się ustawić tylko przez API.
+
+    Strona ustawień była osiągalna wyłącznie ze szczegółów zadania, a zadania
+    nie da się utworzyć, dopóki projekt nie ma ścieżki — błędne koło.
+    """
+    project_id, _ = demo
+    strona = panel.get("/projekty").text
+    assert f'href="/projekty/{project_id}"' in strona
+
+
+def test_lista_projektow_mowi_czego_brakuje_do_kontroli(
+    panel: Panel, demo: tuple[int, str], git_repo: GitRepo
+) -> None:
+    project_id, _ = demo
+    strona = panel.get("/projekty").text
+    assert "tylko raporty" in strona
+    assert "ścieżki repozytorium" in strona
+
+    panel.patch_json(f"/api/v1/projects/{project_id}", {"repo_path": str(git_repo.path)})
+    strona = panel.get("/projekty").text
+    # Ścieżka jest, więc brakuje już tylko polityki — i tak ma być napisane.
+    assert "ścieżki repozytorium" not in strona
+    assert "profilu polityki" in strona
 
 
 def test_nieznana_strona_ma_czytelny_blad(panel: Panel) -> None:

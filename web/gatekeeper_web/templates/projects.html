@@ -27,9 +27,10 @@
     <button class="glowny" type="submit">Dodaj projekt</button>
   </form>
   <p class="brak">
-    W tym wydaniu opis repozytorium jest wyłącznie etykietą — panel niczego
-    z niego nie uruchamia i nie czyta z dysku. Rejestracja ścieżki lokalnego
-    repozytorium wraz z walidacją należy do etapu uruchamiania kontroli.
+    Pole wyżej to sama etykieta. Żeby panel <strong>uruchamiał kontrole</strong>
+    na tym projekcie, trzeba mu jeszcze wskazać ścieżkę repozytorium Git
+    i profil polityki — jedno i drugie ustawia się w <strong>Ustawieniach</strong>
+    projektu, w ostatniej kolumnie tabeli. Kolumna „Gotowość" mówi, czego brakuje.
   </p>
 </div>
 
@@ -40,6 +41,7 @@
         <th scope="col">Projekt</th>
         <th scope="col">Slug</th>
         <th scope="col">Repozytorium</th>
+        <th scope="col">Gotowość</th>
         <th scope="col">Przebiegi</th>
         <th scope="col">Stan</th>
         <th scope="col">Działanie</th>
@@ -50,10 +52,26 @@
         <tr>
           <td><a href="/przebiegi?projekt={{ p.id }}">{{ p.name }}</a></td>
           <td class="mono">{{ p.slug }}</td>
-          <td>{{ p.repo_label or '—' }}</td>
+          <td>
+            {% if p.repo_path %}<span class="mono">{{ p.repo_path }}</span>
+            {% else %}{{ p.repo_label or '—' }}{% endif %}
+          </td>
+          <td>
+            {% if p.runnable %}
+              <span class="znacznik znacznik--pass">gotowy do kontroli</span>
+            {% else %}
+              <span class="znacznik znacznik--neutralny">tylko raporty</span><br>
+              <small>brakuje:
+                {% if not p.repo_path %}ścieżki repozytorium{% endif %}
+                {% if not p.repo_path and p.policy_profile_id is none %} i {% endif %}
+                {% if p.policy_profile_id is none %}profilu polityki{% endif %}
+              </small>
+            {% endif %}
+          </td>
           <td>{{ counts.get(p.id, 0) }}</td>
           <td>{% if p.archived %}<span class="znacznik znacznik--neutralny">zarchiwizowany</span>{% else %}aktywny{% endif %}</td>
           <td>
+            <a href="/projekty/{{ p.id }}">Ustawienia</a>
             <form method="post" action="/projekty/{{ p.id }}/archiwum">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <input type="hidden" name="archived" value="{{ '0' if p.archived else '1' }}">
