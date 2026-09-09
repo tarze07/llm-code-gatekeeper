@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +33,7 @@ from typing import Any
 from gatekeeper_core.adapters.base import relative_to_repo
 from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.core.plugins import ComplexityOutcome, MethodComplexity
+from gatekeeper_core.core.runner import Sandbox, SandboxPolicy, SandboxUnavailable
 
 from ..node import node_env
 from .linters import ESLINT, resolve_bin
@@ -169,8 +169,8 @@ class TsComplexityAnalyzer:
         # znalazł (Node nie przeszukuje globalnego katalogu domyślnie).
         env = node_env()
 
-        with tempfile.TemporaryDirectory(prefix="gatekeeper-complexity-") as tmp:
-            config_path = Path(tmp) / "eslint.config.js"
+        with tempfile.TemporaryDirectory(dir=change.repo, prefix="gatekeeper-complexity-") as tmp:
+            config_path = Path(tmp) / "eslint.config.cjs"
             config_path.write_text(_ESLINT_CONFIG, encoding="utf-8")
             command = [
                 eslint_bin,
@@ -182,23 +182,21 @@ class TsComplexityAnalyzer:
                 *files,
             ]
             try:
-                result = subprocess.run(
-                    command,
-                    cwd=change.repo,
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    timeout=budget_s,
-                    check=False,
+                sandbox = Sandbox(
+                    SandboxPolicy(
+                        memory_mb=None,
+                        read_only_paths=tuple(
+                            Path(p) for p in env.get("NODE_PATH", "").split(":") if p
+                        ),
+                    )
                 )
-            except FileNotFoundError:
+                result = sandbox.run(command, cwd=change.repo, env=env, timeout_s=budget_s)
+            except SandboxUnavailable as exc:
                 facts["complexity.eslint_available"] = False
+                return ComplexityOutcome(methods=[], facts=facts, error=str(exc))
+            if not result.ok and (result.timed_out or result.returncode != 1):
                 return ComplexityOutcome(
-                    methods=[], facts=facts, error="eslint nie jest zainstalowany"
-                )
-            except subprocess.TimeoutExpired:
-                return ComplexityOutcome(
-                    methods=[], facts=facts, error=f"eslint przekroczył limit {budget_s:g}s"
+                    methods=[], facts=facts, error=f"eslint: {result.tail() or 'timeout'}"
                 )
 
         methods: list[MethodComplexity] = []

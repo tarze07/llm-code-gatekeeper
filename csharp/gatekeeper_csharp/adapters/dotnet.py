@@ -12,10 +12,9 @@ Odnajdywanie projektów (`find_project_for`/`projects_for`) i skan podatności
 (core) — są potrzebne też `deps.ecosystems.NuGetEcosystem` (G3.sca), nie tylko
 temu adapterowi.
 
-Zakłada się, że `dotnet restore` już się odbył (tak samo jak G2.cross_verify
-zakłada zainstalowane zależności testowe Pythona) — bramka nie ma prawa
-sama ściągać pakietów, bo to jedyne miejsce w G1 z dostępem do sieci, którego
-tu świadomie nie chcemy.
+Każda kopia commita wymaga własnego `dotnet restore`. Restore korzysta
+z lokalnego cache NuGet udostępnionego przez sandbox, z pustą listą źródeł
+pakietów i bez sieci. Brak pakietu w cache jest błędem kontroli.
 
 **Sandbox musi dostać `memory_mb=None`.** CoreCLR (runtime .NET-a) rezerwuje
 kilka GB przestrzeni adresowej na starcie niezależnie od realnego zużycia —
@@ -27,6 +26,8 @@ na żywym SDK, nie z dokumentacji.
 
 from __future__ import annotations
 
+import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +69,21 @@ def run_dotnet_build(
     timeout_s: float = 180.0,
     args: list[str] | None = None,
 ) -> list[Finding]:
+    started = time.monotonic()
+    with tempfile.TemporaryDirectory(dir=repo, prefix="gatekeeper-restore-") as tmp:
+        config = Path(tmp) / "NuGet.Config"
+        config.write_text(
+            '<configuration><packageSources><clear /></packageSources></configuration>',
+            encoding="utf-8",
+        )
+        run_tool(
+            [DOTNET, "restore", project, "--configfile", str(config),
+             "-p:NuGetAudit=false", "-v", "quiet"],
+            repo, sandbox, timeout_s,
+        )
+    remaining = timeout_s - (time.monotonic() - started)
+    if remaining <= 0:
+        raise ToolFailed("dotnet restore wykorzystał budżet kontroli kompilacji")
     command = [
         DOTNET,
         "build",
@@ -79,8 +95,16 @@ def run_dotnet_build(
         *(args or []),
     ]
     # dotnet build: 0 = czysto (mogą być ostrzeżenia), 1 = błędy kompilacji
-    result = run_tool(command, repo, sandbox, timeout_s, ok_returncodes=(0, 1))
-    return parse_dotnet_build(result.stdout, repo, gate)
+    result = run_tool(command, repo, sandbox, remaining, ok_returncodes=(0, 1))
+    findings = parse_dotnet_build(result.stdout + "\n" + result.stderr, repo, gate)
+    # Błąd MSBuild/SDK nie dowodzi poprawności kodu. Diagnostyki infrastruktury
+    # (np. NETSDK1004) i nieparsowalne wyjście nie mogą zniknąć w filtrze diffa.
+    errors = [f for f in findings if f.severity >= Severity.HIGH]
+    if result.returncode and (
+        not errors or any(not f.rule_id.startswith("dotnet.CS") for f in errors)
+    ):
+        raise ToolFailed(f"dotnet build nie sprawdził kodu: {result.tail()}")
+    return findings
 
 
 class CsharpStaticChecker:
@@ -146,7 +170,5 @@ class CsharpStaticChecker:
                     return StaticCheckOutcome(findings=findings, facts=facts, error=str(exc))
                 break  # brak `dotnet` raz = brak dla wszystkich projektów
             except ToolFailed as exc:
-                if require_dotnet:
-                    return StaticCheckOutcome(findings=findings, facts=facts, error=str(exc))
-                facts["static.dotnet_available"] = False
+                return StaticCheckOutcome(findings=findings, facts=facts, error=str(exc))
         return StaticCheckOutcome(findings=findings, facts=facts)

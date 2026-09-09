@@ -1,0 +1,13 @@
+{
+  "name": "gatekeeper-web-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Źródła TypeScript panelu. Wynik kompilacji (`gatekeeper_web/static/app.js`) jest wersjonowany, bo pakiet Pythona ma działać bez Node.js.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

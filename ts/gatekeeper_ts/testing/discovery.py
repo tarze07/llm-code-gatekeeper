@@ -29,11 +29,12 @@ wraca już względny wobec repo i dwa wywołania (base/head) porównują
 from __future__ import annotations
 
 import json
-import subprocess
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import Any
+
+from gatekeeper_core.core.runner import Sandbox, SandboxPolicy, SandboxUnavailable
 
 from ..node import node_env
 
@@ -41,11 +42,7 @@ HELPER_NAME = "helper.cjs"
 
 
 class HelperUnavailable(RuntimeError):
-    """`node` albo `@typescript-eslint/parser` niedostępne — analogia do
-    `ToolMissing` (`adapters/base.py`), ale ten moduł nie woła
-    `run_tool`/`Sandbox`: analiza drzewa składniowego nie wykonuje kodu
-    ocenianego repo, więc nie potrzebuje izolacji sieci/pamięci narzucanej
-    testom (te uruchamia dopiero `runner.py`, już w sandboksie)."""
+    """Brak helpera lub niemożność jego uruchomienia w Bubblewrap."""
 
 
 @dataclass(frozen=True)
@@ -78,24 +75,19 @@ def helper_path() -> Path:
 def run_helper(command: str, root: Path, relative_paths: list[str]) -> dict[str, Any]:
     if not relative_paths:
         return {}
+    env = node_env()
+    readable = (helper_path(),) + tuple(
+        Path(p) for p in env.get("NODE_PATH", "").split(":") if p
+    )
+    sandbox = Sandbox(SandboxPolicy(memory_mb=None, read_only_paths=readable))
     try:
-        result = subprocess.run(
+        result = sandbox.run(
             ["node", str(helper_path()), command, "--files", *relative_paths],
-            cwd=root,
-            env=node_env(),
-            capture_output=True,
-            text=True,
-            timeout=120.0,
-            check=False,
+            cwd=root, env=env, timeout_s=120.0,
         )
-    except FileNotFoundError as exc:
-        raise HelperUnavailable(
-            "`node` nie jest zainstalowany — bez niego pack TS/JS nie potrafi "
-            "sparsować testów"
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise HelperUnavailable(f"helper `{command}` przekroczył limit 120s") from exc
-    if result.returncode != 0:
+    except SandboxUnavailable as exc:
+        raise HelperUnavailable(str(exc)) from exc
+    if not result.ok:
         raise HelperUnavailable(
             f"helper `{command}` zakończył się błędem: {result.stderr.strip()}"
         )

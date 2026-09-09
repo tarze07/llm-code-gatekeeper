@@ -55,7 +55,7 @@ def repo(tmp_path: Path) -> Repo:
 # --------------------------------------------------------------------------
 # Fixture'y G2.* — testy integracyjne na prawdziwym vitest, nie na mockach
 # (ta sama zasada co `dotnet_repo` w csharp-packu). `npm install` jest
-# **jeden na sesję**, a repozytoria testowe podpinają wynik dowiązaniem —
+# **jeden na sesję**, a repozytoria testowe kopiują wynik —
 # instalacja per test kosztowałaby minuty zamiast sekund.
 # --------------------------------------------------------------------------
 
@@ -113,7 +113,7 @@ def ts_repo(tmp_path: Path, node_modules: Path | None) -> Repo:
         "export function add(a: number, b: number): number {\n  return a + b;\n}\n",
     )
     r.commit("baza: add")
-    (path / "node_modules").symlink_to(node_modules, target_is_directory=True)
+    shutil.copytree(node_modules, path / "node_modules", symlinks=True)
     return r
 
 

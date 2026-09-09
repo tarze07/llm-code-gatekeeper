@@ -16,7 +16,7 @@ from typing import Any
 
 from gatekeeper_core.adapters.base import ToolFailed, run_tool
 from gatekeeper_core.adapters.dotnet_projects import projects_for
-from gatekeeper_core.core.change import ChangeContext
+from gatekeeper_core.core.change import ChangeContext, write_worktree_file
 from gatekeeper_core.core.diffcover import DiffCoverageResult, run_diff_cover_on_report
 from gatekeeper_core.core.plugins import ToolchainIsolationBroken
 from gatekeeper_core.core.runner import Sandbox, SandboxPolicy
@@ -119,9 +119,7 @@ class CsharpTestToolchain:
             content = change.file_at(change.head_sha, file.path)
             if content is None:
                 continue
-            target = worktree / file.path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            write_worktree_file(worktree, file.path, content)
             count += 1
         return count
 
@@ -166,7 +164,7 @@ class CsharpTestToolchain:
         # w `cwd` (patrz PLAN-G2.md, ten sam problem co w `run_cross_verify`),
         # więc iterujemy `.csproj` jawnie; projekt bez testów kończy się
         # nieszkodliwie (`dotnet test` raportuje "brak testów", nie błąd).
-        with tempfile.TemporaryDirectory(prefix="gatekeeper-cs-coverage-") as tmp:
+        with tempfile.TemporaryDirectory(dir=change.repo, prefix="gatekeeper-cs-coverage-") as tmp:
             reports: list[Path] = []
             for project in sorted(change.repo.rglob("*.csproj")):
                 if "obj" in project.parts or "bin" in project.parts:

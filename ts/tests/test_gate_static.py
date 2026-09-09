@@ -28,7 +28,7 @@ def test_ts_bez_tsconfig_przechodzi_bez_wolania_tsc(repo):
 
     result = StaticGuard({}).run(change)
 
-    assert result.status == "pass"
+    assert result.status == "pass", result.message
     assert result.facts["static.ts_files_checked"] == 1
     assert result.facts["static.tsconfig_found"] is False
 
@@ -53,7 +53,7 @@ def test_wymyslone_wywolanie_api_w_ts_blokuje(repo):
 
     result = StaticGuard({}).run(change)
 
-    assert result.status == "fail"
+    assert result.status == "fail", result.message
     assert any(f.rule_id == "tsc.TS2345" for f in result.findings)
     assert result.facts["static.tsc_available"] is True
 
@@ -67,7 +67,7 @@ def test_eslint_bez_configu_przechodzi_bez_wolania_narzedzia(repo):
 
     result = StaticGuard({}).run(change)
 
-    assert result.status == "pass"
+    assert result.status == "pass", result.message
     assert result.facts["static.js_files_checked"] == 1
     assert result.facts["static.eslint_config_found"] is False
 
@@ -86,6 +86,6 @@ def test_eslint_z_configem_lapie_reguly_problem(repo):
 
     result = StaticGuard({}).run(change)
 
-    assert result.status == "fail"
+    assert result.status == "fail", result.message
     assert any(f.rule_id == "eslint.no-eval" for f in result.findings)
     assert result.facts["static.eslint_available"] is True

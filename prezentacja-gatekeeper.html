@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llm-code-gatekeeper — brama jakości kodu z LLM (deck 16:9)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#edeae3; --card:#f8f6f1; --ink:#151a1f; --mut:#5f6a75; --line:#cfc9bf;
+  --acc:#0e5a8a; --pass:#177a4a; --rev:#a9711b; --blk:#b02a20;
+  --sans:'Space Grotesk','Segoe UI',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#31343a;overflow:hidden;font-family:var(--sans);color:var(--ink)}
+#stage{
+  position:absolute;left:50%;top:50%;width:1920px;height:1080px;
+  transform:translate(-50%,-50%);transform-origin:center;
+  background:
+    repeating-linear-gradient(0deg,rgba(21,26,31,.035) 0 1px,transparent 1px 48px),
+    repeating-linear-gradient(90deg,rgba(21,26,31,.035) 0 1px,transparent 1px 48px),
+    var(--paper);
+  overflow:hidden;
+}
+.slide{position:absolute;inset:0;display:none;flex-direction:column;padding:78px 110px 84px 176px}
+.slide.active{display:flex}
+@media (prefers-reduced-motion: no-preference){
+  .slide.active{animation:rise .3s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+}
+/* rail */
+#rail{position:absolute;left:0;top:0;bottom:0;width:96px;border-right:2px solid var(--ink);display:flex;flex-direction:column;align-items:center;padding:26px 0;z-index:5;background:rgba(255,255,253,.5)}
+#rail .brand{font:600 15px/1 var(--mono);letter-spacing:2px;writing-mode:vertical-rl;transform:rotate(180deg);color:var(--ink);margin-top:14px}
+#rail .sec{font:600 15px var(--mono);letter-spacing:1px;color:var(--acc);writing-mode:vertical-rl;transform:rotate(180deg);margin-top:auto;margin-bottom:26px}
+#rail .dot{width:12px;height:12px;border-radius:50%;background:var(--ink);margin-top:22px}
+/* header strip per slide */
+.top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:34px;font:500 21px var(--mono);color:var(--mut)}
+.top b{color:var(--ink);font-weight:600}
+.top .secname{color:var(--acc);letter-spacing:2px;text-transform:uppercase;font-weight:600}
+h1{font-size:120px;line-height:.98;font-weight:700;letter-spacing:-.035em;max-width:1350px}
+h2{font-size:64px;line-height:1.04;font-weight:600;letter-spacing:-.025em;margin-bottom:26px;max-width:1500px}
+p,li{font-size:27px;line-height:1.5}
+.lede{font-size:33px;line-height:1.4;color:var(--mut);max-width:1280px;margin-top:26px}
+.mut{color:var(--mut)}
+.sm{font-size:24px}
+ul{margin-left:30px}li{margin:9px 0}
+code{font:.82em var(--mono);background:#e2ddd2;border:1px solid var(--line);padding:2px 8px;border-radius:4px}
+pre{font:23px/1.5 var(--mono);background:#151a1f;color:#e9f2ee;padding:20px 26px;border-radius:8px;overflow:hidden;margin:12px 0}
+pre code{background:none;border:none;color:inherit;padding:0;font-size:inherit}
+/* grids + boxes */
+.grid{display:grid;gap:18px;margin:16px 0}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.box{background:var(--card);border:1px solid var(--line);border-top:4px solid var(--ink);border-radius:6px;padding:24px 26px}
+.box h4{font-size:29px;font-weight:600;margin-bottom:9px}
+.box p,.box li{font-size:23.5px;line-height:1.45}
+.num{font:700 46px var(--mono);color:var(--acc);line-height:1;margin-bottom:12px}
+.rule{border-left:5px solid var(--acc);background:linear-gradient(90deg,rgba(14,90,138,.08),transparent 70%);padding:20px 26px;margin:22px 0;font-size:30px;line-height:1.35;font-weight:500;max-width:1500px}
+/* verdict + tags */
+.verd{border-top-width:10px}
+.verd.pass{border-top-color:var(--pass)}.verd.rev{border-top-color:var(--rev)}.verd.blk{border-top-color:var(--blk)}
+.verd .st{font:600 21px var(--mono);letter-spacing:2px;text-transform:uppercase}
+.pass .st{color:var(--pass)}.rev .st{color:var(--rev)}.blk .st{color:var(--blk)}
+.ok{color:var(--pass);font-weight:600}.warn{color:var(--rev);font-weight:600}.bad{color:var(--blk);font-weight:600}
+.chip{display:inline-block;font:600 20px var(--mono);letter-spacing:1px;padding:8px 16px;border:2px solid var(--ink);border-radius:4px;background:var(--card);margin-right:14px}
+/* chain */
+.chain{display:flex;gap:14px;margin:22px 0 10px}
+.step{flex:1;background:var(--card);border:2px solid var(--ink);border-radius:6px;padding:20px 10px;text-align:center;position:relative}
+.step:not(:last-child)::after{content:"›";position:absolute;right:-15px;top:42%;font:700 30px var(--mono);color:var(--ink);z-index:2}
+.step b{display:block;font:700 33px var(--sans);letter-spacing:-.02em}
+.step span{display:block;font-size:20px;color:var(--mut);margin-top:8px;line-height:1.3}
+.step.plan{border-style:dashed;border-color:var(--mut);opacity:.75}
+.step.done b::after{content:"●";font-size:14px;color:var(--pass);margin-left:8px;vertical-align:middle}
+.step.plan b::after{content:"○";font-size:14px;color:var(--mut);margin-left:8px;vertical-align:middle}
+/* tables */
+table{border-collapse:collapse;width:100%;margin:8px 0}
+th,td{text-align:left;vertical-align:top;padding:11px 16px;border-bottom:1px solid var(--line);font-size:24px;line-height:1.35}
+th{font:600 19px var(--mono);letter-spacing:1.6px;text-transform:uppercase;color:var(--acc);border-bottom:3px solid var(--ink);padding-top:0}
+/* hud */
+#bar{position:absolute;top:0;left:0;height:7px;background:var(--acc);width:0;z-index:20;transition:width .22s}
+#hud{position:absolute;right:34px;bottom:22px;font:500 20px var(--mono);color:var(--mut);z-index:20}
+#hint{position:absolute;left:176px;bottom:22px;font:500 18px var(--mono);color:#9aa3ac;z-index:20}
+@media print{
+  body{background:#fff;overflow:visible}
+  #stage{position:static;transform:none;width:1920px;height:auto}
+  .slide{position:relative;display:flex!important;page-break-after:always;min-height:1080px}
+  #hud,#hint,#bar{display:none}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+<div id="bar"></div>
+<div id="rail"><div class="brand">GATEKEEPER · 2026-09</div><div class="dot"></div><div class="sec" id="railsec">START</div></div>
+
+<!-- 01 -->
+<section class="slide active" data-sec="TYTUŁ">
+  <div class="top"><span class="secname">prezentacja projektowa</span><span><b>llm-code-gatekeeper</b></span></div>
+  <h1>Czy ta zmiana<br>może iść<br>na produkcję?</h1>
+  <p class="lede">Brama jakości dla kodu generowanego przez agentów LLM. Nie pyta, czy testy są zielone — pyta, czy zmianę wolno wpuścić. Silnik + packi Python / TS&nbsp;/&nbsp;C#, jedenaście bramek G0–G3, jeden raport na PR.</p>
+  <div style="margin-top:56px">
+    <span class="chip" style="border-color:var(--pass)"><b style="color:var(--pass)">PASS</b></span>
+    <span class="chip" style="border-color:var(--rev)"><b style="color:var(--rev)">PASS-WITH-REVIEW</b></span>
+    <span class="chip" style="border-color:var(--blk)"><b style="color:var(--blk)">BLOCK</b></span>
+    <span class="mut sm" style="font-family:var(--mono)">— werdykty z dowodami, nie „score 82/100”</span>
+  </div>
+  <p class="foot" style="margin-top:auto;padding-top:20px;font:18px var(--mono);color:#9aa3ac">stan: Faza 1 ukończona · źródła: core/PLAN.md, README, USAGE, REVIEW.md, PODSUMOWANIE.md</p>
+</section>
+
+<!-- 02 -->
+<section class="slide" data-sec="AGENDA">
+  <div class="top"><span class="secname">agenda</span><span><b>02</b> / 15</span></div>
+  <h2>Pięć pytań, pięć rozdziałów</h2>
+  <div class="grid" style="grid-template-columns:1fr;gap:14px;margin-top:8px">
+    <div class="box" style="display:grid;grid-template-columns:110px 360px 1fr;align-items:center;border-top-width:4px"><div class="num">01</div><h4>Potrzeba</h4><p class="mut">Dlaczego zielone CI nie znaczy bezpieczna zmiana, gdy autorem kodu jest agent.</p></div>
+    <div class="box" style="display:grid;grid-template-columns:110px 360px 1fr;align-items:center"><div class="num">02</div><h4>Wiedza teoretyczna</h4><p class="mut">Model zagrożeń, aksjomat autorstwa artefaktów, łańcuch bramek G0–G6.</p></div>
+    <div class="box" style="display:grid;grid-template-columns:110px 360px 1fr;align-items:center"><div class="num">03</div><h4>Jak przygotowano rozwiązanie</h4><p class="mut">Plan → kontrakty → silnik → packi → kalibracja → weryfikacja mieszanego stosu.</p></div>
+    <div class="box" style="display:grid;grid-template-columns:110px 360px 1fr;align-items:center"><div class="num">04</div><h4>Co zostało zrobione</h4><p class="mut">11 bramek, monorepo z czterema pakietami, parytet G0–G3 w trzech językach.</p></div>
+    <div class="box" style="display:grid;grid-template-columns:110px 360px 1fr;align-items:center"><div class="num">05</div><h4>Jak tego używać</h4><p class="mut">Instalacja, polityka w repo, gatekeeper run, pętla z agentem, CI.</p></div>
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="slide" data-sec="01 POTRZEBA">
+  <div class="top"><span class="secname">potrzeba</span><span><b>03</b> / 15</span></div>
+  <h2>Kod z LLM zwykle „działa”.<br>I to jest problem.</h2>
+  <div class="grid g2" style="flex:1">
+    <div>
+      <p>Standardowy CI odpowiada na pytanie <i>„czy kod nie działa?”</i> — łapie błędy kompilacji i czerwone testy. Agent produkuje kod, który przechodzi oba te próby, a mimo to wycieka na produkcję coś innego:</p>
+      <ul>
+        <li><b>halucynowany pakiet</b>, którego nie ma w rejestrze — albo typosquat,</li>
+        <li><b>test-atrapa</b>: zielony, ale asertuje to, co kod i tak robi,</li>
+        <li><b>sekrety w fixture’ach</b> i <b>diff poza zakresem zlecenia</b>.</li>
+      </ul>
+      <p class="rule" style="margin-bottom:0">Klasyyczny pipeline zakłada, że testy, lockfile i opis PR są niezależnym dowodem. Przy agencie — nie są.</p>
+    </div>
+    <div class="box">
+      <h4>Co dziś widzi recenzent</h4>
+      <ul>
+        <li>✅ testy zielone</li>
+        <li>✅ coverage rośnie</li>
+        <li>✅ zależności zainstalowane z lockfile’a</li>
+        <li>⚠️ diff 900 linii w 30 plikach — „jutro doczytam”</li>
+      </ul>
+      <p class="mut" style="margin-top:14px">…a każdy z tych zielonych punktów napisał <b>ten sam autor co kod</b>. Recenzent klika approve, bo artefakty wyglądają na niezależne — i nie sposób potem ustalić, który model wpuścił defekt.</p>
+    </div>
+  </div>
+  <p class="mut sm" style="margin-top:8px">Nie-cel systemu: zastąpić code review. Cel: zablokować klasy błędów, które maszyna łapie taniej i pewniej, a człowiekowi dać raport zamiast surowego diffa.</p>
+</section>
+
+<!-- 04 -->
+<section class="slide" data-sec="02 TEORIA">
+  <div class="top"><span class="secname">wiedza teoretyczna · model zagrożeń</span><span><b>04</b> / 15</span></div>
+  <h2>Siedem klas defektów, które przechodzą przez CI</h2>
+  <table>
+    <tr><th style="width:340px">Klasa</th><th>Objaw w diffie</th><th style="width:560px">Dlaczego CI milczy</th></tr>
+    <tr><td><b>Halucynowana zależność</b></td><td>import pakietu, który nie istnieje — albo istnieje jako slopsquat</td><td>lockfile powstał razem z kodem; CI instaluje, co agent wpisał</td></tr>
+    <tr><td><b>Testy pod implementację</b></td><td>90% pokrycia, asercje odtwarzają zachowanie kodu</td><td>coverage rośnie, testy zielone</td></tr>
+    <tr><td><b>Testy-atrapy</b></td><td><code>assert True</code>, echo mocka, test bez asercji</td><td>przechodzą, więc „dowodzą”</td></tr>
+    <tr><td><b>Zakres większy niż zlecenie</b></td><td>agent „przy okazji” przepisuje moduł obok</td><td>diff poprawny składniowo i testowalny</td></tr>
+    <tr><td><b>Sekrety w danych testowych</b></td><td>token API w fixture „na chwilę”</td><td>skanery bywają wyłączone dla testów</td></tr>
+    <tr><td><b>Cicha zmiana kontraktu</b></td><td>inne pole API — testy zaktualizowane</td><td>obie strony zmienił ten sam autor</td></tr>
+    <tr><td><b>Nadmierne uprawnienia</b></td><td>TLS verify off, <code>shell=True</code>, IAM <code>*</code></td><td>to poprawny, kompilujący się kod</td></tr>
+  </table>
+  <p class="mut sm" style="margin-top:12px">Pełna lista w core/PLAN.md obejmuje dodatkowo dryf architektoniczny, puste ścieżki błędów i licencje. Faza 1 celuje w powyższe siedem — najtańsze i najbardziej deterministyczne.</p>
+</section>
+
+<!-- 05 -->
+<section class="slide" data-sec="02 TEORIA">
+  <div class="top"><span class="secname">wiedza teoretyczna · aksjomat</span><span><b>05</b> / 15</span></div>
+  <h2>Jedno założenie, na którym stoi cały system</h2>
+  <p class="rule" style="font-size:36px;max-width:1600px">Testy, lockfile, konfiguracja i opis PR pochodzą od <b>tego samego autora co kod</b> — więc żadnego z nich nie wolno traktować jako niezależnego dowodu.</p>
+  <div class="grid g3" style="flex:1">
+    <div class="box"><h4>Skutek dla testów</h4><p class="mut">Zielony test nic nie znaczy, dopóki nie udowodnimy, że <b>pada na kodzie sprzed zmiany</b>. Inaczej tylko ozdabia implementację.</p></div>
+    <div class="box"><h4>Skutek dla zależności</h4><p class="mut">Manifest nie jest źródłem prawdy. Pakiet musi <b>istnieć w rejestrze</b>, nie być zbyt młody i nie być homoglifem popularnej nazwy.</p></div>
+    <div class="box"><h4>Skutek dla polityki</h4><p class="mut">Kryteria oceny leżą w ocenianym repo i <b>agent nie może ich „naprawić”</b>. CODEOWNERS + branch protection to granica bezpieczeństwa, nie formalność.</p></div>
+  </div>
+  <p style="margin-top:6px">Stąd zasada kolejności bramek: <b>najtańsze i najbardziej deterministyczne najpierw</b>. Recenzent LLM (G4) jest drogi i niedeterministyczny — nie wolno nim przykrywać dziur, które tanie bramki już umieją strzec.</p>
+</section>
+
+<!-- 06 -->
+<section class="slide" data-sec="02 TEORIA">
+  <div class="top"><span class="secname">wiedza teoretyczna · model bram</span><span><b>06</b> / 15</span></div>
+  <h2>Łańcuch G0 → G6: od higieny zmiany do wdrożenia</h2>
+  <div class="chain">
+    <div class="step done"><b>G0</b><span>pochodzenie<br>i zakres</span></div>
+    <div class="step done"><b>G1</b><span>statyka, deps,<br>złożoność</span></div>
+    <div class="step done"><b>G2</b><span>dowód<br>behawioralny</span></div>
+    <div class="step done"><b>G3</b><span>sekrety,<br>SAST, SCA</span></div>
+    <div class="step plan"><b>G4</b><span>panel<br>LLM-judge</span></div>
+    <div class="step plan"><b>G5</b><span>człowiek<br>wg polityki</span></div>
+    <div class="step plan"><b>G6</b><span>gotowość<br>deploy</span></div>
+  </div>
+  <div class="grid g3" style="flex:1;margin-top:20px">
+    <div class="box"><h4>● zbudowane</h4><p class="mut">G0–G3: dispatch bramek w core, dostawcy w packach językowych, polityka, raport, ślad w SQLite.</p></div>
+    <div class="box"><h4>Ekonomia faz</h4><p class="mut">Faza 1 (G0+G1+G3) ≈ <b>60% wartości za ~20% kosztu</b>. G2 jest najtrudniejsza i najcenniejsza — tu ginie „zielone, ale puste”.</p></div>
+    <div class="box"><h4>Bramka warunkowa na G4</h4><p class="mut">Panel recenzentów LLM startuje jako komentarz bez prawa blokowania; blokuje dopiero przy <b>precyzji &gt;80%</b> na zestawie kalibracyjnym.</p></div>
+  </div>
+</section>
+
+<!-- 07 -->
+<section class="slide" data-sec="02 TEORIA">
+  <div class="top"><span class="secname">model decyzji</span><span><b>07</b> / 15</span></div>
+  <h2>Trzy werdykty i filozofia fail-closed</h2>
+  <div class="grid g3">
+    <div class="box verd pass"><div class="st">PASS</div><h4 style="margin-top:6px">Zielone światło</h4><p class="mut">Bramki zielone, dowody zebrane. Kod wyjścia <code>0</code>.</p></div>
+    <div class="box verd rev"><div class="st">PASS-WITH-REVIEW</div><h4 style="margin-top:6px">Człowiek zerka</h4><p class="mut">Nie blokuję, ale raport mówi <b>gdzie</b> patrzeć. Kod <code>0</code> (lub <code>2</code> z <code>--fail-on review</code>).</p></div>
+    <div class="box verd blk"><div class="st">BLOCK</div><h4 style="margin-top:6px">Twardy stop</h4><p class="mut">Uzasadnienie, scenariusz awarii, fingerprint. Kod wyjścia <code>1</code>.</p></div>
+  </div>
+  <div class="grid g2" style="flex:1;margin-top:6px">
+    <div class="box"><h4>Brak dowodu ≠ pass</h4>
+      <ul>
+        <li>brak narzędzia → <code>error</code>, nie cichy pass</li>
+        <li>błąd bramki → <code>on_gate_error: review</code></li>
+        <li>raport jawnie wymienia <code>not_checked</code> — brama przyznaje się, czego nie sprawdziła</li>
+      </ul>
+    </div>
+    <div class="box"><h4>Dowód w każdym znalezisku</h4>
+      <ul>
+        <li><code>Finding</code> bez scenariusza awarii <b>nie potrafi powstać</b> (walidacja w konstruktorze)</li>
+        <li>fingerprint <b>bez numeru linii</b> — wyciszenia przeżywają rebase</li>
+        <li>przebiegi lądują w SQLite: <code>incident</code>, <code>verdict</code>, <code>metrics</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 08 -->
+<section class="slide" data-sec="03 PRZYGOTOWANIE">
+  <div class="top"><span class="secname">jak przygotowano rozwiązanie</span><span><b>08</b> / 15</span></div>
+  <h2>Siedem kroków: od dokumentu do zweryfikowanego systemu</h2>
+  <div class="grid" style="grid-template-columns:1.3fr .9fr;flex:1">
+    <div>
+      <ol style="margin-left:34px;font-size:21.5px;line-height:1.38">
+        <li style="margin:8px 0"><b>Rozpoznanie.</b> Taksonomia defektów kodu z agenta i model zagrożeń (core/PLAN.md) — wybór 7 klas deterministycznych.</li>
+        <li style="margin:8px 0"><b>Model decyzji.</b> Fakty, progi, werdykty; polityka jako YAML bez <code>eval</code>; wyjątki z właścicielem i datą wygaśnięcia.</li>
+        <li style="margin:8px 0"><b>Kontrakty pluginów.</b> Protokoły <code>StaticChecker</code>, <code>TestToolchain</code>, <code>EcosystemProvider</code>, <code>SemgrepRulePack</code> — dwa poziomy entry points.</li>
+        <li style="margin:8px 0"><b>Silnik.</b> Orchestrator (fale wg grafu zależności, budżety, ścieżka docs-only), sandbox procesów, raport do PR, ślad w SQLite.</li>
+        <li style="margin:8px 0"><b>Packi językowe.</b> ruff/mypy · tsc/eslint · dotnet build + helper Roslyn <code>gatekeeper-cs-helper</code>.</li>
+        <li style="margin:8px 0"><b>Kalibracja.</b> Fixture’y celowo zepsutych PR-ów: sekret, halucynowany pakiet, za duży diff, test bez dowodu — stała regresja samej bramy.</li>
+        <li style="margin:8px 0"><b>Weryfikacja.</b> Osobno każde repo (pytest, mypy --strict, semgrep --test, calibrate) i <b>mieszany stos</b>: 4 pakiety w jednym venv, diff Python+TS+C# jednym <code>gatekeeper run</code>.</li>
+      </ol>
+    </div>
+    <div class="box" style="align-self:start"><h4>Rozstrzygnięcia projektowe</h4>
+      <ul>
+        <li><b>Monorepo, nie 4 osobne repo</b> — wspólny core + cienkie packi w jednym repo (`#subdirectory=`), historia git zachowana przez <code>git filter-repo</code> przy scaleniu</li>
+        <li>PyPI/npm/NuGet zostają w core: manifest+rejestr+typosquat+SCA to infrastruktura, nie kompilatory</li>
+        <li><code>G1.complexity</code> jako <b>osobny gate ID</b>, nie wpinka do ruffa C901 — własna dźwignia w polityce</li>
+        <li>rollout: pierwszy tydzień <code>warn_only</code>, potem zdjęcie ostrzegania <b>przed</b> ustawieniem required check</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 09 -->
+<section class="slide" data-sec="03 ARCHITEKTURA">
+  <div class="top"><span class="secname">architektura</span><span><b>09</b> / 15</span></div>
+  <h2>Core nie importuje packów — packi się dorejestrowują</h2>
+  <div class="grid g4">
+    <div class="box"><h4>core</h4><p class="mut sm">CLI, orchestrator, polityka, sandbox, 11 bramek jako dispatch, PyPI/npm/NuGet<br><code>gatekeeper_core</code></p></div>
+    <div class="box"><h4>python</h4><p class="mut sm">ruff + mypy, testy przez <code>ast</code>, McCabe, 6 reguł „nigdy”<br><code>gatekeeper_python</code></p></div>
+    <div class="box"><h4>ts / js</h4><p class="mut sm">tsc + eslint, complexity regułą eslint, G2 przez vitest/jest + helper ESTree, 4 reguły „nigdy”<br><code>gatekeeper_ts</code></p></div>
+    <div class="box"><h4>csharp</h4><p class="mut sm">dotnet build, helper Roslyn, xUnit G2, 4 reguły „nigdy”<br><code>gatekeeper_csharp</code></p></div>
+  </div>
+  <table style="margin-top:14px">
+    <tr><th>Grupa entry points</th><th>Dostawcy</th><th>Co dzięki temu zostaje jedną bramką</th></tr>
+    <tr><td><code>gatekeeper.gates</code></td><td>całe bramki (core: 11)</td><td>pack może dodać nową bramkę bez patcha w core</td></tr>
+    <tr><td><code>gatekeeper.static_checkers</code></td><td>ruff/mypy · tsc/eslint · dotnet</td><td><code>G1.static</code></td></tr>
+    <tr><td><code>gatekeeper.complexity_analyzers</code></td><td>AST · eslint · Roslyn</td><td><code>G1.complexity</code></td></tr>
+    <tr><td><code>gatekeeper.test_toolchains</code></td><td>pytest/AST · vitest/jest (ESTree) · xUnit/Roslyn</td><td><code>G2.cross_verify · test_sanity · diff_coverage</code></td></tr>
+    <tr><td><code>gatekeeper.semgrep_rule_packs</code></td><td>reguły uniwersalne + per język</td><td><code>G3.sast</code></td></tr>
+    <tr><td><code>gatekeeper.dep_ecosystems</code></td><td>PyPI · npm · NuGet (<b>żyją w core</b>)</td><td><code>G1.deps</code> i <code>G3.sca</code></td></tr>
+  </table>
+  <p class="mut sm">Polityka referencuje bramki stringiem — dlatego <code>G1.static</code> pozostaje jednym gate ID niezależnie od liczby zainstalowanych packów. Jeden raport na PR przy mieszanym diffie.</p>
+</section>
+
+<!-- 10 -->
+<section class="slide" data-sec="04 STAN">
+  <div class="top"><span class="secname">co zostało zrobione · 11 bramek</span><span><b>10</b> / 15</span></div>
+  <h2>G0–G3: co konkretnie stoi na straży</h2>
+  <table>
+    <tr><th style="width:360px">Bramka</th><th>Pytanie, na które odpowiada</th><th style="width:300px">Gdzie żyje</th></tr>
+    <tr><td><code>G0.provenance</code></td><td>Kto i jakim modelem to napisał? (trailery commitów)</td><td>core</td></tr>
+    <tr><td><code>G0.scope</code></td><td>Czy diff da się zrecenzować? Limity: 400 linii / 15 plików</td><td>core</td></tr>
+    <tr><td><code>G1.deps</code></td><td>Czy nowy pakiet istnieje, nie jest zbyt młody, nie jest typosquatem?</td><td>core</td></tr>
+    <tr><td><code>G1.static</code></td><td>Czy zmienione linie przechodzą build / lint / typy?</td><td>packi</td></tr>
+    <tr><td><code>G1.complexity</code></td><td>Czy funkcja w diffie ma McCabe ≤ 10?</td><td>3 packi</td></tr>
+    <tr><td><code>G2.cross_verify</code></td><td>Czy nowe testy padają na kodzie sprzed zmiany?</td><td>Py + TS + C#</td></tr>
+    <tr><td><code>G2.test_sanity</code></td><td>Czy test ma asercję, która coś znaczy?</td><td>Py + TS + C#</td></tr>
+    <tr><td><code>G2.diff_coverage</code></td><td>Czy nowe linie produkcyjne mają ≥ 80% pokrycia branch-aware?</td><td>Py + TS + C#</td></tr>
+    <tr><td><code>G3.secrets</code></td><td>Czy w diffie — także w testach i fixture’ach — jest sekret?</td><td>core (gitleaks)</td></tr>
+    <tr><td><code>G3.sast</code></td><td>Czy ktoś wyłączył TLS, skleił SQL, odpalił <code>eval</code>?</td><td>packi (semgrep)</td></tr>
+    <tr><td><code>G3.sca</code></td><td>Czy nowo dodana zależność ma znaną podatność?</td><td>core</td></tr>
+  </table>
+  <p class="mut sm" style="margin-top:10px">Planowane, niezaimplementowane: mutacje, detekcja flaky, testy kontraktów, IaC/licencje (G3+) oraz całe G4–G6.</p>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-sec="04 STAN">
+  <div class="top"><span class="secname">stan · parytet języków</span><span><b>11</b> / 15</span></div>
+  <h2>Trzy języki, ten sam typ dowodu</h2>
+  <table>
+    <tr><th>Bramka</th><th>Python</th><th>TS / JS</th><th>C#</th></tr>
+    <tr><td>G1.static</td><td class="ok">ruff + mypy</td><td class="ok">tsc + eslint</td><td class="ok">dotnet build (Roslyn = typy i lint naraz)</td></tr>
+    <tr><td>G1.complexity</td><td class="ok">AST / McCabe</td><td class="ok">reguła eslint</td><td class="ok">gatekeeper-cs-helper</td></tr>
+    <tr><td>G2.* — testy jako dowód</td><td class="ok">pełne (AST + pytest)</td><td class="ok">vitest / jest + helper ESTree</td><td class="ok">xUnit + helper Roslyn</td></tr>
+    <tr><td>G3.sast „nigdy”</td><td class="ok">6 reguł</td><td class="ok">4 reguły</td><td class="ok">4 reguły</td></tr>
+    <tr><td>G1.deps / G3.sca</td><td>PyPI + pip-audit</td><td>npm + npm audit</td><td>NuGet + dotnet list --vulnerable</td></tr>
+  </table>
+  <div class="grid g2" style="flex:1;margin-top:14px">
+    <div class="box"><h4>Uczciwość jako cecha systemu</h4><p class="mut">Brak narzędzia czy brak dowodu to w raporcie <b><code>skipped</code> + <code>not_checked</code></b>, nie udawany pass. G2 dla TS odpala się tylko gdy w <code>package.json</code> jest vitest albo jest — repo z samym tape dostanie <code>skipped</code>, nie zielony kwiatek. Toolchain TS jako jedyny deklaruje <b>dwa języki</b> (TS i JS jednym przebiegiem runnera).</p></div>
+    <div class="box"><h4>Sandbox wykonania</h4><p class="mut">Brama <b>uruchamia kod z PR-a</b>. Jeden punkt <code>subprocess</code>: scrub zmiennych TOKEN/SECRET, <code>unshare --net</code>, RLIMIT pamięci/czasu, allowlista env. Linux-first; twarda izolacja kontenerowa — otwarty dług.</p></div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-sec="04 STAN">
+  <div class="top"><span class="secname">najważniejsza bramka</span><span><b>12</b> / 15</span></div>
+  <h2>G2.cross_verify — test, który musi paść na starym kodzie</h2>
+  <div class="grid g3">
+    <div class="box"><div class="num">1</div><h4>Worktree ze starym kodem</h4><p class="mut">Brama tworzy checkout <code>base_sha</code> — wersji sprzed zmiany z PR-a.</p></div>
+    <div class="box"><div class="num">2</div><h4>Overlay tylko testów</h4><p class="mut">Na stary kod kopiowane są <b>tylko nowe/zmienione pliki testowe</b>. Produkcja nie może wyciec do bazy.</p></div>
+    <div class="box"><div class="num">3</div><h4>Uruchom nowe testy</h4><p class="mut">Jeśli test nowej funkcjonalności <b>przechodzi</b> na starym kodzie — nie dowodzi zmiany → finding.</p></div>
+  </div>
+  <div class="grid g2" style="flex:1;margin-top:8px">
+    <div class="box"><h4>Test sanity (AST / ESTree / Roslyn lint)</h4><p class="mut">Test bez asercji · asercja na stałą (<code>Assert.Equal(1,1)</code>) · echo mocka (Moq, <code>vi.fn</code>/<code>jest.fn</code> zwraca to, co test sam ustawił) · sam <code>is not None</code> / <code>toBeDefined</code> · połknięty wyjątek. Te same pięć rule_id w trzech językach. Markery <code>characterization</code>/<code>test_backfill</code> z licznikiem nadużyć.</p></div>
+    <div class="box"><h4>Diff coverage</h4><p class="mut">Pokrycie <b>różnicowe, branch-aware</b> (coverage.py · vitest/jest <code>--coverage</code> → Cobertura · coverlet + diff-cover): liczy się tylko to, co zmienił PR — ≥ 80%. Globalny percentage łatwo oszukać, diffowy nie.</p></div>
+  </div>
+  <p class="mut sm">Detale: weryfikacja izolacji (Python: wykrycie <code>pip install -e</code>; TS: <code>node_modules</code> z dowiązaniem do repo — npm link/workspaces → <code>IsolationBroken</code>), rozróżnienie <i>failed</i> od <i>error</i> (błąd kompilacji na starym kodzie to słabszy dowód — liczy się osobno). TS celowo na <b>ESTree</b>, nie TS Compiler API: od TypeScript 7 pakiet <code>typescript</code> nie eksponuje już parsera w JS.</p>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-sec="05 UŻYCIE">
+  <div class="top"><span class="secname">użycie · uruchomienie</span><span><b>13</b> / 15</span></div>
+  <h2>Start w ocenianym repozytorium</h2>
+  <div class="grid g2" style="flex:1">
+    <div>
+      <h3>1 · Instalacja (jeszcze z GitHuba, nie z PyPI)</h3>
+      <pre style="font-size:20px"># jedno repo, cztery pakiety: …git#subdirectory=&lt;pack&gt;
+pip install "llm-code-gatekeeper-core @ \
+  git+…tarze07/llm-code-gatekeeper.git#subdirectory=core"
+pip install "llm-code-gatekeeper-python @ \
+  git+…tarze07/llm-code-gatekeeper.git#subdirectory=python"
+pip install "llm-code-gatekeeper-ts @ \
+  git+…tarze07/llm-code-gatekeeper.git#subdirectory=ts"
+# analogicznie: llm-code-gatekeeper-csharp</pre>
+      <h3>2 · Uruchomienie bramy na gałęzi agenta</h3>
+      <pre style="font-size:21px">gatekeeper policy lint --policy policy/gates.yaml
+gatekeeper run --repo . --base origin/main</pre>
+    </div>
+    <div class="box"><h4>3 · Narzędzia projektów ocenianych</h4>
+      <table style="font-size:22px">
+        <tr><th>Stos</th><th>Poza pipem bramy</th></tr>
+        <tr><td>Python</td><td><code>ruff</code>, <code>mypy</code>, binarka gitleaks</td></tr>
+        <tr><td>TS / JS</td><td><code>typescript</code>, <code>eslint</code>, <code>@typescript-eslint/parser</code>; dla G2: <code>vitest</code> lub <code>jest</code> (runner wykrywany z package.json); helper ESTree jedzie w pakiecie, bez osobnej instalacji; wymagany <code>tsconfig.json</code> / config eslint</td></tr>
+        <tr><td>C#</td><td>.NET SDK 8+, <code>dotnet restore</code> wcześniej zrobiony, <code>dotnet tool install gatekeeper-cs-helper</code></td></tr>
+      </table>
+      <h4 style="margin-top:16px">4 · Polityka</h4>
+      <p class="mut">Skopiuj <code>gates.yaml</code> / <code>scope_map.yaml</code> / <code>exceptions.yaml</code> (kopia startowa: <code>core/policy/</code>) do ocenianego repo. Chroń <code>policy/</code> prawdziwymi CODEOWNERS + branch protection.</p>
+    </div>
+  </div>
+  <p class="mut sm">Mieszany stos? Instalujesz core + tyle packów, ile języków w repo. <code>gatekeeper run</code> obsłuży Python+TS+C# w jednym diffie, jednym raportem.</p>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-sec="05 UŻYCIE">
+  <div class="top"><span class="secname">użycie · raport, pętla, CI</span><span><b>14</b> / 15</span></div>
+  <h2>Co robić z werdyktem</h2>
+  <div class="grid g2" style="flex:1">
+    <div class="box"><h4>Czytanie wyniku</h4>
+      <ul>
+        <li>finding = plik + fakt + bramka + fingerprint + <b>scenariusz awarii</b></li>
+        <li>każdy przebieg zostaje w SQLite → <code>gatekeeper incident &lt;run-id&gt;</code></li>
+        <li>fałszywy alarm? <b>nie wyłączaj reguły</b> — oznacz <code>gatekeeper verdict &lt;fp&gt; --false-positive</code> i wpisz wyjątek z właścicielem i datą wygaśnięcia</li>
+        <li>skuteczność bramy: <code>gatekeeper metrics --days 30</code></li>
+      </ul>
+      <h4 style="margin-top:14px">Pętla z agentem</h4>
+      <p class="mut">Raport BLOCK wklej agentowi jako zadanie naprawcze. <b>Maks. 2–3 rundy</b>, potem człowiek — dłuższa pętla produkuje obejścia zamiast poprawek.</p>
+    </div>
+    <div>
+      <pre style="font-size:21px">gatekeeper run --base main
+gatekeeper run --gate G1.deps        # jedna bramka
+gatekeeper run --base main --fail-on review
+gatekeeper policy facts              # dozwolone fakty
+gatekeeper calibrate                 # naprawcze PR-y vs polityka
+gatekeeper verdict &lt;fp&gt; --false-positive --note "…"
+gatekeeper metrics --days 30</pre>
+      <div class="box" style="margin-top:12px;border-top-color:var(--rev)"><h4 class="warn">Uwaga wdrożeniowa</h4><p class="mut">Szablon startowy ma <code>warn_only</code> na G1.static, G3.sast, G3.sca i G2.* — do pierwszego tygodnia obserwacji. <b>Dopóki zostaje, brama komentuje, nie chroni</b>: naprawdę blokuje tylko sekrety, nieistniejący pakiet, typosquat i za duży diff. Zdejmij <code>warn_only</code>, zanim Check Run stanie się required. Gotowy workflow CI: <code>.github/workflows/gatekeeper.yml</code>.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide" data-sec="PODSUMOWANIE">
+  <div class="top"><span class="secname">uczciwy stan i następne kroki</span><span><b>15</b> / 15</span></div>
+  <h2>Co wolno obiecać organizacji dziś</h2>
+  <div class="grid g2" style="flex:1">
+    <div class="box verd pass"><div class="st">GOTOWE DO ADOPCJI</div>
+      <ul>
+        <li>halucynowane pakiety i typosquat (PyPI/npm/NuGet)</li>
+        <li>sekrety także w testach; limity zakresu i rozmiaru diffa</li>
+        <li>statyka, złożoność i reguły „nigdy” w 3 językach</li>
+        <li>dowód testów (cross-verify, sanity, diff coverage) dla Pythona, TS/JS i C#</li>
+        <li>polityka jako YAML, kalibracja, ślad w SQLite, metryki</li>
+      </ul>
+    </div>
+    <div class="box verd rev"><div class="st">NIE OBIECUJ JESZCZE</div>
+      <ul>
+        <li>że domyślny szablon blokuje static/SAST/SCA/G2 — częściowo tylko ostrzega</li>
+        <li>G2 w repo TS, którego runnerem nie jest vitest/jest (brak detekcji → <code>skipped</code>)</li>
+        <li>recenzenta LLM (G4) i checklisty wdrożeniowej (G6)</li>
+        <li>twardej izolacji poza Linuksem; pakietów na PyPI; wypchniętego CI (token bez scope <code>workflow</code>)</li>
+      </ul>
+    </div>
+  </div>
+  <p class="rule">Następny krok nie jest nową bramką. Jest zdjęciem <code>warn_only</code>, naprawą CODEOWNERS i domknięciem fail-open — potem dopiero G4.</p>
+  <p class="foot" style="margin-top:auto;font:17px var(--mono);color:#9aa3ac">Źródła: core/PLAN.md · core/README.md · README.md · USAGE.md · PODSUMOWANIE.md · REVIEW.md · core/PLAN-G1-complexity.md · python/USAGE.md · ts/PLAN-G2.md · csharp/PLAN-G2.md · stan repo: 2026-09 (feat/g2-ts)</p>
+</section>
+
+</div>
+<div id="hud">01 / 15</div>
+<div id="hint">← → · spacja · Home / End</div>
+<script>
+const stage=document.getElementById('stage');
+function fit(){const k=Math.min(innerWidth/1920,innerHeight/1080);stage.style.transform=`translate(-50%,-50%) scale(${k})`;}
+addEventListener('resize',fit);fit();
+const slides=[...document.querySelectorAll('.slide')];
+let i=Math.min(slides.length-1,parseInt(location.hash.slice(1)||localStorage.getItem('gkdeck-slide')||'0',10))||0;
+function show(n){
+  i=Math.max(0,Math.min(slides.length-1,n));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  document.getElementById('hud').textContent=String(i+1).padStart(2,'0')+' / '+slides.length;
+  document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';
+  document.getElementById('railsec').textContent=slides[i].dataset.sec||'';
+  localStorage.setItem('gkdeck-slide',String(i));
+}
+addEventListener('keydown',e=>{
+  if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();show(i+1);}
+  if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();show(i-1);}
+  if(e.key==='Home')show(0);
+  if(e.key==='End')show(slides.length-1);
+});
+addEventListener('click',e=>{
+  if(e.target.closest('a,pre,code'))return;
+  if(e.clientX>innerWidth*0.72)show(i+1);
+  else if(e.clientX<innerWidth*0.12)show(i-1);
+});
+show(i);
+</script>
+</body>
+</html>

@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import Any
 
 from gatekeeper_core.adapters.base import ToolFailed, ToolMissing
-from gatekeeper_core.core.change import ChangeContext
+from gatekeeper_core.core.change import ChangeContext, write_worktree_file
 from gatekeeper_core.core.diffcover import DiffCoverageResult, run_diff_cover_on_report
 from gatekeeper_core.core.plugins import ToolchainIsolationBroken
-from gatekeeper_core.core.runner import Sandbox, SandboxPolicy
+from gatekeeper_core.core.runner import Sandbox, SandboxPolicy, dependency_paths
 
 from . import discovery, quality
 from .discovery import TestItem
@@ -98,6 +98,7 @@ class TsTestToolchain:
         sandbox = Sandbox(
             SandboxPolicy(
                 network=False,
+                read_only_paths=dependency_paths(change.repo),
                 timeout_s=timeout_s,
                 # V8 rezerwuje na starcie kilkugigabajtową przestrzeń adresową
                 # (pointer compression cage), więc twardy `RLIMIT_AS` wywraca
@@ -138,9 +139,7 @@ class TsTestToolchain:
             content = change.file_at(change.head_sha, file.path)
             if content is None:
                 continue
-            target = worktree / file.path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            write_worktree_file(worktree, file.path, content)
             count += 1
         return count
 
@@ -217,6 +216,7 @@ class TsTestToolchain:
         sandbox = Sandbox(
             SandboxPolicy(
                 network=False,
+                read_only_paths=dependency_paths(change.repo),
                 timeout_s=timeout_s,
                 memory_mb=None,  # jak wyżej: V8 i twardy RLIMIT_AS się wykluczają
                 keep_env=tuple(config.get("keep_env", ())),
@@ -226,7 +226,7 @@ class TsTestToolchain:
         # Celowo **cały** zestaw testów repo, nie tylko pliki z diffa — pytanie
         # brzmi „czy zmienione linie pokrywa *jakikolwiek* test", tak samo jak
         # w python- i csharp-packu.
-        with tempfile.TemporaryDirectory(prefix="gatekeeper-ts-coverage-") as tmp:
+        with tempfile.TemporaryDirectory(dir=change.repo, prefix="gatekeeper-ts-coverage-") as tmp:
             out_dir = Path(tmp) / "coverage"
             command = _coverage_command(runner, change.repo, out_dir)
             try:

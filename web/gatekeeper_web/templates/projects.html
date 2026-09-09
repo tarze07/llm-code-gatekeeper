@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block tytul %}Projekty — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Projekty</h1>
+<p class="podtytul">
+  Projekt jest pojemnikiem na raporty jednego repozytorium. Ten sam
+  fingerprint znaleziska w dwóch projektach to dwa różne problemy, dlatego
+  historia jest zawsze przypisana do projektu.
+</p>
+
+{% if blad %}<div class="blad" role="alert">{{ blad }}</div>{% endif %}
+
+<div class="karta">
+  <h2>Nowy projekt</h2>
+  <form method="post" action="/projekty" class="filtry">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div>
+      <label for="name">Nazwa projektu</label>
+      <input id="name" name="name" required maxlength="200" autocomplete="off">
+    </div>
+    <div>
+      <label for="repo_label">Repozytorium (opis, opcjonalnie)</label>
+      <input id="repo_label" name="repo_label" maxlength="500" autocomplete="off"
+             placeholder="np. taskboard-demo">
+    </div>
+    <button class="glowny" type="submit">Dodaj projekt</button>
+  </form>
+  <p class="brak">
+    W tym wydaniu opis repozytorium jest wyłącznie etykietą — panel niczego
+    z niego nie uruchamia i nie czyta z dysku. Rejestracja ścieżki lokalnego
+    repozytorium wraz z walidacją należy do etapu uruchamiania kontroli.
+  </p>
+</div>
+
+<div class="karta przewijana">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Projekt</th>
+        <th scope="col">Slug</th>
+        <th scope="col">Repozytorium</th>
+        <th scope="col">Przebiegi</th>
+        <th scope="col">Stan</th>
+        <th scope="col">Działanie</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in projects %}
+        <tr>
+          <td><a href="/przebiegi?projekt={{ p.id }}">{{ p.name }}</a></td>
+          <td class="mono">{{ p.slug }}</td>
+          <td>{{ p.repo_label or '—' }}</td>
+          <td>{{ counts.get(p.id, 0) }}</td>
+          <td>{% if p.archived %}<span class="znacznik znacznik--neutralny">zarchiwizowany</span>{% else %}aktywny{% endif %}</td>
+          <td>
+            <form method="post" action="/projekty/{{ p.id }}/archiwum">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="archived" value="{{ '0' if p.archived else '1' }}">
+              <button class="zwykly" type="submit">
+                {{ 'Przywróć' if p.archived else 'Archiwizuj' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="brak">Nie ma jeszcze żadnego projektu.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="brak">Archiwizacja ukrywa projekt w listach. Nie kasuje raportów ani żadnych plików.</p>
+{% endblock %}

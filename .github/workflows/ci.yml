@@ -1,4 +1,4 @@
-# CI monorepo: jeden workflow, cztery joby (po jednym na pakiet).
+# CI monorepo: jeden workflow, piec jobow (po jednym na pakiet).
 #
 # GitHub Actions czyta wylacznie korzeniowy `.github/workflows/` — pliki
 # `ci.yml` lezace wczesniej w kazdym packu byly martwe po scaleniu repo
@@ -29,6 +29,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Izolacja procesów
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       - name: Zaleznosci
         run: pip install --quiet -e ".[dev,gates]"
 
@@ -58,6 +61,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Izolacja procesów
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
 
       - name: Zaleznosci
         run: |
@@ -103,6 +109,9 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Izolacja procesów
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       - name: Zaleznosci
         run: |
           pip install --quiet -e ../core
@@ -142,6 +151,9 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Izolacja procesów
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       - name: Zaleznosci
         run: |
           pip install --quiet -e ../core
@@ -154,3 +166,45 @@ jobs:
         run: pytest -q
       - name: semgrep --test
         run: semgrep --test --config gatekeeper_csharp/rules/semgrep rules/semgrep/tests
+
+  # Panel WWW: pakiet opcjonalny, wiec ma wlasny job. Nie instaluje zadnego
+  # pack'a jezykowego ani bubblewrapa — raport jest danymi, a panel go tylko
+  # czyta. Testy chodza po probkach z `web/samples/`, nie po lokalnej sciezce.
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Zaleznosci
+        run: |
+          pip install --quiet -e ../core
+          pip install --quiet -e ".[dev]"
+          pip install --quiet ruff mypy
+
+      - name: ruff
+        run: ruff check gatekeeper_web tests
+      - name: mypy --strict
+        # MYPYPATH: core zainstalowany edytowalnie — mypy nie idzie za hookiem
+        # `__editable__` (ta sama sztuczka co w jobie `ts`).
+        run: MYPYPATH=../core mypy gatekeeper_web --strict
+      - name: pytest
+        run: pytest -q
+
+      # `static/app.js` jest wersjonowany, zeby instalacja pakietu nie wymagala
+      # Node.js. Ten krok pilnuje, ze commit ze zmiana w `frontend/` faktycznie
+      # zawiera przebudowany plik, a nie stary.
+      - name: TypeScript — kompilacja zgodna z zacommitowanym app.js
+        run: |
+          cd frontend
+          npm install --silent --no-audit --no-fund
+          npm run build
+          git diff --exit-code ../gatekeeper_web/static/app.js

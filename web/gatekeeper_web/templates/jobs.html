@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% import "_makra.html" as m %}
+{% block tytul %}Zadania — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Zadania</h1>
+<p class="podtytul">
+  Stan zadania mówi, czy udało się wykonać pracę. Decyzja polityki jest osobną
+  rzeczą i istnieje tylko dla zadania z zapisanym raportem.
+</p>
+
+{% if supervisor_active %}
+  <div class="sukces" role="status">Nadzorca kolejki działa.</div>
+{% else %}
+  <div class="uwaga" role="status">
+    Nadzorca kolejki nie działa — zadania zostaną w kolejce do jego startu.
+    Uruchamia go <code>gatekeeper-web serve</code> albo
+    <code>gatekeeper-web supervise</code>.
+  </div>
+{% endif %}
+
+<div class="karta">
+  <form method="get" action="/zadania" class="filtry">
+    <div>
+      <label for="projekt">Projekt</label>
+      <select id="projekt" name="projekt">
+        <option value="">wszystkie</option>
+        {% for p in projects %}
+          <option value="{{ p.id }}" {% if wybrany == p.id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="glowny" type="submit">Filtruj</button>
+    <a href="/zadania">Wyczyść</a>
+  </form>
+</div>
+
+<div class="karta przewijana">
+  <table>
+    <thead>
+      <tr><th>Zadanie</th><th>Stan</th><th>Zlecono</th><th>Zakończono</th><th>Wynik</th><th>Uwagi</th></tr>
+    </thead>
+    <tbody>
+      {% for job in jobs %}
+        <tr>
+          <td><a href="/zadania/{{ job.id }}">#{{ job.id }}</a>
+            {% if job.retry_of %}<span class="brak">(ponowienie #{{ job.retry_of }})</span>{% endif %}
+          </td>
+          <td>{{ m.stan_zadania(job) }}</td>
+          <td>{{ job.created_at|czas }}</td>
+          <td>{{ job.finished_at|czas if job.finished_at else '—' }}</td>
+          <td>
+            {% if job.has_result %}
+              <a href="/projekty/{{ job.project_id }}/przebiegi/{{ job.run_id }}">{{ job.run_id }}</a>
+            {% else %}
+              <span class="brak">brak raportu</span>
+            {% endif %}
+          </td>
+          <td>{{ job.error or '' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="brak">Żadnego zadania jeszcze nie zlecono.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

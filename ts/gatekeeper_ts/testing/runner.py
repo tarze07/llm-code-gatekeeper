@@ -139,7 +139,7 @@ def run_tests(
     chosen: Runner = runner if runner is not None else detect_runner(worktree)
     bin_path = resolve_bin(worktree, chosen)
 
-    with tempfile.TemporaryDirectory(prefix="gatekeeper-ts-tests-") as tmp:
+    with tempfile.TemporaryDirectory(dir=worktree, prefix="gatekeeper-ts-tests-") as tmp:
         report = Path(tmp) / "results.json"
         command = _command(chosen, bin_path, files, report)
         try:

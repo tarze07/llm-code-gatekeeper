@@ -78,8 +78,12 @@ def known_gate_ids() -> set[str]:
 
 def build_gates(policy: Any, only: Iterable[str] | None = None) -> list[Gate]:
     selected = set(only) if only else None
+    available = all_gates()
+    unknown = (selected or set()) - {cls.id for cls in available}
+    if unknown:
+        raise ValueError(f"nieznane bramki: {', '.join(sorted(unknown))}")
     gates: list[Gate] = []
-    for cls in all_gates():
+    for cls in available:
         if selected and cls.id not in selected:
             continue
         gates.append(cls(policy.gate_config(cls.id)))

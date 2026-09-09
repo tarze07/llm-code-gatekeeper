@@ -1,18 +1,26 @@
 # llm-code-gatekeeper
 
-Brama jakości dla kodu generowanego przez agentów LLM. Jedno repozytorium, cztery pakiety Pythona wydawane niezależnie:
+Brama jakości dla kodu generowanego przez agentów LLM. Jedno repozytorium, pięć pakietów Pythona wydawanych niezależnie:
 
 ```
 llm-code-gatekeeper/
 ├── core/     llm-code-gatekeeper-core      (silnik + CLI)
 ├── python/   llm-code-gatekeeper-python    (pack Python)
 ├── ts/       llm-code-gatekeeper-ts        (pack TS/JS)
-└── csharp/   llm-code-gatekeeper-csharp    (pack C#)
+├── csharp/   llm-code-gatekeeper-csharp    (pack C#)
+└── web/      llm-code-gatekeeper-web       (panel WWW, opcjonalny)
 ```
 
 `core` dostarcza silnik (orchestrator, polityka, CLI `gatekeeper`) i 11 bramek jako logikę dispatchu — sam nie zna żadnego konkretnego języka poza PyPI/npm/NuGet (te trzy ekosystemy są język-agnostyczne, więc żyją w core). Każdy pack (`python`/`ts`/`csharp`) dorejestrowuje przez [entry points](https://packaging.python.org/en/latest/specifications/entry-points/) obsługę jednego języka — bez tego mechanizmu core musiałby importować kod każdego pack'a wprost. Wspólne repo nie zmienia tej granicy: packi **nadal** instaluje się osobno i core nadal nie importuje żadnego z nich.
 
+`web` to osobna sprawa niż packi: nie dokłada żadnej bramki ani obsługi języka. Daje przeglądarkę raportów i lokalny panel, który uruchamia **ten sam silnik co CLI** (wspólne `core.service`), z kolejką i osobnym procesem nadzorcy. Zależy od `core` w jedną stronę i nikt nie musi go instalować, żeby używać CLI. Szczegóły: [`web/README.md`](web/README.md).
+
 Pełny opis architektury (dwa poziomy grup entry points, kontrakty pluginów) jest w [`core/README.md`](core/README.md) — to on jest właściwym punktem wejścia do zrozumienia systemu; ten plik to ściągawka „jak z tym pracować".
+
+Uruchamianie narzędzi wymaga **Linuksa i Bubblewrap** (`sudo apt-get install
+bubblewrap` na Ubuntu/Debian). Każda bramka analizuje osobną kopię wskazanego
+commita i ma egzekwowany limit czasu. Wymagania dotyczące zależności oraz
+zakres izolacji opisuje [core/SECURITY.md](core/SECURITY.md).
 
 ## Używanie bramy na cudzym repo (typowy przypadek)
 

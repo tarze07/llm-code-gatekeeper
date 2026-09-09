@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kod startowy — panel bramy jakości</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="logowanie-strona">
+  <main id="tresc">
+    <h1>Kod startowy</h1>
+    <p class="podtytul">
+      Panel wypisał jednorazowy kod w terminalu, w którym uruchomiono
+      <code>gatekeeper-web serve</code>. Wpisz go tutaj. Kod nie jest częścią
+      adresu strony i nie trafia do logów serwera.
+    </p>
+    {% if blad %}<div class="blad" role="alert">{{ blad }}</div>{% endif %}
+    <form method="post" action="/logowanie" class="karta">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="nastepny" value="{{ nastepny }}">
+      <label for="code">Kod startowy</label>
+      <input id="code" name="code" type="text" inputmode="text" autocomplete="one-time-code" required autofocus>
+      <p><button class="glowny" type="submit">Wejdź do panelu</button></p>
+    </form>
+  </main>
+</body>
+</html>

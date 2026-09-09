@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block tytul %}Nowa kontrola — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Nowa kontrola</h1>
+<p class="podtytul">
+  Panel uruchomi narzędzia na wskazanym commicie. Zakres widzisz przed
+  uruchomieniem, a nie po.
+</p>
+
+{% if blockers %}
+  <div class="blad" role="alert">
+    <strong>Uruchamianie jest zablokowane:</strong>
+    <ul>{% for problem in blockers %}<li>{{ problem }}</li>{% endfor %}</ul>
+  </div>
+{% endif %}
+{% if blad %}<div class="blad" role="alert">{{ blad }}</div>{% endif %}
+{% if refs_error %}<div class="uwaga">{{ refs_error }}</div>{% endif %}
+
+{% if not projects %}
+  <div class="uwaga">
+    Żaden projekt nie jest gotowy do uruchamiania. Projekt musi mieć
+    <strong>ścieżkę repozytorium</strong> i <strong>profil polityki z aktywną
+    wersją</strong> — ustawisz to w zakładce <a href="/projekty">Projekty</a>.
+  </div>
+{% else %}
+  <div class="karta">
+    <h2>Zakres</h2>
+    <form id="formularz-zakresu" method="post" action="/nowa-kontrola/podglad" class="filtry">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <label for="project_id">Projekt</label>
+        <select id="project_id" name="project_id" required>
+          {% for p in projects %}
+            <option value="{{ p.id }}" {% if project and project.id == p.id %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="base">Wersja bazowa</label>
+        <input id="base" name="base" list="refy" required maxlength="200"
+               value="{{ form.get('base', 'main') }}" autocomplete="off">
+      </div>
+      <div>
+        <label for="head">Wersja oceniana</label>
+        <input id="head" name="head" list="refy" maxlength="200"
+               value="{{ form.get('head', 'HEAD') }}" autocomplete="off">
+      </div>
+      <div>
+        <label for="ticket">Ticket (opcjonalnie)</label>
+        <input id="ticket" name="ticket" maxlength="64" value="{{ form.get('ticket', '') }}"
+               autocomplete="off" placeholder="AUTH-101">
+      </div>
+      <div>
+        <label for="fast_path">Ścieżka szybka</label>
+        <select id="fast_path" name="fast_path">
+          <option value="1" {% if form.get('fast_path', True) %}selected{% endif %}>tak — zmiana wyłącznie dokumentacyjna pomija drogie bramki</option>
+          <option value="" {% if not form.get('fast_path', True) %}selected{% endif %}>nie — uruchom wszystko</option>
+        </select>
+      </div>
+      <button class="glowny" type="submit">Pokaż zakres</button>
+    </form>
+
+    <datalist id="refy">
+      {% for ref in refs %}<option value="{{ ref.name }}"></option>{% endfor %}
+    </datalist>
+
+    <details>
+      <summary>Wybierz konkretne bramki (domyślnie wszystkie z polityki)</summary>
+      <p class="brak">
+        Ten wybór trafia do zamrożonego wejścia zadania — powtórzenie uruchomi
+        dokładnie te same kontrole.
+      </p>
+      <ul>
+        {% for gate_id in gates %}
+          <li>
+            <label>
+              <input type="checkbox" form="formularz-zakresu" name="gate" value="{{ gate_id }}"
+                     {% if gate_id in form.get('gates', []) %}checked{% endif %}>
+              <code>{{ gate_id }}</code>
+            </label>
+          </li>
+        {% endfor %}
+      </ul>
+    </details>
+  </div>
+{% endif %}
+
+{% if preview %}
+  <div class="karta">
+    <h2>Dokładny zakres tej kontroli</h2>
+    <dl class="fakty">
+      <dt>Wersja bazowa</dt>
+      <dd class="mono">{{ preview.base_ref }} → {{ preview.base_tip_sha|sha }}</dd>
+      <dt>Merge-base użyty w diffie</dt>
+      <dd class="mono">
+        {{ preview.merge_base|sha }}
+        {% if preview.uses_merge_base %}
+          <span class="brak">(diff liczony od wspólnego przodka, nie od czubka gałęzi bazowej)</span>
+        {% endif %}
+      </dd>
+      <dt>Wersja oceniana</dt>
+      <dd class="mono">{{ preview.head_ref }} → {{ preview.head_sha|sha }}</dd>
+      <dt>Gałąź</dt>
+      <dd>{{ preview.branch or 'brak danych' }}</dd>
+      <dt>Ticket</dt>
+      <dd>{{ preview.ticket or 'brak' }}</dd>
+      <dt>Pliki</dt>
+      <dd>{{ preview.effective_files }} istotnych z {{ preview.total_files }}
+        ({{ preview.generated_files }} generowanych, {{ preview.test_files }} testowych)</dd>
+      <dt>Linie</dt>
+      <dd>{{ preview.effective_lines }} istotnych z {{ preview.total_lines }}</dd>
+      <dt>Tylko dokumentacja</dt>
+      <dd>{{ 'tak' if preview.docs_only else 'nie' }}</dd>
+      <dt>Polityka</dt>
+      <dd>
+        {% if active_revision %}
+          wersja {{ active_revision.label }}, hash <code>{{ active_revision.content_hash[:16] }}</code>
+        {% else %}
+          <span class="brak">brak aktywnej wersji</span>
+        {% endif %}
+      </dd>
+    </dl>
+
+    {% if preview.paths %}
+      <details>
+        <summary>Pliki w zakresie ({{ preview.paths|length }})</summary>
+        <ul>{% for path in preview.paths %}<li class="mono">{{ path }}</li>{% endfor %}</ul>
+      </details>
+    {% endif %}
+
+    {% if active_revision and not blockers %}
+      <form method="post" action="/nowa-kontrola">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="project_id" value="{{ form['project_id'] }}">
+        <input type="hidden" name="base" value="{{ form['base'] }}">
+        <input type="hidden" name="head" value="{{ form['head'] }}">
+        <input type="hidden" name="ticket" value="{{ form['ticket'] }}">
+        <input type="hidden" name="fast_path" value="{{ '1' if form['fast_path'] else '' }}">
+        {% for gate_id in form.get('gates', []) %}
+          <input type="hidden" name="gate" value="{{ gate_id }}">
+        {% endfor %}
+        <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+        <button class="glowny" type="submit">Uruchom kontrolę</button>
+        <span class="brak">
+          Podwójne kliknięcie nie zleci dwóch analiz — zadanie ma klucz idempotencji.
+        </span>
+      </form>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

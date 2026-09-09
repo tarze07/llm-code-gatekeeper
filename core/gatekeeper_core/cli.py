@@ -10,11 +10,10 @@ from pathlib import Path
 import typer
 
 from .core import metrics as metrics_module
-from .core.change import ChangeContext
 from .core.finding import Verdict
-from .core.orchestrator import run_gates
 from .core.policy import Policy, PolicyError
 from .core.report import render_check_runs, render_json, render_markdown
+from .core.service import PreparationError, RunRequest, execute, prepare
 from .core.store import DEFAULT_PATH as DEFAULT_STORE
 from .core.store import Store
 from .gates import known_facts, known_gate_ids
@@ -51,20 +50,27 @@ def run(
     no_store: bool = typer.Option(False, "--no-store", help="Nie zapisuj śladu przebiegu"),
 ) -> None:
     """Uruchamia bramki na zakresie `base..head` i wypisuje decyzję."""
+    # Przygotowanie i wykonanie żyją w `core.service` — panel WWW uruchamia
+    # dokładnie tę samą ścieżkę, więc walidacja polityki nie ma dwóch kopii.
+    request = RunRequest(
+        repo=repo,
+        base=base,
+        head=head,
+        policy_path=policy_path,
+        exceptions_path=exceptions,
+        ticket=ticket,
+        gates=tuple(gate) if gate else None,
+        fast_path=not no_fast_path,
+    )
     try:
-        policy = Policy.load(policy_path, exceptions)
-    except (OSError, PolicyError) as exc:
-        typer.secho(f"polityka: {exc}", fg=typer.colors.RED, err=True)
+        prepared = prepare(request)
+    except PreparationError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
         raise typer.Exit(EXIT_USAGE) from exc
 
-    errors = policy.lint(known_facts(), known_gate_ids())
-    if errors:
-        for err in errors:
-            typer.secho(f"polityka: {err}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(EXIT_USAGE)
-
-    change = ChangeContext.from_git(repo, base, head, ticket_id=ticket)
-    result = run_gates(change, policy, only=gate, fast_path=not no_fast_path)
+    policy = prepared.policy
+    change = prepared.change
+    result = execute(prepared)
 
     if not no_store:
         try:

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block tytul %}Wersja {{ revision.label }} — polityka{% endblock %}
+
+{% block tresc %}
+<h1>{{ profile.name }} — wersja {{ revision.label }}</h1>
+<p class="podtytul">
+  <a href="/polityki/{{ revision.profile_id }}">← Profil</a> ·
+  stan: {{ revision.state }} · hash <code>{{ revision.content_hash[:16] }}</code> ·
+  utworzona {{ revision.created_at|czas }}
+</p>
+
+{% if result.ok %}
+  <div class="sukces" role="status">Polityka przechodzi walidację.</div>
+{% else %}
+  <div class="blad" role="alert">
+    <strong>Polityka nie przechodzi walidacji:</strong>
+    <ul>{% for err in result.errors %}<li>{{ err }}</li>{% endfor %}</ul>
+    <p>Aktywacja jest zablokowana do czasu poprawienia tych błędów.</p>
+  </div>
+{% endif %}
+
+{% if result.expired %}
+  <div class="blad">
+    <strong>Wygasłe wyjątki:</strong>
+    <ul>{% for item in result.expired %}<li>{{ item }}</li>{% endfor %}</ul>
+  </div>
+{% endif %}
+{% if result.expiring %}
+  <div class="uwaga">
+    <strong>Wyjątki wygasające wkrótce:</strong>
+    <ul>{% for item in result.expiring %}<li>{{ item }}</li>{% endfor %}</ul>
+  </div>
+{% endif %}
+
+{% if active and active.id != revision.id %}
+  <div class="karta">
+    <h2>Co się zmieni wobec wersji {{ active.label }}</h2>
+    {% if changes %}
+      <table>
+        <thead><tr><th>Rodzaj</th><th>Zmiana</th><th>Skutek</th></tr></thead>
+        <tbody>
+          {% for change in changes %}
+            <tr>
+              <td>{{ change.kind }}</td>
+              <td>{{ change.detail }}</td>
+              <td>
+                {% if change.loosens %}
+                  <span class="znacznik znacznik--review">rozluźnia</span>
+                {% else %}
+                  <span class="znacznik znacznik--neutralny">zaostrza lub bez zmiany rygoru</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="brak">
+        Rozluźnienia są oznaczone osobno: to jedyna lista, którą naprawdę
+        trzeba przeczytać przed aktywacją.
+      </p>
+    {% else %}
+      <p class="brak">Brak różnic w regułach wobec wersji aktywnej.</p>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% if result.ok and revision.state != 'active' %}
+  <div class="karta">
+    <h2>Aktywacja</h2>
+    <form method="post" action="/polityki/wersje/{{ revision.id }}/aktywuj" class="filtry">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <label for="author">Kto aktywuje</label>
+        <input id="author" name="author" maxlength="120" autocomplete="off">
+      </div>
+      <div>
+        <label for="note">Uzasadnienie</label>
+        <input id="note" name="note" maxlength="500" size="40" autocomplete="off">
+      </div>
+      <button class="glowny" type="submit">Aktywuj tę wersję</button>
+    </form>
+    <p class="brak">
+      Aktywacja dotyczy przyszłych zadań. Zapisane raporty zachowują politykę,
+      według której zapadła ich decyzja.
+    </p>
+  </div>
+{% endif %}
+
+<div class="karta">
+  <h2>Treść</h2>
+  <h3>gates.yaml</h3>
+  <pre class="mono przewijana">{{ revision.policy_yaml }}</pre>
+  {% if revision.exceptions_yaml %}
+    <h3>exceptions.yaml</h3>
+    <pre class="mono przewijana">{{ revision.exceptions_yaml }}</pre>
+  {% endif %}
+  {% if revision.scope_map_yaml %}
+    <h3>scope_map.yaml</h3>
+    <pre class="mono przewijana">{{ revision.scope_map_yaml }}</pre>
+  {% endif %}
+</div>
+{% endblock %}

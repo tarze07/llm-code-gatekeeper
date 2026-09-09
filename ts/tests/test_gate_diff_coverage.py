@@ -48,8 +48,8 @@ def test_pelne_pokrycie_obu_galezi_daje_ratio_rowne_jeden(ts_repo):
 
     result = DiffCoverage({}).run(change)
 
-    assert result.status == "pass"
-    assert result.facts["coverage.diff_ratio"] == 1.0
+    assert result.status == "pass", result.message
+    assert result.facts["coverage.diff_ratio"] == 1.0, result.message
     assert result.facts["coverage.tool_available"] is True
 
 

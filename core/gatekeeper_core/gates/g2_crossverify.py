@@ -188,7 +188,10 @@ class CrossVerify(Gate):
             )
 
         return self.result(
-            status="fail" if facts["tests.pass_on_pre_change_code"] else "pass",
+            status=(
+                "error" if facts["tests.weak_evidence"]
+                else "fail" if facts["tests.pass_on_pre_change_code"] else "pass"
+            ),
             duration_s=time.monotonic() - started,
             facts=facts,
             findings=findings,
