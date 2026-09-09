@@ -7,7 +7,8 @@ w jedną stronę.
 Zakres tego wydania to etapy 0–6 z [`PLAN-WEB-UI.md`](../PLAN-WEB-UI.md):
 przeglądarka raportów, rejestr projektów, **uruchamianie kontroli z kolejką
 i osobnym nadzorcą**, postęp i anulowanie, oceny znalezisk, metryki,
-zarządzanie profilami polityki, logowanie kodem startowym i kopia bazy.
+zarządzanie profilami polityki i kopia bazy. Panel startuje bez logowania;
+sesję z jednorazowym kodem startowym włącza `--wymagaj-logowania`.
 Czego nie ma — mówi wprost [`CONTRACT.md`](CONTRACT.md) §11.
 
 ## Instalacja i start
@@ -37,10 +38,30 @@ Podczas pracy nad panelem można dodać `--reload`. Serwer uruchamia wtedy
 fabrykę aplikacji w osobnym procesie i zachowuje wybrane `--state-dir`,
 `--host` oraz `--port` po przeładowaniu.
 
-Po starcie terminal wypisuje **jednorazowy kod startowy**. Wpisuje się go na
-`/logowanie`. Kod nie jest częścią adresu strony. `--host 0.0.0.0` kończy się
-odmową startu: kod startowy nie zastępuje HTTPS i ról. Wersja zespołowa to
-osobny model wdrożenia (plan §10), a nie zmiana adresu nasłuchu.
+### Logowanie
+
+Domyślnie panel **o nic nie pyta** — otwierasz adres i jesteś na pulpicie.
+Dla jednego operatora na własnej maszynie kod przepisywany z terminala był
+kosztem bez odbiorcy.
+
+Cena tej wygody jest konkretna i warto ją znać: panel wpuszcza **każdego, kto
+sięgnie na ten port**. Nasłuch na pętli zwrotnej odcina sieć, ale nie odcina
+innych procesów na tej samej maszynie ani stron otwartych w przeglądarce
+(przed zapisem broni CSRF i kontrola `Origin`, przed odczytem — nic).
+
+Gdy to za mało — z maszyny korzysta ktoś jeszcze albo chodzą na niej
+niezaufane procesy — sesja wraca:
+
+```bash
+gatekeeper-web serve --wymagaj-logowania
+```
+
+Terminal wypisuje wtedy **jednorazowy kod startowy**; wpisuje się go na
+`/logowanie` i kod nie jest częścią adresu strony.
+
+`--host 0.0.0.0` kończy się odmową startu niezależnie od logowania: kod
+startowy nie zastępuje HTTPS i ról. Wersja zespołowa to osobny model
+wdrożenia (plan §10), a nie zmiana adresu nasłuchu.
 
 Kopia bazy (nic nie kasuje historii):
 
@@ -102,8 +123,9 @@ Panel czyta raporty z cudzych repozytoriów, więc granice dostępu są części
 funkcji, a nie dodatkiem (plan §8):
 
 * nasłuch tylko na pętli zwrotnej + weryfikacja nagłówka `Host`;
-* sesja operatora z jednorazowym kodem startowym (ciasto HttpOnly/SameSite;
-  sekret sesji nie trafia do URL ani logów);
+* opcjonalna sesja operatora — `--wymagaj-logowania`, jednorazowy kod
+  startowy, ciasteczko HttpOnly/SameSite, sekret nie trafia do URL ani logów;
+  **domyślnie wyłączona**, więc dostęp do portu jest dostępem do panelu;
 * repozytorium wolno zarejestrować **wyłącznie** w katalogach podanych przez
   `--repo-root`; sprawdzana jest ścieżka rozwinięta, więc dowiązanie nie jest
   furtką, a walidacja powtarza się przy każdym uruchomieniu;

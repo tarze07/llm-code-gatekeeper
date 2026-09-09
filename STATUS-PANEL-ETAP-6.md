@@ -6,8 +6,8 @@ Plan źródłowy: [`PLAN-WEB-UI.md`](PLAN-WEB-UI.md).
 
 ## 1. Skrót
 
-Dokończony **etap 6** MVP. Panel ma sesję operatora (jednorazowy kod
-startowy), kopię zapasową bazy i domkniętą instrukcję. Testy przeglądarkowe
+Dokończony **etap 6** MVP. Panel ma opcjonalną sesję operatora, kopię
+zapasową bazy i domkniętą instrukcję. Testy przeglądarkowe
 ze sterownikiem nadal nie wchodzą — w środowisku nie ma Chromium; zestaw
 sprawdza HTML i API. Historia nie jest usuwana automatycznie.
 
@@ -18,10 +18,16 @@ Pominięte przy zapisie: `csharp/build/`. Commit nie został wypchnięty.
 
 ## 2. Sesja operatora (plan §8)
 
-Jednorazowy kod startowy przy `gatekeeper-web serve`, strona `/logowanie`,
-ciasteczko `gk_session` (HttpOnly/SameSite). Sekret nie trafia do URL ani
-logów. API bez sesji → 401, HTML → przekierowanie. `--host 0.0.0.0` nadal
-odmowa (to nie jest wersja zespołowa).
+Domyślnie **wyłączona**: `gatekeeper-web serve` otwiera pulpit od razu.
+Dostęp do portu na pętli zwrotnej jest dostępem do panelu — zapisy chroni
+CSRF i kontrola `Origin`, odczytów nie chroni nic.
+
+`serve --wymagaj-logowania` przywraca pełny model: jednorazowy kod startowy
+w terminalu, strona `/logowanie`, ciasteczko `gk_session` (HttpOnly/SameSite),
+sekret poza URL-em i logami, API bez sesji → 401, HTML → przekierowanie.
+
+`--host 0.0.0.0` to odmowa startu w obu trybach (to nie jest wersja
+zespołowa).
 
 ## 3. Kopia bazy
 

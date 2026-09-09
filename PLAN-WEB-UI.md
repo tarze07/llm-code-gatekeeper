@@ -3,7 +3,8 @@
 Status: **etapy 0–6 zaimplementowane** w pakiecie [`web/`](web/) — kontrakt
 danych, przeglądarka raportów, rejestr projektów i profili polityki, kolejka
 z osobnym nadzorcą, realne uruchamianie kontroli z postępem i anulowaniem,
-oceny znalezisk, incydenty i metryki, sesja kodem startowym, kopia bazy.
+oceny znalezisk, incydenty i metryki, opcjonalna sesja kodem startowym,
+kopia bazy.
 Testy przeglądarkowe ze sterownikiem i kasująca retencja pozostają poza
 wydaniem (patrz [`web/CONTRACT.md`](web/CONTRACT.md) §11). Rozdz. 10 (zespół,
 GitHub/GitLab) jest poza MVP.
@@ -353,6 +354,11 @@ częścią funkcji zarządzania, a nie dodatkiem po wystawieniu serwera.
 
 - Domyślny nasłuch tylko na `127.0.0.1`. Sesja operatora zakładana jednorazowym
   kodem startowym; sekret sesji nie trafia do URL raportu ani logów.
+  **Zrealizowane inaczej, świadomie:** sesja jest opcją (`--wymagaj-logowania`),
+  a nie domyślnym zachowaniem. Dla jednego operatora na własnej maszynie kod
+  przepisywany z terminala okazał się kosztem bez odbiorcy; obrona sprowadza
+  się wtedy do pętli zwrotnej, kontroli `Host`, CSRF i `Origin`. Gdy z maszyny
+  korzysta ktoś jeszcze, flaga przywraca pełny model z tego punktu.
 - Walidacja nagłówka Host i Origin, ochrona CSRF operacji zapisujących,
   ciasteczko HttpOnly/SameSite; brak otwartego CORS. Ciasteczko Secure przy HTTPS.
 - Rejestracja repozytorium wyłącznie w dozwolonych katalogach. Normalizacja

@@ -41,9 +41,11 @@ class Settings:
     #: Nadzorca zadań startuje razem z panelem. Wyłączany w testach API,
     #: które nie mają nic uruchamiać.
     start_supervisor: bool = True
-    #: Sesja operatora (PLAN-WEB-UI.md §8). Testy wyłączają logowanie, żeby
-    #: nie powtarzać kodu startowego w każdym przypadku; `serve` zostawia True.
-    require_login: bool = True
+    #: Sesja operatora (PLAN-WEB-UI.md §8). Panel lokalny startuje **bez**
+    #: logowania: nasłuch i tak jest tylko na pętli zwrotnej, a jednorazowy kod
+    #: w terminalu okazał się kosztem bez odbiorcy dla jednego operatora.
+    #: `serve --wymagaj-logowania` włącza sesję z kodem startowym z powrotem.
+    require_login: bool = False
     session_secret: str = ""
     bootstrap_code: str = ""
     bootstrap_hash: str = ""
@@ -80,6 +82,9 @@ class Settings:
                 if roots
                 else DEFAULT_REPO_ROOTS
             ),
+            # `--reload` startuje nowy proces, więc tryb logowania musi
+            # przejechać przez środowisko razem z sekretem i skrótem kodu.
+            require_login=os.environ.get("GATEKEEPER_WEB_REQUIRE_LOGIN", "") == "1",
             session_secret=os.environ.get("GATEKEEPER_WEB_SESSION_SECRET", ""),
             bootstrap_hash=os.environ.get("GATEKEEPER_WEB_BOOTSTRAP_HASH", ""),
         )

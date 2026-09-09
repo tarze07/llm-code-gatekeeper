@@ -1,7 +1,13 @@
-"""Sesja operatora — jednorazowy kod startowy (PLAN-WEB-UI.md §8)."""
+"""Tryb logowania panelu: domyślnie żaden, opcjonalnie kod startowy.
+
+`serve` startuje bez sesji (panel lokalny, pętla zwrotna). Zestaw poniżej
+pilnuje obu stron tego przełącznika: że domyślnie naprawdę nic nie pyta
+i że `--wymagaj-logowania` wraca do sesji z planu §8.
+"""
 
 from __future__ import annotations
 
+import pytest
 from conftest import BASE_URL, ORIGIN
 from fastapi.testclient import TestClient
 
@@ -119,3 +125,45 @@ def test_nastepny_nie_jest_otwartym_przekierowaniem(settings: Settings) -> None:
         )
     assert response.status_code == 303
     assert response.headers["location"] == "/"
+
+
+# ------------------------------------------------- tryb domyślny: bez sesji
+
+
+def _otwarty(settings: Settings) -> TestClient:
+    return TestClient(create_app(settings), base_url=BASE_URL, follow_redirects=False)
+
+
+def test_domyslnie_panel_nie_pyta_o_kod(settings: Settings) -> None:
+    """Fixture `settings` używa domyślnego `require_login`, czyli False."""
+    assert settings.require_login is False
+    with _otwarty(settings) as client:
+        strona = client.get("/")
+        api = client.get("/api/v1/projects")
+    assert strona.status_code == 200
+    assert api.status_code == 200
+
+
+def test_bez_logowania_strona_kodu_odsyla_na_pulpit(settings: Settings) -> None:
+    with _otwarty(settings) as client:
+        response = client.get("/logowanie")
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
+def test_bez_logowania_nie_ma_ciasteczka_sesji(settings: Settings) -> None:
+    """Brak sesji to brak sesji — panel nie zakłada jej po cichu."""
+    with _otwarty(settings) as client:
+        response = client.get("/")
+    assert SESSION_COOKIE not in response.cookies
+    assert SESSION_COOKIE not in response.headers.get("set-cookie", "")
+
+
+def test_tryb_logowania_przechodzi_przez_srodowisko(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--reload` odtwarza ustawienia z env; zgubiony klucz otwierałby panel."""
+    monkeypatch.delenv("GATEKEEPER_WEB_REQUIRE_LOGIN", raising=False)
+    assert Settings.from_env().require_login is False
+    monkeypatch.setenv("GATEKEEPER_WEB_REQUIRE_LOGIN", "1")
+    assert Settings.from_env().require_login is True
+    monkeypatch.setenv("GATEKEEPER_WEB_REQUIRE_LOGIN", "0")
+    assert Settings.from_env().require_login is False

@@ -41,19 +41,29 @@ def serve(
     no_supervisor: bool = typer.Option(
         False, "--no-supervisor", help="Nie uruchamiaj nadzorcy kolejki (gdy działa osobno)"
     ),
+    wymagaj_logowania: bool = typer.Option(
+        False,
+        "--wymagaj-logowania",
+        help="Sesja operatora zakładana jednorazowym kodem startowym z terminala",
+    ),
 ) -> None:
     """Startuje panel razem z nadzorcą kolejki.
 
-    Nasłuch spoza pętli zwrotnej jest odmawiany: jednorazowy kod startowy
-    nie zastępuje HTTPS i ról z planu §10, więc `--host 0.0.0.0` nadal
-    nie jest „udostępnieniem zespołowi”.
+    Domyślnie panel nie pyta o nic: nasłuchuje na pętli zwrotnej i od razu
+    otwiera pulpit. `--wymagaj-logowania` dokłada sesję operatora zakładaną
+    jednorazowym kodem startowym — przydaje się, gdy z maszyny korzysta ktoś
+    jeszcze albo chodzą na niej niezaufane procesy.
+
+    Nasłuch spoza pętli zwrotnej jest odmawiany niezależnie od logowania:
+    kod startowy nie zastępuje HTTPS i ról z planu §10, więc `--host 0.0.0.0`
+    nadal nie jest „udostępnieniem zespołowi”.
     """
     import uvicorn
 
     from .auth import generate_bootstrap_code, generate_session_secret, hash_bootstrap_code
 
-    bootstrap_code = generate_bootstrap_code()
-    session_secret = generate_session_secret()
+    bootstrap_code = generate_bootstrap_code() if wymagaj_logowania else ""
+    session_secret = generate_session_secret() if wymagaj_logowania else ""
     settings = Settings(
         state_dir=state_dir.expanduser(),
         host=host,
@@ -61,9 +71,12 @@ def serve(
         allowed_repo_roots=(
             tuple(p.expanduser() for p in repo_root) if repo_root else DEFAULT_REPO_ROOTS
         ),
+        require_login=wymagaj_logowania,
         session_secret=session_secret,
         bootstrap_code=bootstrap_code,
-        bootstrap_hash=hash_bootstrap_code(bootstrap_code, session_secret),
+        bootstrap_hash=(
+            hash_bootstrap_code(bootstrap_code, session_secret) if wymagaj_logowania else ""
+        ),
     )
     if host not in settings.allowed_hosts:
         typer.secho(
@@ -75,14 +88,21 @@ def serve(
         raise typer.Exit(EXIT_USAGE)
     settings.ensure_state_dir()
     typer.secho(
-        f"panel: http://{host}:{port}/logowanie  (stan: {settings.state_dir})",
+        f"panel: http://{host}:{port}{'/logowanie' if wymagaj_logowania else '/'}"
+        f"  (stan: {settings.state_dir})",
         fg=typer.colors.GREEN,
     )
     typer.echo(
         "repozytoria dozwolone w: " + ", ".join(str(root) for root in settings.allowed_repo_roots)
     )
-    typer.echo(f"kod startowy (jednorazowy): {bootstrap_code}")
-    typer.echo("wpisz go na stronie logowania — nie umieszczaj w URL ani w logach")
+    if wymagaj_logowania:
+        typer.echo(f"kod startowy (jednorazowy): {bootstrap_code}")
+        typer.echo("wpisz go na stronie logowania — nie umieszczaj w URL ani w logach")
+    else:
+        typer.echo(
+            "bez logowania — panel wpuszcza każdego, kto sięgnie na ten port; "
+            "`--wymagaj-logowania` włącza sesję z kodem startowym"
+        )
 
     from .app import create_app
 
@@ -103,6 +123,7 @@ def serve(
             "GATEKEEPER_WEB_REPO_ROOTS": os.pathsep.join(
                 str(root) for root in settings.allowed_repo_roots
             ),
+            "GATEKEEPER_WEB_REQUIRE_LOGIN": "1" if wymagaj_logowania else "0",
             "GATEKEEPER_WEB_SESSION_SECRET": settings.session_secret,
             "GATEKEEPER_WEB_BOOTSTRAP_HASH": settings.bootstrap_hash,
         }

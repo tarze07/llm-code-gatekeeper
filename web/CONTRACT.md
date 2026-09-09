@@ -197,8 +197,14 @@ Zaimplementowane: etapy 0–6. Import i przeglądanie raportów, rejestr
 projektów ze ścieżką repozytorium, wybór zakresu Git z podglądem,
 diagnostyka środowiska, kolejka z osobnym nadzorcą, realne uruchamianie
 kontroli, postęp i anulowanie, odtwarzanie po restarcie, oceny znalezisk,
-incydenty, metryki, zarządzanie profilami polityki, **sesja operatora
-zakładana jednorazowym kodem startowym** oraz **kopia zapasowa bazy**.
+incydenty, metryki, zarządzanie profilami polityki, **opcjonalna sesja
+operatora** (`serve --wymagaj-logowania`, jednorazowy kod startowy) oraz
+**kopia zapasowa bazy**.
+
+Sesja jest **domyślnie wyłączona**: panel lokalny startuje bez logowania,
+więc dostęp do portu na pętli zwrotnej jest dostępem do panelu. Zapisy nadal
+chroni CSRF i kontrola `Origin`; odczytów nie chroni nic. Wymaganie planu §8
+„sekret sesji nie trafia do URL ani logów" obowiązuje w trybie z flagą.
 
 Świadomie **nieobecne**:
 
