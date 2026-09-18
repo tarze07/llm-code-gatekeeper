@@ -182,3 +182,54 @@ def test_dokladanie_do_path_jest_idempotentne(monkeypatch) -> None:
     monkeypatch.setenv("PATH", f"{bindir}:/usr/bin")
 
     assert ensure_tools_on_path().count(bindir) == 1
+
+
+def test_globalne_narzedzia_dotnet_trafiaja_do_path(monkeypatch, tmp_path) -> None:
+    """`gatekeeper-cs-helper` instaluje się do `~/.dotnet/tools`, a `dotnet tool
+    install` zostawia dopisanie tego katalogu operatorowi. Trzy bramki padały
+    więc na „nie znaleziono programu" na maszynie, gdzie narzędzie było."""
+    from gatekeeper_web.cli import ensure_tools_on_path
+
+    narzedzia = tmp_path / ".dotnet" / "tools"
+    narzedzia.mkdir(parents=True)
+    monkeypatch.setenv("DOTNET_CLI_HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", "/usr/bin")
+
+    parts = ensure_tools_on_path().split(":")
+
+    assert str(narzedzia) in parts
+    # Na końcu: narzędzie systemowe o tej samej nazwie ma pierwszeństwo.
+    assert parts.index(str(narzedzia)) > parts.index("/usr/bin")
+
+
+def test_nieistniejacy_katalog_narzedzi_dotnet_nie_smieci_w_path(
+    monkeypatch, tmp_path
+) -> None:
+    from gatekeeper_web.cli import ensure_tools_on_path
+
+    monkeypatch.setenv("DOTNET_CLI_HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", "/usr/bin")
+
+    assert "dotnet" not in ensure_tools_on_path()
+
+
+def test_dotnet_root_wskazuje_instalacje_uzytkownika(monkeypatch, tmp_path) -> None:
+    """Bez `DOTNET_ROOT` shim narzędzia nie znajduje .NET rozpakowanego do `~/.dotnet`."""
+    from gatekeeper_web.cli import ensure_dotnet_root
+
+    korzen = tmp_path / ".dotnet"
+    korzen.mkdir()
+    (korzen / "dotnet").write_text("#!/bin/sh\n")
+    (korzen / "dotnet").chmod(0o755)
+    monkeypatch.delenv("DOTNET_ROOT", raising=False)
+    monkeypatch.setenv("PATH", str(korzen))
+
+    assert ensure_dotnet_root() == str(korzen)
+
+
+def test_dotnet_root_operatora_zostaje(monkeypatch) -> None:
+    from gatekeeper_web.cli import ensure_dotnet_root
+
+    monkeypatch.setenv("DOTNET_ROOT", "/wybor/operatora")
+
+    assert ensure_dotnet_root() == "/wybor/operatora"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -278,12 +279,52 @@ def ensure_tools_on_path() -> str:
     bindir = sysconfig.get_path("scripts")
     parts = [p for p in os.environ.get("PATH", os.defpath).split(os.pathsep) if p]
     if bindir not in parts:
-        os.environ["PATH"] = os.pathsep.join([bindir, *parts])
+        parts.insert(0, bindir)
+
+    # Globalne narzędzia .NET (`gatekeeper-cs-helper`) mają jedno umówione
+    # miejsce i nie trafiają do `PATH` same — `dotnet tool install` wypisuje
+    # instrukcję i zostawia to operatorowi. Bramki G1.complexity, G2.test_sanity
+    # i G2.cross_verify padały więc na „nie znaleziono programu" na maszynie,
+    # gdzie narzędzie było zainstalowane. Doklejamy **na koniec**: narzędzie
+    # systemowe o tej samej nazwie ma pierwszeństwo.
+    tools = _dotnet_tools_dir()
+    if tools.is_dir() and str(tools) not in parts:
+        parts.append(str(tools))
+
+    os.environ["PATH"] = os.pathsep.join(parts)
     return os.environ["PATH"]
+
+
+def _dotnet_tools_dir() -> Path:
+    home = os.environ.get("DOTNET_CLI_HOME") or str(Path.home())
+    return Path(home) / ".dotnet" / "tools"
+
+
+def ensure_dotnet_root() -> str | None:
+    """Ustawia `DOTNET_ROOT`, gdy .NET jest instalacją użytkownika.
+
+    Shim globalnego narzędzia .NET szuka runtime'u w miejscach systemowych
+    albo pod `DOTNET_ROOT`. Przy .NET rozpakowanym do `~/.dotnet` — a tak
+    wygląda instalacja bez pakietu dystrybucji — bez tej zmiennej narzędzie
+    kończy się „You must install .NET to run this application", mimo że
+    `dotnet --version` działa. Sandbox robi dokładnie to samo dla procesów
+    bramek (`core.runner`); tu chodzi o wywołania spoza sandboxa, np. odczyt
+    wersji na ekranie środowiska.
+
+    Nie nadpisujemy wartości ustawionej przez operatora.
+    """
+    if os.environ.get("DOTNET_ROOT"):
+        return os.environ["DOTNET_ROOT"]
+    dotnet = shutil.which("dotnet")
+    if dotnet is None:
+        return None
+    os.environ["DOTNET_ROOT"] = str(Path(dotnet).resolve().parent)
+    return os.environ["DOTNET_ROOT"]
 
 
 def main() -> None:  # pragma: no cover
     ensure_tools_on_path()
+    ensure_dotnet_root()
     try:
         app()
     except KeyboardInterrupt:
