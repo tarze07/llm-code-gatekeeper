@@ -36,6 +36,8 @@ include = ["gatekeeper_web*"]
 # Zbudowany CSS/JS jedzie w kole — użytkownik panelu nie instaluje Node.js
 # (źródła TypeScriptu żyją w `frontend/`, patrz README.md §Zasoby).
 gatekeeper_web = ["templates/*.html", "static/*.css", "static/*.js", "py.typed"]
+# Polityka startowa pierwszego szkicu — bez niej nowy profil jest pustym polem.
+"gatekeeper_web.polityka_startowa" = ["*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

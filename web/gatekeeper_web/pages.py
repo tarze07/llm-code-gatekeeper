@@ -39,7 +39,15 @@ from .services.environment import cached as cached_environment
 from .services.environment import collect as collect_environment
 from .services.importing import ImportOutcome, import_report
 from .services.reports import MAX_BYTES, ReportImportError
-from .services.repos import RepoError, list_refs, preview_scope, resolve_repo_path
+from .services.repos import (
+    RepoError,
+    default_base_ref,
+    group_refs,
+    list_refs,
+    preview_scope,
+    recent_commits,
+    resolve_repo_path,
+)
 from .storage import (
     JobQueue,
     PolicyStore,
@@ -49,6 +57,10 @@ from .storage import (
     RunFilter,
 )
 from .templating import environment
+
+#: Ile referencji trafia na listę wyboru. Dłuższej i tak nikt nie przewinie,
+#: a pole obok przyjmuje dowolną nazwę i SHA.
+MAX_LISTED_REFS = 200
 
 router = APIRouter(include_in_schema=False)
 _env = environment()
@@ -148,6 +160,8 @@ def dashboard(
 def projects_page(
     request: Request,
     repository: Repository = Depends(get_repository),
+    policies: PolicyStore = Depends(get_policies),
+    settings: Settings = Depends(get_settings),
     blad: str | None = Query(None, max_length=300),
 ) -> Response:
     projects = repository.list_projects(include_archived=True)
@@ -156,6 +170,8 @@ def projects_page(
         "projects.html",
         projects=projects,
         counts={p.id: repository.count_reports(RunFilter(project_id=p.id)) for p in projects},
+        profiles=policies.list_profiles(),
+        allowed_roots=[str(root) for root in settings.allowed_repo_roots],
         blad=blad,
     )
 
@@ -163,13 +179,46 @@ def projects_page(
 @router.post("/projekty", dependencies=[Depends(verify_csrf)])
 def create_project_form(
     name: str = Form(..., max_length=200),
-    repo_label: str = Form("", max_length=500),
+    repo_path: str = Form("", max_length=4096),
+    policy_profile_id: str = Form(""),
     repository: Repository = Depends(get_repository),
+    policies: PolicyStore = Depends(get_policies),
+    settings: Settings = Depends(get_settings),
 ) -> Response:
+    """Zakłada projekt razem z tym, czego wymaga uruchomienie kontroli.
+
+    Ścieżka i profil idą tym samym formularzem co nazwa, bo projekt bez nich
+    jest wyłącznie pojemnikiem na importowane raporty — a operator, który
+    właśnie wpisał nazwę repozytorium, chciał czegoś innego. Jedno i drugie
+    pozostaje opcjonalne: projekt na same raporty nadal zakłada się samą nazwą.
+    """
     if not name.strip():
         return RedirectResponse("/projekty?blad=Projekt+musi+mieć+nazwę.", status_code=303)
-    repository.create_project(name, repo_label.strip() or None)
-    return RedirectResponse("/projekty", status_code=303)
+
+    # Walidujemy przed `create_project`: projekt-widmo po odrzuconej ścieżce
+    # byłby gorszy niż komunikat, bo operator poprawia formularz i zakłada drugi.
+    resolved: str | None = None
+    if repo_path.strip():
+        try:
+            resolved = str(resolve_repo_path(repo_path, settings.allowed_repo_roots))
+        except RepoError as exc:
+            return RedirectResponse(f"/projekty?blad={quote(str(exc))}", status_code=303)
+
+    profile_id: int | None = None
+    if policy_profile_id.strip():
+        try:
+            profile_id = int(policy_profile_id)
+        except ValueError:
+            return RedirectResponse("/projekty?blad=Nie+znam+takiego+profilu.", status_code=303)
+        if policies.get_profile(profile_id) is None:
+            return RedirectResponse("/projekty?blad=Nie+znam+takiego+profilu.", status_code=303)
+
+    project = repository.create_project(name)
+    if resolved is not None or profile_id is not None:
+        repository.update_project(
+            project.id, repo_path=resolved, policy_profile_id=profile_id
+        )
+    return RedirectResponse(f"/projekty/{project.id}", status_code=303)
 
 
 @router.post("/projekty/{project_id}/archiwum", dependencies=[Depends(verify_csrf)])
@@ -406,7 +455,12 @@ def update_project_form(
             )
     profile_id: int | None = None
     if policy_profile_id.strip():
-        profile_id = int(policy_profile_id)
+        try:
+            profile_id = int(policy_profile_id)
+        except ValueError:
+            return RedirectResponse(
+                f"/projekty/{project.id}?blad=Nie+znam+takiego+profilu.", status_code=303
+            )
         if policies.get_profile(profile_id) is None:
             return RedirectResponse(
                 f"/projekty/{project.id}?blad=Nie+znam+takiego+profilu.", status_code=303
@@ -433,10 +487,15 @@ def new_check_page(
         require_project(repository, projekt) if projekt else (projects[0] if projects else None)
     )
     refs: list[Any] = []
+    commits: tuple[Any, ...] = ()
     refs_error: str | None = None
+    domyslna_baza = ""
     if project and project.repo_path:
         try:
-            refs = list_refs(resolve_repo_path(project.repo_path, settings.allowed_repo_roots))
+            repo = resolve_repo_path(project.repo_path, settings.allowed_repo_roots)
+            refs = list_refs(repo)
+            commits = recent_commits(repo)
+            domyslna_baza = default_base_ref(repo)
         except RepoError as exc:
             refs_error = str(exc)
     env = cached_environment(settings.state_dir)
@@ -445,12 +504,15 @@ def new_check_page(
         "new_check.html",
         projects=projects,
         project=project,
-        refs=refs[:100],
+        ref_groups=group_refs(refs[:MAX_LISTED_REFS]),
+        refs_truncated=len(refs) > MAX_LISTED_REFS,
+        commits=commits,
         refs_error=refs_error,
         gates=[g["id"] for g in env.gates],
         blockers=env.blockers,
         preview=None,
         form={},
+        domyslna_baza=domyslna_baza,
         idempotency_key="",
         blad=None,
     )
@@ -460,8 +522,12 @@ def new_check_page(
 def preview_check(
     request: Request,
     project_id: int = Form(...),
-    base: str = Form(..., max_length=200),
-    head: str = Form("HEAD", max_length=200),
+    base: str = Form("", max_length=200),
+    head: str = Form("", max_length=200),
+    # Lista pokrywa zwykły przypadek, pole tekstowe — SHA i referencję spoza
+    # listy. Wybór z listy ma pierwszeństwo; bez JavaScriptu działa jedno i drugie.
+    base_wpisana: str = Form("", max_length=200),
+    head_wpisana: str = Form("", max_length=200),
     ticket: str = Form("", max_length=64),
     fast_path: str = Form(""),
     gate: list[str] | None = Form(None),
@@ -472,6 +538,8 @@ def preview_check(
     """Podgląd dokładnego zakresu **przed** uruchomieniem czegokolwiek."""
     project = require_project(repository, project_id)
     env = cached_environment(settings.state_dir)
+    base = (base.strip() or base_wpisana.strip())
+    head = (head.strip() or head_wpisana.strip() or "HEAD")
     form = {
         "project_id": project.id,
         "base": base,
@@ -482,8 +550,19 @@ def preview_check(
     }
     preview = None
     blad = None
+    # Lista referencji jedzie także przy błędzie: „nie znam wersji 'main'" bez
+    # podpowiedzi poprawnych nazw zostawiało operatora ze zgadywanką dokładnie
+    # tam, gdzie potrzebował listy.
+    refs: list[Any] = []
+    commits: tuple[Any, ...] = ()
+    domyslna_baza = ""
     try:
         repo = resolve_repo_path(project.repo_path or "", settings.allowed_repo_roots)
+        refs = list_refs(repo)
+        commits = recent_commits(repo)
+        domyslna_baza = default_base_ref(repo)
+        if not base:
+            raise RepoError("wybierz wersję bazową z listy albo wpisz jej nazwę")
         preview = preview_scope(repo, base, head, ticket=ticket or None)
     except RepoError as exc:
         blad = str(exc)
@@ -502,13 +581,16 @@ def preview_check(
         "new_check.html",
         projects=[p for p in repository.list_projects() if p.runnable],
         project=project,
-        refs=[],
+        ref_groups=group_refs(refs[:MAX_LISTED_REFS]),
+        refs_truncated=len(refs) > MAX_LISTED_REFS,
+        commits=commits,
         refs_error=None,
         gates=[g["id"] for g in env.gates],
         blockers=env.blockers,
         preview=preview,
         active_revision=active,
         form=form,
+        domyslna_baza=domyslna_baza,
         # Klucz powstaje raz, przy podglądzie: podwójne kliknięcie „Uruchom"
         # trafia w to samo zadanie (PLAN-WEB-UI.md §9, scenariusz 6).
         idempotency_key=secrets.token_urlsafe(16),
@@ -708,7 +790,9 @@ def metrics_page(
 
 @router.get("/polityki")
 def policies_page(
-    request: Request, policies: PolicyStore = Depends(get_policies)
+    request: Request,
+    policies: PolicyStore = Depends(get_policies),
+    blad: str | None = Query(None, max_length=300),
 ) -> Response:
     profiles = policies.list_profiles()
     return render(
@@ -722,6 +806,7 @@ def policies_page(
             }
             for profile in profiles
         ],
+        blad=blad,
     )
 
 
@@ -730,6 +815,45 @@ def create_profile_form(
     name: str = Form(..., max_length=200), policies: PolicyStore = Depends(get_policies)
 ) -> Response:
     profile = policies.create_profile(name)
+    return RedirectResponse(f"/polityki/{profile.id}", status_code=303)
+
+
+@router.post("/polityki/startowy", dependencies=[Depends(verify_csrf)])
+def create_starter_profile_form(
+    name: str = Form("Polityka startowa", max_length=200),
+    policies: PolicyStore = Depends(get_policies),
+) -> Response:
+    """Profil gotowy do użycia: szkic z polityki startowej i od razu aktywny.
+
+    Skrót przez trzy kroki (profil → szkic → aktywacja), bo na świeżej
+    instalacji wszystkie trzy trzeba wykonać, zanim cokolwiek da się
+    uruchomić — a pierwszy z nich stawiał operatora przed pustym polem
+    `gates.yaml`. Aktywacja jest tu świadomym kliknięciem operatora, nie
+    domyślnym stanem panelu: bez niej `/nowa-kontrola` nadal by odmawiała.
+    """
+    starter = policy_service.starter_policy()
+    profile = policies.create_profile(name.strip() or "Polityka startowa")
+    revision = policies.create_revision(
+        profile.id,
+        starter.policy_yaml,
+        starter.exceptions_yaml,
+        starter.scope_map_yaml,
+        author=None,
+        note="polityka startowa panelu",
+    )
+    with TemporaryDirectory(prefix="gk-policy-") as tmp:
+        result = policy_service.validate(revision, Path(tmp))
+    if not result.ok:
+        # Polityka startowa jedzie w pakiecie, więc to nie jest błąd operatora
+        # — to zepsuty pakiet albo core niezgodny z panelem. Mówimy wprost.
+        return RedirectResponse(
+            "/polityki?blad=" + quote(
+                "polityka startowa nie przechodzi walidacji w tej instalacji: "
+                + "; ".join(result.errors)
+            ),
+            status_code=303,
+        )
+    policies.activate(revision.id, author=None, note="polityka startowa panelu")
     return RedirectResponse(f"/polityki/{profile.id}", status_code=303)
 
 
@@ -747,6 +871,9 @@ def policy_profile_page(
     if active is not None:
         with TemporaryDirectory(prefix="gk-policy-") as tmp:
             summary = policy_service.validate(active, Path(tmp)).summary
+    # Pierwszy szkic startuje z polityki startowej, nie z pustego `version: 1`:
+    # pusty plik przechodził walidację i dawał bramę bez jednej reguły.
+    starter = policy_service.starter_policy()
     return render(
         request,
         "policy_profile.html",
@@ -754,9 +881,10 @@ def policy_profile_page(
         revisions=policies.list_revisions(profile_id),
         active=active,
         summary=summary,
-        draft_source=active.policy_yaml if active else "version: 1\n",
-        draft_exceptions=(active.exceptions_yaml if active else "") or "",
-        draft_scope_map=(active.scope_map_yaml if active else "") or "",
+        draft_source=active.policy_yaml if active else starter.policy_yaml,
+        draft_exceptions=(active.exceptions_yaml if active else starter.exceptions_yaml) or "",
+        draft_scope_map=(active.scope_map_yaml if active else starter.scope_map_yaml) or "",
+        ze_startowej=active is None,
     )
 
 

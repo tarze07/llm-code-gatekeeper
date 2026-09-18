@@ -36,15 +36,56 @@
           {% endfor %}
         </select>
       </div>
+      {% set wybrana_baza = form.get('base', domyslna_baza) %}
+      {% set wybrana_head = form.get('head', 'HEAD') %}
       <div>
         <label for="base">Wersja bazowa</label>
-        <input id="base" name="base" list="refy" required maxlength="200"
-               value="{{ form.get('base', 'main') }}" autocomplete="off">
+        <select id="base" name="base">
+          <option value="">— wpisz obok —</option>
+          {% for kind, refs in ref_groups %}
+            <optgroup label="{{ kind }}">
+              {% for ref in refs %}
+                <option value="{{ ref.name }}" {% if ref.name == wybrana_baza %}selected{% endif %}>
+                  {{ ref.name }}{% if ref.subject %} — {{ ref.subject[:60] }}{% endif %}
+                </option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+          {% if commits %}
+            <optgroup label="commit (ostatnie {{ commits|length }})">
+              {% for c in commits %}
+                <option value="{{ c.sha }}" {% if c.sha == wybrana_baza or c.short_sha == wybrana_baza %}selected{% endif %}>
+                  {{ c.short_sha }} · {{ c.date[:10] }} · {{ c.subject[:60] }}
+                </option>
+              {% endfor %}
+            </optgroup>
+          {% endif %}
+        </select>
       </div>
       <div>
         <label for="head">Wersja oceniana</label>
-        <input id="head" name="head" list="refy" maxlength="200"
-               value="{{ form.get('head', 'HEAD') }}" autocomplete="off">
+        <select id="head" name="head">
+          <option value="HEAD" {% if wybrana_head == 'HEAD' %}selected{% endif %}>HEAD — aktualnie wypisana wersja</option>
+          <option value="">— wpisz obok —</option>
+          {% for kind, refs in ref_groups %}
+            <optgroup label="{{ kind }}">
+              {% for ref in refs %}
+                <option value="{{ ref.name }}" {% if ref.name == wybrana_head %}selected{% endif %}>
+                  {{ ref.name }}{% if ref.subject %} — {{ ref.subject[:60] }}{% endif %}
+                </option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+          {% if commits %}
+            <optgroup label="commit (ostatnie {{ commits|length }})">
+              {% for c in commits %}
+                <option value="{{ c.sha }}" {% if c.sha == wybrana_head or c.short_sha == wybrana_head %}selected{% endif %}>
+                  {{ c.short_sha }} · {{ c.date[:10] }} · {{ c.subject[:60] }}
+                </option>
+              {% endfor %}
+            </optgroup>
+          {% endif %}
+        </select>
       </div>
       <div>
         <label for="ticket">Ticket (opcjonalnie)</label>
@@ -61,9 +102,31 @@
       <button class="glowny" type="submit">Pokaż zakres</button>
     </form>
 
-    <datalist id="refy">
-      {% for ref in refs %}<option value="{{ ref.name }}"></option>{% endfor %}
-    </datalist>
+    <details class="karta-wewnetrzna">
+      <summary>Wersja spoza listy (SHA albo nazwa referencji)</summary>
+      <p class="brak">
+        Wypełnij, gdy na liście wyżej wybierzesz „— wpisz obok —". Wybór z listy
+        ma pierwszeństwo, więc to pole można zostawić puste. Działa tu też zapis
+        względny: <code>60d1046^</code> to rodzic tego commita, <code>master~2</code>
+        — dwa commity przed czubkiem gałęzi.
+        {% if refs_truncated %}
+          Lista jest ucięta do {{ ref_groups | map(attribute=1) | map('length') | sum }}
+          pozycji — repozytorium ma ich więcej.
+        {% endif %}
+      </p>
+      <div class="filtry">
+        <div>
+          <label for="base_wpisana">Wersja bazowa</label>
+          <input id="base_wpisana" name="base_wpisana" form="formularz-zakresu"
+                 maxlength="200" autocomplete="off" placeholder="np. 60d1046^ albo release/2.1">
+        </div>
+        <div>
+          <label for="head_wpisana">Wersja oceniana</label>
+          <input id="head_wpisana" name="head_wpisana" form="formularz-zakresu"
+                 maxlength="200" autocomplete="off" placeholder="np. 9f8e7d6">
+        </div>
+      </div>
+    </details>
 
     <details>
       <summary>Wybierz konkretne bramki (domyślnie wszystkie z polityki)</summary>
@@ -112,6 +175,8 @@
       <dd>{{ preview.effective_lines }} istotnych z {{ preview.total_lines }}</dd>
       <dt>Tylko dokumentacja</dt>
       <dd>{{ 'tak' if preview.docs_only else 'nie' }}</dd>
+      <dt>Commity</dt>
+      <dd>{{ preview.total_commits }}</dd>
       <dt>Polityka</dt>
       <dd>
         {% if active_revision %}
@@ -121,6 +186,42 @@
         {% endif %}
       </dd>
     </dl>
+
+    {% if preview.commits %}
+      <details>
+        <summary>Commity w zakresie ({{ preview.total_commits }})</summary>
+        <p class="brak">
+          Od najnowszego, licząc od merge-base — dokładnie te zmiany składają się
+          na oceniany diff.
+        </p>
+        <div class="przewijana">
+          <table>
+            <thead><tr><th scope="col">Commit</th><th scope="col">Data</th><th scope="col">Autor</th><th scope="col">Opis</th></tr></thead>
+            <tbody>
+              {% for commit in preview.commits %}
+                <tr>
+                  <td class="mono">{{ commit.short_sha }}</td>
+                  <td>{{ commit.date[:10] }}</td>
+                  <td>{{ commit.author }}</td>
+                  <td>{{ commit.subject }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if preview.commits_truncated %}
+          <p class="brak">
+            Pokazane {{ preview.commits|length }} z {{ preview.total_commits }} —
+            lista jest ucięta, zakres kontroli obejmuje komplet.
+          </p>
+        {% endif %}
+      </details>
+    {% elif preview.total_commits == 0 %}
+      <p class="brak">
+        Zakres nie zawiera żadnego commita — wersja oceniana jest tym samym
+        commitem co merge-base.
+      </p>
+    {% endif %}
 
     {% if preview.paths %}
       <details>

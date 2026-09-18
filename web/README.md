@@ -71,14 +71,25 @@ gatekeeper-web backup --state-dir ~/.local/state/gatekeeper-web -o panel-kopia.d
 
 ## Pierwsze kroki — uruchamianie kontroli
 
-1. **Polityki** → utwórz profil, wklej `gates.yaml` (kopia startowa jest
-   w [`core/policy/`](../core/policy/)), zapisz szkic, sprawdź walidację
-   i **aktywuj** go świadomie.
-2. **Projekty** → dodaj projekt, wskaż ścieżkę lokalnego repozytorium
-   i przypisz profil polityki.
-3. **Nowa kontrola** → wybierz wersję bazową i ocenianą, obejrzyj dokładny
-   zakres (merge-base, liczba plików i linii, lista ścieżek) i dopiero wtedy
-   naciśnij „Uruchom kontrolę".
+1. **Polityki** → **Utwórz profil startowy**. Panel zakłada profil wypełniony
+   polityką startową i od razu ją aktywuje — bez szukania `gates.yaml` na dysku.
+   Progi w niej to kalibracja narzędzia, nie Twojego projektu: przejrzyj je
+   i zawęź kolejnym szkicem. Wolisz prowadzić to ręcznie? „Nowy profil" daje
+   pusty profil, a jego pierwszy szkic i tak startuje z polityki startowej —
+   aktywacja pozostaje osobnym, świadomym kliknięciem.
+2. **Projekty** → dodaj projekt, podając od razu **ścieżkę lokalnego
+   repozytorium** i **profil polityki**. Oba pola są opcjonalne: bez nich
+   powstaje projekt na same importowane raporty, a uzupełnisz je później
+   w Ustawieniach projektu. Kolumna „Gotowość" mówi, czego brakuje.
+3. **Nowa kontrola** → wybierz wersję bazową i ocenianą **z list wypełnionych
+   zawartością ocenianego repozytorium**: gałęzie lokalne, zdalne, tagi oraz
+   **ostatnie commity** (skrócone SHA, data, temat). `HEAD` jest osobną
+   pozycją. Wersję spoza listy wpisuje się w polu obok — działa tam też zapis
+   względny, np. `60d1046^` (rodzic tego commita), więc żeby sprawdzić
+   pojedynczy commit, nie trzeba szukać SHA rodzica. Obejrzyj dokładny
+   zakres (merge-base, liczba plików i linii, lista ścieżek oraz **lista
+   commitów** liczona od merge-base) i dopiero wtedy naciśnij „Uruchom
+   kontrolę".
 4. **Zadania** → postęp „ukończono N z M kontroli", zatrzymanie, ponowienie
    („powtórz ten sam zakres" albo „sprawdź najnowszą wersję").
 5. Szczegóły przebiegu → powody decyzji, bramki z faktami, wszystkie
@@ -135,8 +146,13 @@ funkcji, a nie dodatkiem (plan §8):
   polityki: operator wybiera zarejestrowany projekt i zatwierdzony profil;
 * bez działającego Bubblewrapa panel **nie oferuje** trybu bez izolacji —
   mówi, czego brakuje;
-* CSP bez CDN-a i bez `unsafe-inline`, `nosniff`, `no-referrer`, `DENY` dla ramek;
-* CSRF (double-submit) i kontrola `Origin` dla każdej operacji zapisującej;
+* CSP bez CDN-a i bez `unsafe-inline`, `nosniff`, `DENY` dla ramek;
+* `Referrer-Policy: same-origin` — ścieżka raportu nie wycieka do obcej
+  strony. Świadomie **nie** `no-referrer`: przy tamtej wartości przeglądarka
+  wysyła `Origin: null` przy każdym zapisie i panel odrzuca własne formularze;
+* CSRF (double-submit) i kontrola `Origin` dla każdej operacji zapisującej —
+  `localhost` i `127.0.0.1` to ten sam panel, ale **port musi się zgadzać**,
+  więc inna usługa na tej maszynie i proxy z przepisanym `Host` są obce;
 * każdy tekst z raportu renderowany z escapowaniem, eksport HTML bez JavaScriptu;
 * redakcja ścieżek katalogów roboczych i pól o nazwach sugerujących sekret;
 * limity rozmiaru pliku, liczby znalezisk i długości pól przy imporcie;
@@ -149,6 +165,12 @@ kończy się odmową startu — wersja zespołowa to osobny model wdrożenia
 automatycznie; kopia: `gatekeeper-web backup`.
 
 ## Zasoby (CSS/JS)
+
+`gatekeeper_web/polityka_startowa/` to zamrożona kopia
+[`core/policy/`](../core/policy/) — treść pierwszego szkicu każdego profilu.
+Nie czytamy jej z katalogu core'a celowo: profil raz aktywowany ma oceniać
+tym samym, czym oceniał wczoraj, a nie zmieniać kryteria przy aktualizacji
+zależności.
 
 `gatekeeper_web/static/app.css` jest pisany ręcznie. `app.js` powstaje
 z TypeScriptu w `frontend/` i **jest wersjonowany**, żeby instalacja pakietu

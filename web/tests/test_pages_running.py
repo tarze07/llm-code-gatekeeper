@@ -186,3 +186,134 @@ def test_repozytorium_znika_po_rejestracji(panel: Panel, git_repo: GitRepo) -> N
     response = panel.post_json("/api/v1/jobs", {"project_id": project_id, "base": "main"})
     assert response.status_code == 409
     assert "nie istnieje" in response.json()["detail"]
+
+
+def test_wersje_wybiera_sie_z_listy_referencji_repozytorium(
+    panel: Panel, gotowy_projekt: int
+) -> None:
+    """Wolne pole tekstowe kazało znać nazwy gałęzi na pamięć."""
+    strona = panel.get(f"/nowa-kontrola?projekt={gotowy_projekt}").text
+
+    assert '<select id="base" name="base">' in strona
+    assert '<select id="head" name="head">' in strona
+    # Referencje pochodzą z ocenianego repozytorium i są pogrupowane.
+    assert '<optgroup label="gałąź lokalna">' in strona
+    assert '<option value="praca"' in strona
+    assert '<option value="main"' in strona
+    # `HEAD` zostaje osobną, nazwaną pozycją — to nie jest nazwa gałęzi.
+    assert "HEAD — aktualnie wypisana wersja" in strona
+
+
+def test_lista_startuje_na_galezi_bazowej_repozytorium(
+    panel: Panel, gotowy_projekt: int
+) -> None:
+    """Sztywne `main` dawało błąd na każdym repozytorium z `master`."""
+    strona = panel.get(f"/nowa-kontrola?projekt={gotowy_projekt}").text
+
+    assert '<option value="main" selected>' in strona.replace("\n", " ")
+
+
+def test_blad_zlej_wersji_nie_zabiera_listy_referencji(
+    panel: Panel, gotowy_projekt: int
+) -> None:
+    """Lista poprawnych nazw jest potrzebna najbardziej właśnie przy błędzie."""
+    strona = panel.post(
+        "/nowa-kontrola/podglad",
+        data={
+            "project_id": gotowy_projekt,
+            "base": "galezi-takiej-nie-ma",
+            "head": "HEAD",
+            "fast_path": "1",
+        },
+    ).text
+
+    assert "nie znam wersji" in strona
+    assert "dostępne m.in.:" in strona
+    # Lista wyboru też zostaje — operator poprawia błąd, wybierając z niej.
+    assert '<select id="base" name="base">' in strona
+    assert '<option value="praca"' in strona
+
+
+def test_wersja_spoza_listy_dziala_przez_pole_tekstowe(
+    panel: Panel, gotowy_projekt: int, git_repo: GitRepo
+) -> None:
+    """Lista nie może odciąć SHA ani referencji, której na niej nie ma."""
+    sha = git_repo.git("rev-parse", "main").strip()
+
+    strona = panel.post(
+        "/nowa-kontrola/podglad",
+        data={
+            "project_id": gotowy_projekt,
+            "base": "",
+            "base_wpisana": sha,
+            "head": "HEAD",
+            "fast_path": "1",
+        },
+    ).text
+
+    assert "Dokładny zakres tej kontroli" in strona
+    assert "nie znam wersji" not in strona
+
+
+def test_wybor_z_listy_ma_pierwszenstwo_przed_polem(
+    panel: Panel, gotowy_projekt: int
+) -> None:
+    """Dwa źródła tej samej wartości muszą mieć jednoznaczną kolejność."""
+    strona = panel.post(
+        "/nowa-kontrola/podglad",
+        data={
+            "project_id": gotowy_projekt,
+            "base": "main",
+            "base_wpisana": "galezi-takiej-nie-ma",
+            "head": "HEAD",
+            "fast_path": "1",
+        },
+    ).text
+
+    assert "Dokładny zakres tej kontroli" in strona
+    assert "galezi-takiej-nie-ma" not in strona
+
+
+def test_brak_wersji_bazowej_mowi_co_zrobic(panel: Panel, gotowy_projekt: int) -> None:
+    strona = panel.post(
+        "/nowa-kontrola/podglad",
+        data={"project_id": gotowy_projekt, "base": "", "head": "HEAD", "fast_path": "1"},
+    ).text
+
+    assert "wybierz wersję bazową z listy albo wpisz jej nazwę" in strona
+
+
+def test_commity_sa_na_liscie_wyboru_wersji(panel: Panel, gotowy_projekt: int) -> None:
+    """Wersja bazowa to zwykle commit, na który nie wskazuje żadna gałąź."""
+    strona = panel.get(f"/nowa-kontrola?projekt={gotowy_projekt}").text
+
+    assert 'optgroup label="commit' in strona
+    # Pełne SHA jako wartość, skrócone w opisie — jedno działa, drugie się czyta.
+    assert strona.count('optgroup label="commit') == 2, "commity w obu listach"
+
+
+def test_commit_z_listy_dziala_jako_wersja_bazowa(
+    panel: Panel, gotowy_projekt: int, git_repo: GitRepo
+) -> None:
+    rodzic = git_repo.git("rev-parse", "main").strip()
+
+    strona = panel.post(
+        "/nowa-kontrola/podglad",
+        data={"project_id": gotowy_projekt, "base": rodzic, "head": "HEAD", "fast_path": "1"},
+    ).text
+
+    assert "Dokładny zakres tej kontroli" in strona
+    assert "nie znam wersji" not in strona
+
+
+def test_ekran_srodowiska_wymienia_helper_csharp(panel: Panel) -> None:
+    """Trzy bramki padały na „nie znaleziono programu", a ekran milczał.
+
+    `gatekeeper-cs-helper` instaluje się osobno (`dotnet tool install`), więc
+    jest najbardziej prawdopodobnym brakiem na świeżej maszynie — i właśnie
+    dlatego musi być widoczny tam, gdzie panel mówi, czym dysponuje.
+    """
+    strona = panel.get("/srodowisko").text
+
+    assert "gatekeeper-cs-helper" in strona
+    assert "G1.complexity" in strona

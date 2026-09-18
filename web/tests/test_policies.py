@@ -146,3 +146,38 @@ def test_wygasly_wyjatek_jest_bledem_walidacji(store: PolicyStore, tmp_path: Pat
 
     assert not result.ok
     assert result.expired
+
+
+def test_polityka_startowa_przechodzi_walidacje(tmp_path: Path) -> None:
+    """Profil startowy aktywuje się jednym kliknięciem — więc musi być poprawny.
+
+    Ten test jest po to, żeby zmiana w core (nowa nazwa faktu, usunięta bramka)
+    wywaliła się tutaj, a nie u operatora zakładającego pierwszy projekt.
+    """
+    store = PolicyStore(Database(tmp_path / "panel.db"))
+    profile = store.create_profile("Startowa")
+    startowa = service.starter_policy()
+    revision = store.create_revision(
+        profile.id,
+        startowa.policy_yaml,
+        startowa.exceptions_yaml,
+        startowa.scope_map_yaml,
+    )
+
+    wynik = service.validate(revision, tmp_path / "snapshot")
+    assert wynik.ok, wynik.errors
+    # Wyjątki w pliku startowym są zakomentowane: polityka nie może wygasnąć
+    # z upływem czasu i zablokować aktywacji komuś, kto instaluje panel za rok.
+    assert wynik.expired == []
+
+
+def test_polityka_startowa_faktycznie_bramkuje(tmp_path: Path) -> None:
+    """Pusty `version: 1` też przechodził walidację — i nie blokował niczego."""
+    store = PolicyStore(Database(tmp_path / "panel.db"))
+    profile = store.create_profile("Startowa")
+    startowa = service.starter_policy()
+    revision = store.create_revision(profile.id, startowa.policy_yaml, None, None)
+
+    podsumowanie = service.validate(revision, tmp_path / "snapshot").summary
+    assert "secrets.found_in_diff" in podsumowanie["blocking"]
+    assert podsumowanie["thresholds"]

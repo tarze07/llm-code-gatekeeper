@@ -70,10 +70,20 @@
 
 <div class="karta">
   <h2>Nowy szkic</h2>
-  <p class="brak">
-    Szkic startuje z treści wersji aktywnej. Aktywacja jest osobnym działaniem
-    i dotyczy wyłącznie przyszłych zadań.
-  </p>
+  {% if ze_startowej %}
+    <p class="brak">
+      Ten profil nie ma jeszcze żadnej wersji, więc pola niżej wypełnia
+      <strong>polityka startowa panelu</strong> — działający punkt wyjścia,
+      nie polityka docelowa. Progi są kalibracją narzędzia: przejrzyj je pod
+      swój projekt, zanim aktywujesz. Aktywacja jest osobnym działaniem
+      i dotyczy wyłącznie przyszłych zadań.
+    </p>
+  {% else %}
+    <p class="brak">
+      Szkic startuje z treści wersji aktywnej. Aktywacja jest osobnym działaniem
+      i dotyczy wyłącznie przyszłych zadań.
+    </p>
+  {% endif %}
   <form method="post" action="/polityki/{{ profile.id }}/szkice">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <p>

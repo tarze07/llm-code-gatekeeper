@@ -179,3 +179,74 @@ def test_nieznana_strona_ma_czytelny_blad(panel: Panel) -> None:
     response = panel.get("/projekty/999/przebiegi/xyz")
     assert response.status_code == 404
     assert "nie znam projektu" in response.text
+
+
+# --------------------------------------------- zakładanie projektu do kontroli
+#
+# Ścieżka „świeży panel → pierwsza kontrola" prowadziła przez trzy strony
+# i kończyła się pustym polem `gates.yaml`. Poniższe testy pilnują, żeby
+# wracała do jednego formularza.
+
+
+def test_nowy_projekt_przyjmuje_sciezke_i_profil_od_razu(
+    panel: Panel, git_repo: GitRepo
+) -> None:
+    """Jeden formularz zamiast trzech stron — projekt od razu uruchamialny."""
+    profil = panel.post("/polityki/startowy", data={"name": "Startowa"}, follow_redirects=False)
+    assert profil.status_code == 303
+    profile_id = profil.headers["location"].rsplit("/", 1)[-1]
+
+    response = panel.post(
+        "/projekty",
+        data={
+            "name": "Taskboard",
+            "repo_path": str(git_repo.path),
+            "policy_profile_id": profile_id,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    strona = panel.get(response.headers["location"]).text
+    assert "gotowy do uruchamiania" in strona
+    # Projekt gotowy do kontroli musi być wybieralny tam, gdzie się ją zleca.
+    assert "Taskboard" in panel.get("/nowa-kontrola").text
+
+
+def test_nowy_projekt_bez_sciezki_nadal_dziala(panel: Panel) -> None:
+    """Projekt na same importowane raporty zakłada się samą nazwą."""
+    response = panel.post("/projekty", data={"name": "Tylko raporty"}, follow_redirects=False)
+    assert response.status_code == 303
+    assert "tylko raporty" in panel.get("/projekty").text
+
+
+def test_odrzucona_sciezka_nie_zostawia_projektu_widma(panel: Panel) -> None:
+    """Komunikat zamiast projektu, który trzeba potem sprzątać."""
+    response = panel.post(
+        "/projekty",
+        data={"name": "Poza zakresem", "repo_path": "/etc"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    strona = panel.get(response.headers["location"]).text
+    assert "jest poza katalogami dozwolonymi dla panelu" in strona
+    assert "Poza zakresem" not in panel.get("/projekty").text
+
+
+def test_smieciowy_profil_nie_wywraca_formularza(panel: Panel) -> None:
+    """`int()` na polu z formularza dawał 500 zamiast komunikatu."""
+    response = panel.post(
+        "/projekty",
+        data={"name": "Zły profil", "policy_profile_id": "nie-liczba"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "Nie+znam+takiego+profilu" in response.headers["location"]
+    assert "Zły profil" not in panel.get("/projekty").text
+
+
+def test_lista_projektow_odsyla_po_profil_gdy_go_nie_ma(panel: Panel) -> None:
+    strona = panel.get("/projekty").text
+    assert "Nie masz jeszcze żadnego profilu polityki" in strona
+    assert 'href="/polityki"' in strona

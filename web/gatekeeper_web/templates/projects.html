@@ -20,17 +20,40 @@
       <input id="name" name="name" required maxlength="200" autocomplete="off">
     </div>
     <div>
-      <label for="repo_label">Repozytorium (opis, opcjonalnie)</label>
-      <input id="repo_label" name="repo_label" maxlength="500" autocomplete="off"
-             placeholder="np. taskboard-demo">
+      <label for="repo_path">Ścieżka lokalnego repozytorium</label>
+      <input id="repo_path" name="repo_path" maxlength="4096" size="38" autocomplete="off"
+             placeholder="{{ allowed_roots[0] if allowed_roots else '/sciezka/do/repo' }}/taskboard">
+    </div>
+    <div>
+      <label for="policy_profile_id">Profil polityki</label>
+      <select id="policy_profile_id" name="policy_profile_id">
+        <option value="">— brak —</option>
+        {% for p in profiles %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
     </div>
     <button class="glowny" type="submit">Dodaj projekt</button>
   </form>
   <p class="brak">
-    Pole wyżej to sama etykieta. Żeby panel <strong>uruchamiał kontrole</strong>
-    na tym projekcie, trzeba mu jeszcze wskazać ścieżkę repozytorium Git
-    i profil polityki — jedno i drugie ustawia się w <strong>Ustawieniach</strong>
-    projektu, w ostatniej kolumnie tabeli. Kolumna „Gotowość" mówi, czego brakuje.
+    Ścieżka i profil są opcjonalne — bez nich powstaje projekt
+    <strong>tylko na importowane raporty</strong>. Żeby panel
+    <strong>uruchamiał kontrole</strong>, potrzebuje obu; jedno i drugie da się
+    też uzupełnić później w <strong>Ustawieniach</strong> projektu, a kolumna
+    „Gotowość" mówi, czego brakuje.
+  </p>
+  {% if not profiles %}
+    <p class="uwaga">
+      Nie masz jeszcze żadnego profilu polityki, więc lista wyżej jest pusta.
+      <a href="/polityki">Utwórz profil startowy</a> — panel wypełni go gotową
+      polityką, którą potem zawęzisz pod swój projekt.
+    </p>
+  {% endif %}
+  <p class="brak">
+    Repozytorium musi być korzeniem repozytorium Git i leżeć w katalogu
+    dozwolonym dla panelu
+    ({% for root in allowed_roots %}<code>{{ root }}</code>{% if not loop.last %}, {% endif %}{% else %}<em>brak</em>{% endfor %}).
+    Inny katalog wymaga uruchomienia panelu z <code>--repo-root</code>.
   </p>
 </div>
 

@@ -588,6 +588,17 @@ def _preview_dict(preview: Any) -> dict[str, Any]:
         "test_files": preview.test_files,
         "docs_only": preview.docs_only,
         "paths": list(preview.paths),
+        "total_commits": preview.total_commits,
+        "commits_truncated": preview.commits_truncated,
+        "commits": [
+            {
+                "sha": commit.sha,
+                "author": commit.author,
+                "date": commit.date,
+                "subject": commit.subject,
+            }
+            for commit in preview.commits
+        ],
     }
 
 

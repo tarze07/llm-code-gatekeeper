@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,11 +26,22 @@ from gatekeeper_core.core.change import ChangeContext, GitError
 
 #: Nazwa referencji Git. Świadomie węższa niż `git check-ref-format`: panel nie
 #: musi obsługiwać egzotycznych nazw, a musi odrzucać `--upload-pack=…`.
-_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/@+-]{0,199}$")
+#:
+#: `^` i `~` są dozwolone, bo `60d1046^` i `master~2` to najkrótszy sposób
+#: powiedzenia „rodzic tego commita" — a bez nich trzeba było wyszukiwać SHA
+#: rodzica ręcznie. Bezpieczeństwa to nie rusza: pierwszy znak nadal musi być
+#: alfanumeryczny (więc nazwa nie stanie się opcją), a całość i tak jedzie do
+#: gita po `--end-of-options` i musi rozwiązać się do obiektu commit.
+_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/@+~^-]{0,199}$")
 
 #: Ile referencji pokazujemy w formularzu. Repozytorium z 20 000 gałęzi nie ma
 #: zawiesić strony.
 MAX_REFS = 500
+
+#: Ile commitów wypisujemy w podglądzie zakresu. Gałąź odbiegająca o tysiąc
+#: commitów to sygnał sam w sobie — pokazujemy początek listy i mówimy wprost,
+#: że jest ucięta, zamiast renderować wszystko albo milczeć.
+MAX_COMMITS = 200
 
 GIT_TIMEOUT_S = 20.0
 
@@ -44,6 +56,20 @@ class RepoRef:
     kind: str
     sha: str
     subject: str = ""
+
+
+@dataclass(frozen=True)
+class RepoCommit:
+    """Jeden commit z ocenianego zakresu."""
+
+    sha: str
+    author: str
+    date: str
+    subject: str
+
+    @property
+    def short_sha(self) -> str:
+        return self.sha[:12]
 
 
 @dataclass(frozen=True)
@@ -65,6 +91,15 @@ class ScopePreview:
     test_files: int
     docs_only: bool
     paths: tuple[str, ...]
+    #: Commity w ocenianym zakresie, od najnowszego. Domyślnie puste, żeby
+    #: istniejące wywołania konstruktora nie musiały nic wiedzieć o historii.
+    commits: tuple[RepoCommit, ...] = ()
+    #: Ile commitów jest naprawdę — `len(commits)` bywa ucięte do `MAX_COMMITS`.
+    total_commits: int = 0
+
+    @property
+    def commits_truncated(self) -> bool:
+        return self.total_commits > len(self.commits)
 
     @property
     def uses_merge_base(self) -> bool:
@@ -126,7 +161,7 @@ def validate_ref_name(ref: str) -> str:
     if not _REF_RE.match(ref):
         raise RepoError(
             f"niedozwolona nazwa wersji Git: {ref!r} — dozwolone są litery, cyfry "
-            "oraz `. _ / @ + -`"
+            "oraz `. _ / @ + - ~ ^`"
         )
     return ref
 
@@ -141,7 +176,63 @@ def resolve_commit(repo: Path, ref: str) -> str:
             repo, "rev-parse", "--verify", "--quiet", "--end-of-options", f"{name}^{{commit}}"
         )
     except RepoError as exc:
-        raise RepoError(f"nie znam wersji {name!r} w tym repozytorium") from exc
+        raise RepoError(
+            f"nie znam wersji {name!r} w tym repozytorium{_available_refs(repo)}"
+        ) from exc
+
+
+def _available_refs(repo: Path, limit: int = 8) -> str:
+    """Końcówka komunikatu: czego operator może użyć zamiast tego, co wpisał.
+
+    Sama informacja „nie znam tej wersji" zostawia go ze zgadywanką — zwłaszcza
+    gdy repozytorium ma `master`, a panel podpowiedział `main`.
+    """
+    try:
+        refs = list_refs(repo, limit=limit)
+    except RepoError:  # pragma: no cover - błąd gita już zgłosiliśmy wyżej
+        return ""
+    if not refs:
+        return ""
+    return " — dostępne m.in.: " + ", ".join(ref.name for ref in refs)
+
+
+def ref_exists(repo: Path, ref: str) -> bool:
+    try:
+        resolve_commit(repo, ref)
+    except RepoError:
+        return False
+    return True
+
+
+#: Typowe nazwy gałęzi integracyjnej, sprawdzane po kolei, gdy repozytorium nie
+#: deklaruje własnej przez `origin/HEAD`.
+FALLBACK_BASE_REFS = ("main", "master", "develop", "trunk")
+
+
+def default_base_ref(repo: Path) -> str:
+    """Gałąź bazowa podpowiadana w formularzu — pusto, gdy nie ma pewnej.
+
+    Wpisane na sztywno `main` było zgadywanką udającą wiedzę: w repozytorium
+    z `master` formularz startował z wartością, która musiała dać błąd. Pytamy
+    więc repozytorium, a gdy nie umie odpowiedzieć — zostawiamy pole puste
+    i oddajemy wybór liście podpowiedzi. Puste pole jest uczciwsze niż nazwa,
+    o której wiadomo tylko tyle, że bywa popularna.
+    """
+    try:
+        declared = _git(repo, "symbolic-ref", "--short", "--quiet", "refs/remotes/origin/HEAD")
+    except RepoError:
+        declared = ""
+    if declared:
+        # `origin/main` → wolimy lokalne `main`, jeśli istnieje: diff liczy się
+        # tak samo, a nazwa jest ta, którą operator zna.
+        for candidate in (declared.removeprefix("origin/"), declared):
+            if candidate and ref_exists(repo, candidate):
+                return candidate
+
+    for candidate in FALLBACK_BASE_REFS:
+        if ref_exists(repo, candidate):
+            return candidate
+    return ""
 
 
 def list_refs(repo: Path, limit: int = MAX_REFS) -> list[RepoRef]:
@@ -167,7 +258,101 @@ def list_refs(repo: Path, limit: int = MAX_REFS) -> list[RepoRef]:
     return refs
 
 
+#: Ile ostatnich commitów trafia na listę wyboru wersji.
+MAX_PICKABLE_COMMITS = 50
+
+
+def recent_commits(repo: Path, limit: int = MAX_PICKABLE_COMMITS) -> tuple[RepoCommit, ...]:
+    """Ostatnie commity z **całego** repozytorium, do wyboru jako wersja.
+
+    `--all`, a nie tylko bieżąca gałąź: commit, od którego chce się liczyć diff,
+    bardzo często nie jest czubkiem niczego — to zwykle rodzic ocenianej zmiany,
+    na który nie wskazuje żadna gałąź ani tag. Bez tej listy trzeba było
+    wyszukać jego SHA poza panelem i przepisać ręcznie.
+    """
+    out = _git(
+        repo,
+        "log",
+        "--all",
+        f"--max-count={limit}",
+        "--format=%H%x09%an%x09%aI%x09%s",
+    )
+    commits: list[RepoCommit] = []
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 4:
+            continue
+        commits.append(
+            RepoCommit(sha=parts[0], author=parts[1][:120], date=parts[2], subject=parts[3][:200])
+        )
+    return tuple(commits)
+
+
+def list_commits(
+    repo: Path, base_sha: str, head_sha: str, limit: int = MAX_COMMITS
+) -> tuple[tuple[RepoCommit, ...], int]:
+    """Commity z zakresu `base_sha..head_sha` plus ich pełna liczba.
+
+    Zakres jest ten sam, z którego liczy się diff — czyli od **merge-base**,
+    nie od czubka gałęzi bazowej. Lista, która pokazywałaby coś innego niż
+    oceniany diff, wprowadzałaby w błąd dokładnie tam, gdzie operator decyduje.
+
+    SHA podaje git (`rev-parse`), nie formularz, więc do zakresu nie trafia
+    tekst od użytkownika. `--end-of-options` zostaje mimo to — dokładnie jak
+    przy `resolve_commit`.
+    """
+    if base_sha == head_sha:
+        return (), 0
+
+    zakres = f"{base_sha}..{head_sha}"
+    total = _git(repo, "rev-list", "--count", "--end-of-options", zakres)
+    out = _git(
+        repo,
+        "log",
+        f"--max-count={limit}",
+        "--format=%H%x09%an%x09%aI%x09%s",
+        "--end-of-options",
+        zakres,
+    )
+    commits: list[RepoCommit] = []
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 4:
+            continue
+        commits.append(
+            RepoCommit(
+                sha=parts[0],
+                author=parts[1][:120],
+                date=parts[2],
+                # Temat commita jedzie prosto z cudzego repozytorium — ucinamy
+                # go tu, a szablon i tak escapuje.
+                subject=parts[3][:200],
+            )
+        )
+    try:
+        liczba = int(total)
+    except ValueError:  # pragma: no cover - `rev-list --count` zwraca liczbę
+        liczba = len(commits)
+    return tuple(commits), liczba
+
+
 _KINDS = {"refs/heads/": "gałąź lokalna", "refs/remotes/": "gałąź zdalna", "refs/tags/": "tag"}
+
+#: Kolejność grup na liście wyboru. Gałąź lokalna jest tym, czego operator
+#: szuka najczęściej, tag — najrzadziej.
+_KIND_ORDER = ("gałąź lokalna", "gałąź zdalna", "tag", "referencja")
+
+
+def group_refs(refs: Sequence[RepoRef]) -> list[tuple[str, list[RepoRef]]]:
+    """Referencje pogrupowane do listy wyboru, w stałej kolejności rodzajów.
+
+    Wewnątrz grupy zostaje kolejność z `list_refs` (od ostatnio commitowanej),
+    bo to ona odpowiada na pytanie „nad czym ostatnio pracowałem".
+    """
+    grouped: dict[str, list[RepoRef]] = {}
+    for ref in refs:
+        grouped.setdefault(ref.kind, []).append(ref)
+    return [(kind, grouped[kind]) for kind in _KIND_ORDER if kind in grouped]
 
 
 def _kind(full_refname: str) -> str:
@@ -192,6 +377,8 @@ def preview_scope(
     except GitError as exc:
         raise RepoError(f"nie umiem policzyć zakresu zmiany: {exc}") from exc
 
+    commits, total_commits = list_commits(repo, change.base_sha, change.head_sha)
+
     return ScopePreview(
         base_ref=base_name,
         head_ref=head_name,
@@ -208,6 +395,8 @@ def preview_scope(
         test_files=sum(1 for f in change.files if f.test),
         docs_only=change.is_docs_only,
         paths=tuple(f.path for f in change.effective_files[:200]),
+        commits=commits,
+        total_commits=total_commits,
     )
 
 
