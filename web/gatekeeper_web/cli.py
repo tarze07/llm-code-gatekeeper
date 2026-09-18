@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 
 import typer
@@ -254,7 +255,35 @@ def import_cmd(
     typer.echo(f"projekt: {found.name} ({found.slug}) · przebieg: {outcome.row.run_id}")
 
 
+def ensure_tools_on_path() -> str:
+    """Dokłada katalog binarny środowiska panelu na początek `PATH`.
+
+    Bramki wołają `semgrep`, `diff-cover` i resztę jako podprocesy, przez
+    `shutil.which`. Te narzędzia instalują się **razem z panelem** — do
+    `…/.venv/bin`, jako zależności `core` i packów — ale uruchomienie
+    `…/.venv/bin/gatekeeper-web` *nie* dokłada tego katalogu do `PATH`;
+    robi to dopiero `source …/activate`. Panel wystartowany bez aktywacji
+    zgłaszał więc „nie znaleziono programu: semgrep" dla narzędzia leżącego
+    obok jego własnego interpretera, a ekran środowiska pokazywał „brak".
+
+    Kolejność jak przy aktywacji: własne środowisko przed systemowym.
+    Ustawiamy `os.environ`, więc nadzorca i workery — uruchamiane przez
+    `sys.executable` z dziedziczonym środowiskiem — dostają to samo.
+
+    Katalog bierzemy z `sysconfig`, nie z `Path(sys.executable).resolve()`:
+    `…/.venv/bin/python` bywa dowiązaniem do `/usr/bin/python3.12`, więc
+    rozwinięcie ścieżki wyprowadza **poza** środowisko panelu — dokładnie
+    ten sam haczyk, który `core.runner` obchodzi przy `pyvenv.cfg`.
+    """
+    bindir = sysconfig.get_path("scripts")
+    parts = [p for p in os.environ.get("PATH", os.defpath).split(os.pathsep) if p]
+    if bindir not in parts:
+        os.environ["PATH"] = os.pathsep.join([bindir, *parts])
+    return os.environ["PATH"]
+
+
 def main() -> None:  # pragma: no cover
+    ensure_tools_on_path()
     try:
         app()
     except KeyboardInterrupt:

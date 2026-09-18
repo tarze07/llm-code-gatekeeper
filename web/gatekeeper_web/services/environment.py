@@ -56,6 +56,14 @@ TOOLS: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("node", ("--version",), "pack TS/JS"),
     ("npm", ("--version",), "pack TS/JS"),
     ("dotnet", ("--version",), "pack C#"),
+    # Osobne narzędzie, nie część packa: instaluje się je przez
+    # `dotnet tool install --global gatekeeper-cs-helper` (USAGE.md §C#).
+    # Brak wpisu na tej liście oznaczał, że trzy bramki padały na
+    # „nie znaleziono programu", a ekran środowiska milczał.
+    # Helper nie ma flagi wersji — wypisuje użycie, a gdy .NET stoi poza
+    # ścieżką systemową i brakuje `DOTNET_ROOT`, wypisuje właśnie to.
+    # W obu przypadkach kolumna mówi prawdę o tym, czy da się go wywołać.
+    ("gatekeeper-cs-helper", ("--version",), "pack C#: G1.complexity, G2.*"),
 )
 
 VERSION_TIMEOUT_S = 5.0

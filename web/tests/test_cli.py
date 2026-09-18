@@ -151,3 +151,34 @@ def test_serve_reload_startuje_z_wybranym_katalogiem_stanu(
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait(timeout=5)
+
+
+def test_srodowisko_panelu_trafia_do_path(monkeypatch) -> None:
+    """Narzędzia bramek leżą obok interpretera panelu, nie w PATH systemu.
+
+    `…/.venv/bin/gatekeeper-web` nie dokłada swojego katalogu do `PATH` —
+    robi to dopiero `activate`. Bez tego `semgrep` i `diff-cover`,
+    zainstalowane razem z panelem, były dla `shutil.which` niewidoczne.
+    """
+    import sysconfig
+
+    from gatekeeper_web.cli import ensure_tools_on_path
+
+    bindir = sysconfig.get_path("scripts")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    wynik = ensure_tools_on_path()
+
+    assert wynik.split(":")[0] == bindir, "własne środowisko przed systemowym"
+    assert "/usr/bin" in wynik.split(":")
+
+
+def test_dokladanie_do_path_jest_idempotentne(monkeypatch) -> None:
+    import sysconfig
+
+    from gatekeeper_web.cli import ensure_tools_on_path
+
+    bindir = sysconfig.get_path("scripts")
+    monkeypatch.setenv("PATH", f"{bindir}:/usr/bin")
+
+    assert ensure_tools_on_path().count(bindir) == 1
