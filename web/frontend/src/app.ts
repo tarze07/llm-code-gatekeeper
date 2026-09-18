@@ -181,7 +181,90 @@ function setupJobProgress(container: HTMLElement): void {
   void poll();
 }
 
+/**
+ * Przelacznik skorki. Bez tego pliku zostaje motyw systemowy
+ * (`prefers-color-scheme` w `app.css`) — dlatego przycisk powstaje tutaj,
+ * a nie w szablonie: bez JavaScriptu nie ma prawa pojawic sie martwa kontrolka.
+ *
+ * Wybor pamietamy w `localStorage`, bo to preferencja tej przegladarki, a nie
+ * stan panelu — nie ma po co jechac do bazy ani do ciasteczka.
+ */
+const KLUCZ_SKORKI = "gk-motyw";
+
+type Motyw = "jasny" | "ciemny" | "system";
+
+function zapisanyMotyw(): Motyw {
+  try {
+    const zapisany = window.localStorage.getItem(KLUCZ_SKORKI);
+    if (zapisany === "jasny" || zapisany === "ciemny") {
+      return zapisany;
+    }
+  } catch {
+    // Prywatne okno albo zablokowane dane witryny — motyw systemowy wystarczy.
+  }
+  return "system";
+}
+
+function zastosujMotyw(motyw: Motyw): void {
+  const korzen = document.documentElement;
+  if (motyw === "system") {
+    korzen.removeAttribute("data-motyw");
+  } else {
+    korzen.setAttribute("data-motyw", motyw);
+  }
+}
+
+function systemowoCiemny(): boolean {
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+}
+
+function setupThemeToggle(): void {
+  const marka = document.querySelector<HTMLElement>("header.top .marka");
+  if (!marka) {
+    return;
+  }
+  const przycisk = document.createElement("button");
+  przycisk.type = "button";
+  przycisk.className = "przelacznik-skorki";
+
+  const odswiez = (motyw: Motyw): void => {
+    const ciemny = motyw === "ciemny" || (motyw === "system" && systemowoCiemny());
+    przycisk.textContent = ciemny ? "skorka: ciemna" : "skorka: jasna";
+    przycisk.setAttribute(
+      "aria-label",
+      ciemny ? "Skorka ciemna — przelacz na jasna" : "Skorka jasna — przelacz na ciemna",
+    );
+    przycisk.setAttribute("aria-pressed", String(ciemny));
+  };
+
+  let motyw = zapisanyMotyw();
+  zastosujMotyw(motyw);
+  odswiez(motyw);
+
+  przycisk.addEventListener("click", () => {
+    const ciemnyTeraz = motyw === "ciemny" || (motyw === "system" && systemowoCiemny());
+    motyw = ciemnyTeraz ? "jasny" : "ciemny";
+    zastosujMotyw(motyw);
+    odswiez(motyw);
+    try {
+      window.localStorage.setItem(KLUCZ_SKORKI, motyw);
+    } catch {
+      // Wybor zadziala do konca tej strony; zapamietanie go nie jest krytyczne.
+    }
+  });
+
+  // Zmiana ustawienia systemu ma byc widoczna, dopoki operator nie wybral sam.
+  window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (motyw === "system") {
+      odswiez(motyw);
+    }
+  });
+
+  marka.appendChild(przycisk);
+}
+
 function start(): void {
+  setupThemeToggle();
   const findings = document.querySelector<HTMLElement>("[data-findings-root]");
   if (findings) {
     setupFindingFilter(findings);

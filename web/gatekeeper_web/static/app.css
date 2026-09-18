@@ -14,6 +14,18 @@
   --pass: #12653a;
   --pass-tlo: #e9f6ee;
   --uwaga-tlo: #fff8e6;
+  /* Domkniecie palety: te kolory byly wpisane na twardo w regulach nizej,
+     wiec skorka ciemna musialaby je powtarzac selektor po selektorze. */
+  --fokus: #0b57d0;
+  --nav-tlo: #eef2fb;
+  --nav-ramka: #c9d6f5;
+  --block-ramka: #f3c2c8;
+  --review-ramka: #f0dca8;
+  --review-akcent: #c98a00;
+  --pass-ramka: #b9e0c9;
+  --neutralny-tlo: #eef0f4;
+  --pole-tlo: #ffffff;
+  --akcent-tekst: #ffffff;
 }
 
 * { box-sizing: border-box; }
@@ -31,7 +43,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #0b57d0;
+  outline: 3px solid var(--fokus);
   outline-offset: 2px;
 }
 
@@ -65,8 +77,8 @@ nav.glowna a {
   border: 1px solid transparent;
 }
 nav.glowna a[aria-current="page"] {
-  background: #eef2fb;
-  border-color: #c9d6f5;
+  background: var(--nav-tlo);
+  border-color: var(--nav-ramka);
   font-weight: 600;
 }
 
@@ -106,22 +118,22 @@ code, .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; f
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.znacznik--block { background: var(--block-tlo); color: var(--block); border-color: #f3c2c8; }
-.znacznik--review { background: var(--review-tlo); color: var(--review); border-color: #f0d9a8; }
-.znacznik--pass { background: var(--pass-tlo); color: var(--pass); border-color: #b9e0c9; }
-.znacznik--neutralny { background: #eef0f4; color: var(--tekst-slaby); border-color: var(--ramka); }
+.znacznik--block { background: var(--block-tlo); color: var(--block); border-color: var(--block-ramka); }
+.znacznik--review { background: var(--review-tlo); color: var(--review); border-color: var(--review-ramka); }
+.znacznik--pass { background: var(--pass-tlo); color: var(--pass); border-color: var(--pass-ramka); }
+.znacznik--neutralny { background: var(--neutralny-tlo); color: var(--tekst-slaby); border-color: var(--ramka); }
 
 .uwaga {
   background: var(--uwaga-tlo);
-  border: 1px solid #f0dca8;
-  border-left: 5px solid #c98a00;
+  border: 1px solid var(--review-ramka);
+  border-left: 5px solid var(--review-akcent);
   border-radius: 8px;
   padding: 10px 14px;
   margin: 10px 0;
 }
 .blad {
   background: var(--block-tlo);
-  border: 1px solid #f3c2c8;
+  border: 1px solid var(--block-ramka);
   border-left: 5px solid var(--block);
   border-radius: 8px;
   padding: 10px 14px;
@@ -129,7 +141,7 @@ code, .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; f
 }
 .sukces {
   background: var(--pass-tlo);
-  border: 1px solid #b9e0c9;
+  border: 1px solid var(--pass-ramka);
   border-left: 5px solid var(--pass);
   border-radius: 8px;
   padding: 10px 14px;
@@ -143,13 +155,13 @@ input, select, button {
   padding: 7px 10px;
   border: 1px solid var(--ramka);
   border-radius: 6px;
-  background: #fff;
+  background: var(--pole-tlo);
   color: inherit;
 }
-button.glowny { background: var(--akcent); border-color: var(--akcent); color: #fff; cursor: pointer; font-weight: 600; }
+button.glowny { background: var(--akcent); border-color: var(--akcent); color: var(--akcent-tekst); cursor: pointer; font-weight: 600; }
 button.zwykly { cursor: pointer; }
 
-.znalezisko { border: 1px solid var(--ramka); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #fff; }
+.znalezisko { border: 1px solid var(--ramka); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: var(--panel); }
 .znalezisko h4 { margin: 0 0 4px; font-size: 1rem; }
 .znalezisko .meta { color: var(--tekst-slaby); font-size: 0.88rem; margin-bottom: 6px; }
 .waga { font-weight: 600; }
@@ -168,6 +180,90 @@ footer.stopka { color: var(--tekst-slaby); font-size: 0.85rem; padding: 20px; te
 footer.stopka .wyloguj { display: inline; margin-left: 12px; }
 body.logowanie-strona main { max-width: 28rem; padding-top: 12vh; }
 body.logowanie-strona input[name="code"] { width: 100%; letter-spacing: 0.08em; }
+
+/* ------------------------------------------------------------------ skorka
+   Ciemna skorka to sama podmiana zmiennych — zadna regula nizej o niej nie wie.
+   Bez JavaScriptu dziala ustawienie systemowe; `data-motyw` na `<html>` to
+   swiadomy wybor operatora i wygrywa w obie strony (jasny motyw na ciemnym
+   systemie tez). Kolejnosc blokow ma znaczenie: wybor jawny idzie ostatni. */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-motyw="jasny"]) {
+  --tlo: #14171c;
+  --panel: #1c2128;
+  --tekst: #e6e9ee;
+  --tekst-slaby: #9aa4b2;
+  --ramka: #303845;
+  --akcent: #8ab4f8;
+  --block: #ff9099;
+  --block-tlo: #3a1b1f;
+  --review: #e9bc6b;
+  --review-tlo: #382e19;
+  --pass: #79d19b;
+  --pass-tlo: #16301f;
+  --uwaga-tlo: #382e19;
+  --fokus: #a8c7fa;
+  --nav-tlo: #25303f;
+  --nav-ramka: #3c4c64;
+  --block-ramka: #632f35;
+  --review-ramka: #5c4822;
+  --review-akcent: #caa04a;
+  --pass-ramka: #265340;
+  --neutralny-tlo: #262d38;
+  --pole-tlo: #171b21;
+  --akcent-tekst: #0d1117;
+  }
+}
+
+:root[data-motyw="ciemny"] {
+  --tlo: #14171c;
+  --panel: #1c2128;
+  --tekst: #e6e9ee;
+  --tekst-slaby: #9aa4b2;
+  --ramka: #303845;
+  --akcent: #8ab4f8;
+  --block: #ff9099;
+  --block-tlo: #3a1b1f;
+  --review: #e9bc6b;
+  --review-tlo: #382e19;
+  --pass: #79d19b;
+  --pass-tlo: #16301f;
+  --uwaga-tlo: #382e19;
+  --fokus: #a8c7fa;
+  --nav-tlo: #25303f;
+  --nav-ramka: #3c4c64;
+  --block-ramka: #632f35;
+  --review-ramka: #5c4822;
+  --review-akcent: #caa04a;
+  --pass-ramka: #265340;
+  --neutralny-tlo: #262d38;
+  --pole-tlo: #171b21;
+  --akcent-tekst: #0d1117;
+}
+
+/* Przegladarka ma renderowac swoje kontrolki (paski przewijania, pola wyboru
+   daty) w tej samej tonacji co strona. */
+:root { color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-motyw="jasny"]) { color-scheme: dark; }
+}
+:root[data-motyw="ciemny"] { color-scheme: dark; }
+:root[data-motyw="jasny"] { color-scheme: light; }
+
+/* Przelacznik skorki wstawia JavaScript — bez niego zostaje motyw systemowy,
+   wiec martwy przycisk nie ma prawa pojawic sie w naglowku. */
+.przelacznik-skorki {
+  margin-left: auto;
+  cursor: pointer;
+  background: var(--pole-tlo);
+  border: 1px solid var(--ramka);
+  color: var(--tekst-slaby);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+.przelacznik-skorki:hover { color: var(--tekst); }
+header.top .marka { display: flex; align-items: center; gap: 12px; }
 
 @media (max-width: 640px) {
   dl.fakty { grid-template-columns: 1fr; }

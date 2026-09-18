@@ -180,6 +180,14 @@ nie wymagała Node.js:
 cd frontend && npm install && npm run build   # → ../gatekeeper_web/static/app.js
 ```
 
+Skórka jasna i ciemna to sama podmiana zmiennych CSS — żadna reguła układu
+o niej nie wie. Bez JavaScriptu obowiązuje ustawienie systemu
+(`prefers-color-scheme`); przycisk w nagłówku pozwala wybrać świadomie i wygrywa
+w obie strony (jasna skórka na ciemnym systemie też). Wybór pamięta
+`localStorage` tej przeglądarki, więc nie jedzie do bazy ani do ciasteczka.
+Eksport HTML raportu ma własny arkusz i zostaje jasny — to dokument do
+udostępnienia i druku, nie ekran panelu.
+
 JavaScript jest dodatkiem: bez niego strona pokazuje komplet danych i
 wszystkie formularze działają.
 
