@@ -26,7 +26,10 @@ def test_naglowki_bezpieczenstwa_sa_ustawione(panel: Panel) -> None:
     assert "default-src 'none'" in headers["content-security-policy"]
     assert "cdn" not in headers["content-security-policy"]
     assert headers["x-content-type-options"] == "nosniff"
-    assert headers["referrer-policy"] == "no-referrer"
+    # Nie `no-referrer`: ta wartość każe przeglądarce wysyłać `Origin: null`
+    # przy każdym zapisie i wyłączała wszystkie formularze panelu.
+    # Szczegóły przy `test_polityka_referrera_nie_ukrywa_originu`.
+    assert headers["referrer-policy"] == "same-origin"
     assert headers["x-frame-options"] == "DENY"
 
 
@@ -175,3 +178,93 @@ def test_wejscie_zadania_nie_wybiera_interpretera_ani_pluginow(
     # projektu i z zatwierdzonego profilu polityki.
     assert body["input"]["policy_revision"] == 1
     assert "repo_path" not in payload["input"]
+
+
+# ----------------------------------------------- Origin: ten sam panel vs obcy
+#
+# Kontrola `Origin` porównywała gołe napisy, więc operator z `localhost` w pasku
+# adresu dostawał 403 „żądanie z obcego origin" przy każdym zapisie, mimo że
+# rozmawiał z własnym panelem. Poniższe testy trzymają obie strony granicy:
+# zapis z tego samego panelu ma przechodzić, wszystko inne — nie.
+
+
+@pytest.mark.parametrize(
+    "origin, host",
+    [
+        ("http://localhost:8080", "127.0.0.1:8080"),
+        ("http://127.0.0.1:8080", "localhost:8080"),
+        ("http://LocalHost:8080", "localhost:8080"),
+        ("http://[::1]:8080", "[::1]:8080"),
+    ],
+)
+def test_ten_sam_panel_innym_zapisem_adresu_przechodzi(origin: str, host: str) -> None:
+    from gatekeeper_web.config import DEFAULT_ALLOWED_HOSTS
+    from gatekeeper_web.security import origin_allowed
+
+    assert origin_allowed(origin, host, DEFAULT_ALLOWED_HOSTS)
+
+
+@pytest.mark.parametrize(
+    "origin, host, powod",
+    [
+        ("http://localhost:3000", "localhost:8080", "inna usługa na tej samej maszynie"),
+        ("http://zly.example:8080", "localhost:8080", "cudza domena, ten sam port"),
+        ("http://localhost.zly.example:8080", "localhost:8080", "nazwa udająca localhost"),
+        ("https://abc-8080.devtunnels.ms", "localhost:8080", "tunel z przepisanym Host"),
+        ("null", "localhost:8080", "piaskownica albo file://"),
+        ("", "localhost:8080", "pusty nagłówek"),
+    ],
+)
+def test_obcy_origin_nadal_odrzucony(origin: str, host: str, powod: str) -> None:
+    from gatekeeper_web.config import DEFAULT_ALLOWED_HOSTS
+    from gatekeeper_web.security import origin_allowed
+
+    assert not origin_allowed(origin, host, DEFAULT_ALLOWED_HOSTS), powod
+
+
+def test_odmowa_nazywa_oba_naglowki(panel: Panel) -> None:
+    """Sam komunikat „obcy origin" nie pozwalał zdiagnozować własnego panelu."""
+    response = panel.client.post(
+        "/projekty",
+        data={"name": "Z obcej strony", "csrf_token": panel.token},
+        headers={"Origin": "http://evil.example"},
+    )
+    assert response.status_code == 403
+    assert "evil.example" in response.text
+    assert "Origin" in response.text
+
+
+def test_polityka_referrera_nie_ukrywa_originu() -> None:
+    """Nagłówek panelu nie może wyłączać jego własnych formularzy.
+
+    `Referrer-Policy: no-referrer` każe przeglądarce wysłać `Origin: null`
+    przy każdym POST (Fetch, „append a request `Origin` header"). Panel
+    odrzuca `null`, więc sam sobie blokował każdy zapis z HTML-a — sprawdzone
+    w Chrome: `no-referrer` → `Origin: null`, `same-origin` → prawdziwy adres.
+
+    Ten test jest tu dlatego, że reszta zestawu tego nie złapie: `TestClient`
+    podaje `Origin` jawnie i nigdy nie odtworzy zachowania przeglądarki.
+    """
+    from gatekeeper_web.security import REFERRER_POLICIES_HIDING_ORIGIN, SECURITY_HEADERS
+
+    assert SECURITY_HEADERS["Referrer-Policy"] not in REFERRER_POLICIES_HIDING_ORIGIN
+
+
+def test_odpowiedzi_panelu_nie_ukrywaja_originu(panel: Panel) -> None:
+    """To samo na żywej odpowiedzi — nagłówek jedzie z każdej strony."""
+    from gatekeeper_web.security import REFERRER_POLICIES_HIDING_ORIGIN
+
+    polityka = panel.get("/projekty").headers.get("referrer-policy")
+    assert polityka is not None
+    assert polityka not in REFERRER_POLICIES_HIDING_ORIGIN
+
+
+def test_origin_null_ma_wlasna_diagnoze(panel: Panel) -> None:
+    """`null` to inna sytuacja niż cudza domena — komunikat ma to rozróżniać."""
+    response = panel.client.post(
+        "/polityki",
+        data={"name": "Z piaskownicy", "csrf_token": panel.token},
+        headers={"Origin": "null"},
+    )
+    assert response.status_code == 403
+    assert "Origin: null" in response.text
