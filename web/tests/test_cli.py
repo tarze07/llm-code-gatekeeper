@@ -101,14 +101,19 @@ def test_serve_reload_startuje_z_wybranym_katalogiem_stanu(
             polecenie, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
         )
         try:
+            # Krótki limit obowiązuje **tylko** sondę startową: dopóki panel
+            # wstaje, przeterminowanie jest sygnałem „jeszcze nie", więc ma być
+            # tanie. Żądania po pętli to już zwykłe zapytania do działającego
+            # serwera — pierwsze wyrenderowanie pulpitu pod `--reload` potrafi
+            # przekroczyć pół sekundy i wywracało test na wolniejszej maszynie.
             with httpx.Client(
-                base_url=base, trust_env=False, timeout=0.5, follow_redirects=False
+                base_url=base, trust_env=False, timeout=10, follow_redirects=False
             ) as client:
                 deadline = time.monotonic() + 15
                 while time.monotonic() < deadline:
                     assert process.poll() is None, logfile.read_text()
                     try:
-                        response = client.get("/logowanie")
+                        response = client.get("/logowanie", timeout=0.5)
                     except httpx.TransportError:
                         time.sleep(0.05)
                         continue
