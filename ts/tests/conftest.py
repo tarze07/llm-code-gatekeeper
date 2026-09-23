@@ -1,12 +1,38 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import sysconfig
 from functools import lru_cache
 from pathlib import Path
 
 import pytest
 
+
+def pytest_configure() -> None:
+    """Dokłada katalog binarny środowiska testowego na początek `PATH`.
+
+    Bramki wołają `diff-cover` i resztę narzędzi jako podprocesy, przez
+    `shutil.which`. Instalują się one **razem z packiem**, do `…/.venv/bin`,
+    ale `…/.venv/bin/python -m pytest` *nie* dokłada tego katalogu do `PATH`
+    — robi to dopiero `source …/activate`. Zestaw odpalony bez aktywacji
+    zgłaszał więc „nie znaleziono programu: diff-cover" dla narzędzia
+    leżącego obok własnego interpretera: ten sam haczyk, który panel obchodzi
+    w `gatekeeper_web.cli.ensure_tools_on_path`.
+
+    Katalog bierzemy z `sysconfig`, nie z `Path(sys.executable).resolve()`:
+    `…/.venv/bin/python` bywa dowiązaniem do `/usr/bin/python3.12`, więc
+    rozwinięcie ścieżki wyprowadza **poza** środowisko packa.
+
+    Hook musi być `pytest_configure`, nie fixture: warunki `skipif` w
+    `test_gate_diff_coverage.py` liczą się przy imporcie modułu testowego,
+    czyli zanim jakikolwiek fixture zdąży się wykonać.
+    """
+    bindir = sysconfig.get_path("scripts")
+    parts = [p for p in os.environ.get("PATH", os.defpath).split(os.pathsep) if p]
+    if bindir not in parts:
+        os.environ["PATH"] = os.pathsep.join([bindir, *parts])
 
 class Repo:
     """Minimalne repozytorium git do testów bramek."""
