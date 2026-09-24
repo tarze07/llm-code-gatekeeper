@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% import "_makra.html" as m %}
+{% block tytul %}Historia przebiegów — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Historia</h1>
+<p class="podtytul">Znaleziono {{ total }} przebiegów. Strona {{ page }} z {{ pages }}.</p>
+
+<div class="karta">
+  <form method="get" action="/przebiegi" class="filtry">
+    <div>
+      <label for="projekt">Projekt</label>
+      <select id="projekt" name="projekt">
+        <option value="">wszystkie</option>
+        {% for p in projects %}
+          <option value="{{ p.id }}" {% if filters.projekt == p.id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="decyzja">Decyzja polityki</label>
+      <select id="decyzja" name="decyzja">
+        <option value="">wszystkie</option>
+        {% for v in verdicts %}
+          <option value="{{ v }}" {% if filters.decyzja == v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="od">Od dnia</label>
+      <input id="od" name="od" type="date" value="{{ filters.od or '' }}">
+    </div>
+    <div>
+      <label for="do">Do dnia</label>
+      <input id="do" name="do" type="date" value="{{ filters.do or '' }}">
+    </div>
+    <div>
+      <label for="q">Szukaj (SHA, przebieg, repozytorium)</label>
+      <input id="q" name="q" type="search" maxlength="200" value="{{ filters.q or '' }}">
+    </div>
+    <button class="glowny" type="submit">Filtruj</button>
+    <a href="/przebiegi">Wyczyść</a>
+  </form>
+</div>
+
+<div class="karta przewijana">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Decyzja</th>
+        <th scope="col">Projekt</th>
+        <th scope="col">Przebieg</th>
+        <th scope="col">Zakres</th>
+        <th scope="col">Znaleziska</th>
+        <th scope="col">Bramki</th>
+        <th scope="col">Czas</th>
+        <th scope="col">Start</th>
+        <th scope="col">Źródło</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{{ m.decyzja(row.verdict) }}</td>
+          <td>{{ row.project_name }}</td>
+          <td class="mono"><a href="/projekty/{{ row.project_id }}/przebiegi/{{ row.run_id }}">{{ row.run_id }}</a></td>
+          <td class="mono">{{ row.base_sha|sha }} → {{ row.head_sha|sha }}</td>
+          <td>{{ row.finding_count }}</td>
+          <td>
+            {{ row.gate_count }}
+            {% if row.gate_error_count %}
+              <span class="znacznik znacznik--review">{{ row.gate_error_count }}× błąd</span>
+            {% endif %}
+          </td>
+          <td>{{ row.duration_s|sekundy }}</td>
+          <td>{{ row.started_at|czas }}</td>
+          <td>
+            <span class="znacznik znacznik--neutralny">
+              {{ 'zaimportowany' if row.origin == 'imported' else 'z silnika' }}
+            </span>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="brak">Żaden przebieg nie pasuje do filtrów.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<nav class="stronicowanie" aria-label="Stronicowanie">
+  {% set baza = '/przebiegi?' ~ ('projekt=' ~ filters.projekt ~ '&' if filters.projekt else '')
+                             ~ ('decyzja=' ~ filters.decyzja ~ '&' if filters.decyzja else '')
+                             ~ ('od=' ~ filters.od ~ '&' if filters.od else '')
+                             ~ ('do=' ~ filters.do ~ '&' if filters.do else '')
+                             ~ ('q=' ~ filters.q ~ '&' if filters.q else '')
+                             ~ 'na_stronie=' ~ per_page %}
+  {% if page > 1 %}<a href="{{ baza }}&strona={{ page - 1 }}">← Poprzednia</a>{% endif %}
+  <span>Strona {{ page }} z {{ pages }}</span>
+  {% if page < pages %}<a href="{{ baza }}&strona={{ page + 1 }}">Następna →</a>{% endif %}
+</nav>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block tytul %}Projekty — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Projekty</h1>
+<p class="podtytul">
+  Projekt jest pojemnikiem na raporty jednego repozytorium. Ten sam
+  fingerprint znaleziska w dwóch projektach to dwa różne problemy, dlatego
+  historia jest zawsze przypisana do projektu.
+</p>
+
+{% if blad %}<div class="blad" role="alert">{{ blad }}</div>{% endif %}
+
+<div class="karta">
+  <h2>Nowy projekt</h2>
+  <form method="post" action="/projekty" class="filtry">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div>
+      <label for="name">Nazwa projektu</label>
+      <input id="name" name="name" required maxlength="200" autocomplete="off">
+    </div>
+    <div>
+      <label for="repo_path">Ścieżka lokalnego repozytorium</label>
+      <input id="repo_path" name="repo_path" maxlength="4096" size="38" autocomplete="off"
+             placeholder="{{ allowed_roots[0] if allowed_roots else '/sciezka/do/repo' }}/taskboard">
+    </div>
+    <div>
+      <label for="policy_profile_id">Profil polityki</label>
+      <select id="policy_profile_id" name="policy_profile_id">
+        <option value="">— brak —</option>
+        {% for p in profiles %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="glowny" type="submit">Dodaj projekt</button>
+  </form>
+  <p class="brak">
+    Ścieżka i profil są opcjonalne — bez nich powstaje projekt
+    <strong>tylko na importowane raporty</strong>. Żeby panel
+    <strong>uruchamiał kontrole</strong>, potrzebuje obu; jedno i drugie da się
+    też uzupełnić później w <strong>Ustawieniach</strong> projektu, a kolumna
+    „Gotowość" mówi, czego brakuje.
+  </p>
+  {% if not profiles %}
+    <p class="uwaga">
+      Nie masz jeszcze żadnego profilu polityki, więc lista wyżej jest pusta.
+      <a href="/polityki">Utwórz profil startowy</a> — panel wypełni go gotową
+      polityką, którą potem zawęzisz pod swój projekt.
+    </p>
+  {% endif %}
+  <p class="brak">
+    Repozytorium musi być korzeniem repozytorium Git i leżeć w katalogu
+    dozwolonym dla panelu
+    ({% for root in allowed_roots %}<code>{{ root }}</code>{% if not loop.last %}, {% endif %}{% else %}<em>brak</em>{% endfor %}).
+    Inny katalog wymaga uruchomienia panelu z <code>--repo-root</code>.
+  </p>
+</div>
+
+<div class="karta przewijana">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Projekt</th>
+        <th scope="col">Slug</th>
+        <th scope="col">Repozytorium</th>
+        <th scope="col">Gotowość</th>
+        <th scope="col">Przebiegi</th>
+        <th scope="col">Stan</th>
+        <th scope="col">Działanie</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in projects %}
+        <tr>
+          <td><a href="/przebiegi?projekt={{ p.id }}">{{ p.name }}</a></td>
+          <td class="mono">{{ p.slug }}</td>
+          <td>
+            {% if p.repo_path %}<span class="mono">{{ p.repo_path }}</span>
+            {% else %}{{ p.repo_label or '—' }}{% endif %}
+          </td>
+          <td>
+            {% if p.runnable %}
+              <span class="znacznik znacznik--pass">gotowy do kontroli</span>
+            {% else %}
+              <span class="znacznik znacznik--neutralny">tylko raporty</span><br>
+              <small>brakuje:
+                {% if not p.repo_path %}ścieżki repozytorium{% endif %}
+                {% if not p.repo_path and p.policy_profile_id is none %} i {% endif %}
+                {% if p.policy_profile_id is none %}profilu polityki{% endif %}
+              </small>
+            {% endif %}
+          </td>
+          <td>{{ counts.get(p.id, 0) }}</td>
+          <td>{% if p.archived %}<span class="znacznik znacznik--neutralny">zarchiwizowany</span>{% else %}aktywny{% endif %}</td>
+          <td>
+            <a href="/projekty/{{ p.id }}">Ustawienia</a>
+            <form method="post" action="/projekty/{{ p.id }}/archiwum">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="archived" value="{{ '0' if p.archived else '1' }}">
+              <button class="zwykly" type="submit">
+                {{ 'Przywróć' if p.archived else 'Archiwizuj' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="brak">Nie ma jeszcze żadnego projektu.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="brak">Archiwizacja ukrywa projekt w listach. Nie kasuje raportów ani żadnych plików.</p>
+{% endblock %}

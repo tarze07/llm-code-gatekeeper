@@ -1,0 +1,210 @@
+# CI monorepo: jeden workflow, piec jobow (po jednym na pakiet).
+#
+# GitHub Actions czyta wylacznie korzeniowy `.github/workflows/` — pliki
+# `ci.yml` lezace wczesniej w kazdym packu byly martwe po scaleniu repo
+# i zostaly zastapione tym plikiem. `python/.github/workflows/gatekeeper.yml`
+# to co innego: szablon integracji dla *ocenianego* repo, nie CI tego repo.
+#
+# Roznica wobec wersji sprzed scalenia: core instalowany z checkoutu
+# (`pip install -e ./core`), nie z `git+https://...#subdirectory=core`.
+# PR zmieniajacy core i pack naraz jest dzieki temu testowany razem,
+# a nie packiem z PR-a przeciw core'owi z `main`.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Izolacja procesów
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Zaleznosci
+        run: pip install --quiet -e ".[dev,gates]"
+
+      - name: gitleaks (potrzebny G3.secrets)
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+
+      - name: ruff
+        run: ruff check gatekeeper_core tests
+      - name: mypy --strict
+        run: mypy gatekeeper_core --strict
+      - name: pytest
+        run: pytest -q
+      - name: policy lint
+        run: gatekeeper policy lint --policy policy/gates.yaml
+      - name: calibrate
+        run: gatekeeper calibrate
+
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Izolacja procesów
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Zaleznosci
+        run: |
+          pip install --quiet -e ../core
+          pip install --quiet -e ".[dev,gates]"
+          pip install --quiet semgrep
+
+      - name: Instalacja gitleaksa (testy integracyjne bramki G3.secrets, core-owa)
+        env:
+          GITLEAKS_VERSION: "8.21.2"
+        run: |
+          set -euo pipefail
+          curl -sSL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+
+      - name: ruff
+        run: ruff check gatekeeper_python tests
+      - name: pytest
+        run: pytest -q
+      - name: policy lint
+        run: gatekeeper policy lint --policy policy/gates.yaml
+      # Regula bez testu negatywnego predzej czy pozniej zaczyna blokowac
+      # poprawny kod — to jest ten test, uruchamiany na kazdym PR-ze.
+      - name: semgrep --test
+        run: semgrep --test --config gatekeeper_python/rules/semgrep rules/semgrep/tests
+      # Zestaw kalibracyjny: celowo zepsute/czyste PR-y przeciw polityce z tego
+      # repo. Lapie regresje w regulach, zanim zlapie ja produkcja (PLAN.md §6).
+      - name: calibrate
+        run: gatekeeper calibrate
+
+  ts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Izolacja procesów
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Zaleznosci
+        run: |
+          pip install --quiet -e ../core
+          pip install --quiet -e ".[dev,gates]"
+          pip install --quiet semgrep
+          # `@typescript-eslint/parser` — G1.complexity (config eslinta) i helper
+          # G2.* (tools/helper.cjs). `vitest` globalnie — przypadek kalibracyjny
+          # `test-bez-dowodu` uruchamia go bez lokalnych `node_modules`.
+          npm install --global typescript eslint @typescript-eslint/parser vitest
+
+      - name: ruff
+        run: ruff check gatekeeper_ts tests
+      - name: mypy --strict
+        # MYPYPATH: core jest zainstalowany edytowalnie, a mypy nie idzie za
+        # hookiem `__editable__` — bez tego widzi wylacznie brakujace importy.
+        run: MYPYPATH=../core mypy gatekeeper_ts --strict
+      - name: pytest
+        # Testy G2.* robia jeden `npm install` na sesje (fixture `node_modules`)
+        # i uruchamiaja prawdziwy vitest — bez sieci po prostu skipuja.
+        run: pytest -q
+      - name: semgrep --test
+        run: semgrep --test --config gatekeeper_ts/rules/semgrep rules/semgrep/tests
+      - name: calibrate
+        run: gatekeeper calibrate
+
+  csharp:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: csharp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Izolacja procesów
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Zaleznosci
+        run: |
+          pip install --quiet -e ../core
+          pip install --quiet -e ".[dev,gates]"
+          pip install --quiet semgrep
+
+      - name: ruff
+        run: ruff check gatekeeper_csharp tests
+      - name: pytest
+        run: pytest -q
+      - name: semgrep --test
+        run: semgrep --test --config gatekeeper_csharp/rules/semgrep rules/semgrep/tests
+
+  # Panel WWW: pakiet opcjonalny, wiec ma wlasny job. Nie instaluje zadnego
+  # pack'a jezykowego ani bubblewrapa — raport jest danymi, a panel go tylko
+  # czyta. Testy chodza po probkach z `web/samples/`, nie po lokalnej sciezce.
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Zaleznosci
+        run: |
+          pip install --quiet -e ../core
+          pip install --quiet -e ".[dev]"
+          pip install --quiet ruff mypy
+
+      - name: ruff
+        run: ruff check gatekeeper_web tests
+      - name: mypy --strict
+        # MYPYPATH: core zainstalowany edytowalnie — mypy nie idzie za hookiem
+        # `__editable__` (ta sama sztuczka co w jobie `ts`).
+        run: MYPYPATH=../core mypy gatekeeper_web --strict
+      - name: pytest
+        run: pytest -q
+
+      # `static/app.js` jest wersjonowany, zeby instalacja pakietu nie wymagala
+      # Node.js. Ten krok pilnuje, ze commit ze zmiana w `frontend/` faktycznie
+      # zawiera przebudowany plik, a nie stary.
+      - name: TypeScript — kompilacja zgodna z zacommitowanym app.js
+        run: |
+          cd frontend
+          npm install --silent --no-audit --no-fund
+          npm run build
+          git diff --exit-code ../gatekeeper_web/static/app.js

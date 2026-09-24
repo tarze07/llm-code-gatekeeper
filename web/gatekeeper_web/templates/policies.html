@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block tytul %}Polityki — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Profile polityki</h1>
+<p class="podtytul">
+  Polityka operatora żyje w panelu, nie w ocenianym repozytorium. Gdyby brała
+  się z ocenianego commita, agent mógłby zmienić kryteria własnej oceny.
+</p>
+
+{% if blad %}<div class="blad" role="alert">{{ blad }}</div>{% endif %}
+
+<div class="karta">
+  <h2>Profil startowy</h2>
+  <p class="brak">
+    Gotowy profil z polityką startową panelu, od razu w wersji aktywnej —
+    najkrótsza droga do pierwszej kontroli. Progi w nim to kalibracja
+    narzędzia, nie Twojego projektu: przejrzyj je i zawęź kolejnym szkicem.
+  </p>
+  <form method="post" action="/polityki/startowy" class="filtry">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div>
+      <label for="starter_name">Nazwa profilu</label>
+      <input id="starter_name" name="name" maxlength="200" autocomplete="off"
+             value="Polityka startowa">
+    </div>
+    <button class="glowny" type="submit">Utwórz profil startowy</button>
+  </form>
+</div>
+
+<div class="karta">
+  <h2>Nowy profil</h2>
+  <p class="brak">
+    Pusty profil — bez wersji. Pierwszy szkic panel wypełni polityką startową,
+    a aktywujesz go osobnym działaniem, po obejrzeniu walidacji.
+  </p>
+  <form method="post" action="/polityki" class="filtry">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div>
+      <label for="name">Nazwa profilu</label>
+      <input id="name" name="name" required maxlength="200" autocomplete="off">
+    </div>
+    <button class="zwykly" type="submit">Utwórz</button>
+  </form>
+</div>
+
+{% for entry in profiles %}
+  <div class="karta">
+    <h2><a href="/polityki/{{ entry.profile.id }}">{{ entry.profile.name }}</a></h2>
+    <p>
+      {% if entry.active %}
+        Aktywna wersja <strong>{{ entry.active.label }}</strong>,
+        hash <code>{{ entry.active.content_hash[:16] }}</code>,
+        aktywowana {{ entry.active.activated_at|czas }}
+        {% if entry.active.author %} przez {{ entry.active.author }}{% endif %}.
+      {% else %}
+        <span class="brak">Brak aktywnej wersji — projekty z tym profilem nie uruchomią kontroli.</span>
+      {% endif %}
+    </p>
+    <p class="brak">{{ entry.revisions|length }} wersji w historii.</p>
+  </div>
+{% else %}
+  <div class="karta"><p class="brak">Nie ma jeszcze żadnego profilu.</p></div>
+{% endfor %}
+{% endblock %}

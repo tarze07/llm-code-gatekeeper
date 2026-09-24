@@ -1,0 +1,309 @@
+{
+  "run_id": "b7120acb8675",
+  "repo": "/repozytoria/taskboard-demo",
+  "base_sha": "51411fac3a29ad87d020a03b5744e71be419e1c9",
+  "head_sha": "c8b12de0a29a51f09c964a9a82b6d40c45f04bc3",
+  "started_at": "2026-09-07T08:04:27.810064+00:00",
+  "duration_s": 19.012,
+  "policy_version": 1,
+  "decision": {
+    "verdict": "BLOCK",
+    "reasons": [
+      {
+        "source": "threshold",
+        "rule": "diff.effective_lines",
+        "detail": "Diff jest zbyt duży, żeby dało się go rzetelnie zrecenzować — rozbij PR.",
+        "gate": "G0.scope",
+        "fingerprints": []
+      },
+      {
+        "source": "threshold",
+        "rule": "diff.effective_files",
+        "detail": "Zbyt wiele plików w jednej zmianie — rozbij PR.",
+        "gate": "G0.scope",
+        "fingerprints": []
+      },
+      {
+        "source": "human_review",
+        "rule": "paths_match: ['**/auth/**', '**/payments/**', '**/migrations/**', 'infra/**', '.github/workflows/**', 'policy/**']",
+        "detail": "zmiana dotyka ścieżki wrażliwej: policy/exceptions.yaml, policy/gates.yaml, policy/scope_map.yaml",
+        "gate": null,
+        "fingerprints": []
+      },
+      {
+        "source": "human_review",
+        "rule": "deps.new_external_package",
+        "detail": "deps.new_external_package = True",
+        "gate": "G1.deps",
+        "fingerprints": []
+      }
+    ],
+    "warnings": [
+      {
+        "source": "threshold",
+        "rule": "deps.new_package_count",
+        "detail": "deps.new_package_count = 9 > dozwolone 3",
+        "gate": "G1.deps",
+        "fingerprints": []
+      },
+      {
+        "source": "threshold",
+        "rule": "coverage.diff_ratio",
+        "detail": "Nowe linie produkcyjne słabo pokryte testami całego zestawu (G2.diff_coverage).",
+        "gate": "G2.diff_coverage",
+        "fingerprints": []
+      },
+      {
+        "source": "gate_error",
+        "rule": "G2.cross_verify.error",
+        "detail": "0 testów dowodzi zmiany, 0 przechodzi na starym kodzie, 15 bez rozstrzygnięcia · nałożono 3 plików testowych, uruchomiono vitest na 1 plikach (`node_modules` z ocenianego repo) · nałożono 3 plików testowych w 1 projektach",
+        "gate": "G2.cross_verify",
+        "fingerprints": []
+      }
+    ],
+    "suppressed": []
+  },
+  "gates": [
+    {
+      "gate": "G0.provenance",
+      "status": "pass",
+      "duration_s": 0.0,
+      "warn_only": false,
+      "message": "1/1 od agenta · agent: Codex",
+      "facts": {
+        "provenance.model": null,
+        "provenance.agent": "Codex",
+        "provenance.session_id": null,
+        "provenance.commits": 1,
+        "provenance.generated_commits": 1,
+        "provenance.human_edited": false,
+        "provenance.unknown_origin": false,
+        "provenance.agent_ratio": 1.0
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G0.scope",
+      "status": "pass",
+      "duration_s": 0.0,
+      "warn_only": false,
+      "message": "632 linii w 21 plikach (pominięto 1 plików generowanych)",
+      "facts": {
+        "diff.total_lines": 2967,
+        "diff.total_files": 22,
+        "diff.effective_lines": 632,
+        "diff.effective_files": 21,
+        "diff.generated_files": 1,
+        "diff.test_files": 3,
+        "diff.docs_only": false,
+        "diff.largest_file_lines": 97,
+        "diff.binary_files": 0,
+        "diff.has_ticket": false,
+        "diff.scope_map_matched": false,
+        "diff.out_of_scope_files": 0
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G1.complexity",
+      "status": "pass",
+      "duration_s": 1.387,
+      "warn_only": false,
+      "message": "8 zmierzonych metod w diffie, 0 powyżej progu 10 (max M = 4)",
+      "facts": {
+        "complexity.max": 4,
+        "complexity.over_threshold_count": 0,
+        "complexity.methods_measured": 8,
+        "complexity.ts_files_checked": 4,
+        "complexity.eslint_available": true,
+        "complexity.csharp_files_checked": 2
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G1.deps",
+      "status": "pass",
+      "duration_s": 4.764,
+      "warn_only": false,
+      "message": "sprawdzono 9 nowych pakietów",
+      "facts": {
+        "deps.new_packages": [
+          "@typescript-eslint/parser",
+          "@vitest/coverage-v8",
+          "eslint",
+          "typescript",
+          "vitest",
+          "coverlet.collector",
+          "Microsoft.NET.Test.Sdk",
+          "xunit",
+          "xunit.runner.visualstudio"
+        ],
+        "deps.new_package_count": 9,
+        "deps.new_external_package": true,
+        "deps.unknown_package": false,
+        "deps.typosquat_suspect": false,
+        "deps.too_young": false,
+        "deps.no_source_repo": false,
+        "deps.manifests_changed": 3
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G1.static",
+      "status": "pass",
+      "duration_s": 3.735,
+      "warn_only": true,
+      "message": "0 znalezisk w zmienionych liniach (0 wysokiej wagi)",
+      "facts": {
+        "static.finding_count": 0,
+        "static.high_severity_count": 0,
+        "static.ts_files_checked": 3,
+        "static.tsconfig_found": true,
+        "static.tsc_available": true,
+        "static.js_files_checked": 2,
+        "static.eslint_config_found": true,
+        "static.eslint_available": true,
+        "static.csharp_files_checked": 3,
+        "static.csproj_found": true,
+        "static.dotnet_available": true
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G2.cross_verify",
+      "status": "error",
+      "duration_s": 10.787,
+      "warn_only": true,
+      "message": "0 testów dowodzi zmiany, 0 przechodzi na starym kodzie, 15 bez rozstrzygnięcia · nałożono 3 plików testowych, uruchomiono vitest na 1 plikach (`node_modules` z ocenianego repo) · nałożono 3 plików testowych w 1 projektach",
+      "facts": {
+        "tests.new_count": 15,
+        "tests.checked": 15,
+        "tests.pass_on_pre_change_code": false,
+        "tests.passing_on_old_code": [],
+        "tests.weak_evidence": 15,
+        "tests.proved": 0,
+        "tests.characterization_used": 0,
+        "tests.isolation_broken": false
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G2.diff_coverage",
+      "status": "pass",
+      "duration_s": 14.026,
+      "warn_only": true,
+      "message": "33/61 nowych linii produkcyjnych pokrytych testami (54%)",
+      "facts": {
+        "coverage.diff_ratio": 0.5409836065573771,
+        "coverage.total_lines": 61,
+        "coverage.covered_lines": 33,
+        "coverage.tool_available": true
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G2.test_sanity",
+      "status": "pass",
+      "duration_s": 2.017,
+      "warn_only": true,
+      "message": "1 znalezisk jakości w 15 nowych/zmienionych testach (0 blokujących)",
+      "facts": {
+        "sanity.checked_count": 15,
+        "sanity.finding_count": 1,
+        "sanity.blocking_count": 0,
+        "sanity.rule_ids": [
+          "test.only_smoke"
+        ]
+      },
+      "findings": [
+        {
+          "gate": "G2.test_sanity",
+          "rule_id": "test.only_smoke",
+          "severity": "low",
+          "title": "Test `handles successful deletion without JSON` sprawdza tylko istnienie wyniku",
+          "failure_scenario": "`handles successful deletion without JSON` wywołuje testowany kod, ale każda asercja ogranicza się do `toBeDefined`/`not.toBeNull` — funkcja zwracająca zupełnie błędną wartość (byle zdefiniowaną) nadal przejdzie ten test.",
+          "file": "frontend/tasks.test.ts",
+          "line": 17,
+          "confidence": 1.0,
+          "evidence": {
+            "test": "frontend/tasks.test.ts::handles successful deletion without JSON"
+          },
+          "fingerprint": "47ea5d9804413dfe"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G3.sast",
+      "status": "pass",
+      "duration_s": 2.712,
+      "warn_only": true,
+      "message": "0 znalezisk reguł „nigdy” w zmienionych liniach (0 krytycznych)",
+      "facts": {
+        "sast.finding_count": 0,
+        "sast.critical_count": 0,
+        "sast.rule_ids": [],
+        "sast.rule_packs": [
+          "core",
+          "csharp",
+          "ts"
+        ]
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G3.sca",
+      "status": "pass",
+      "duration_s": 2.42,
+      "warn_only": true,
+      "message": "sprawdzono 5/9 nowych pakietów (npm, nuget), 0 z podatnościami · nierozwiązane: coverlet.collector, microsoft.net.test.sdk, xunit, xunit.runner.visualstudio",
+      "facts": {
+        "sca.checked_package_count": 9,
+        "sca.checked_ecosystems": [
+          "npm",
+          "nuget"
+        ],
+        "sca.vulnerable_package_count": 0,
+        "sca.unresolved_package_count": 4,
+        "sca.finding_count": 0,
+        "sca.tool_available": true
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G3.secrets",
+      "status": "pass",
+      "duration_s": 0.374,
+      "warn_only": false,
+      "message": "0 sekretów w zmienionych plikach, 0 zastanych",
+      "facts": {
+        "secrets.found": false,
+        "secrets.found_in_diff": false,
+        "secrets.count": 0,
+        "secrets.count_in_diff": 0,
+        "secrets.unresolved_paths": 0,
+        "secrets.tool_version": "8.21.2"
+      },
+      "findings": [],
+      "artifacts": []
+    }
+  ],
+  "not_checked": [
+    "testy mutacyjne, flaky-testy, contract-diff (G2) — kamień 4, w toku (G2.test_sanity i G2.diff_coverage zbudowane)",
+    "G2.cross_verify (nowe testy przeciw kodowi sprzed zmiany) — Python i C#; adapter TS/JS (vitest/jest) w planie",
+    "IaC i licencje (G3) — kamień 3 w toku; SCA sam w sobie obejmuje PyPI/npm/NuGet, poza tym zakresem zależności to jeszcze dług",
+    "CRAP (złożoność × brak pokrycia) — wymaga G2.diff_coverage bez `warn_only`; G1.complexity mierzy samą złożoność już dziś (PLAN-G1-complexity.md §8)",
+    "review semantyczny LLM (G4) — kamień 5",
+    "gotowość wdrożeniowa: migracje, rollback, obserwowalność (G6) — kamień 6",
+    "izolacja Bubblewrap: prywatny system plików i PID; sieć testów odcięta, sieć dostępna wyłącznie narzędziom żądającym jej jawnie"
+  ]
+}

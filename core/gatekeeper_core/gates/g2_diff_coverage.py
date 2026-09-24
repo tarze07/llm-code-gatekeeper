@@ -22,12 +22,13 @@ from __future__ import annotations
 
 import time
 from importlib.metadata import entry_points
+from pathlib import Path
 from typing import Any
 
 from ..adapters.base import ToolFailed, ToolMissing
 from ..core.change import ChangeContext
 from ..core.finding import GateResult
-from ..core.plugins import TestToolchain
+from ..core.plugins import TestToolchain, toolchain_languages
 from . import Gate, register
 
 TOOLCHAIN_GROUP = "gatekeeper.test_toolchains"
@@ -61,11 +62,11 @@ class DiffCoverage(Gate):
         notes: list[str] = []
 
         for toolchain in toolchains:
-            language = getattr(toolchain, "language", None)
+            languages = toolchain_languages(toolchain)
             production = [
                 f
                 for f in change.files
-                if not f.test and not f.generated and f.status != "D" and f.language == language
+                if not f.test and not f.generated and f.status != "D" and f.language in languages
             ]
             if not production:
                 continue
@@ -96,8 +97,7 @@ class DiffCoverage(Gate):
                 status="skipped",
                 duration_s=time.monotonic() - started,
                 facts=facts,
-                message="zmiana nie dotyka kodu produkcyjnego w żadnym zainstalowanym "
-                "języku — nie ma czego mierzyć",
+                message=_nothing_to_measure(change, toolchains),
             )
 
         facts["coverage.covered_lines"] = covered_total
@@ -124,6 +124,83 @@ class DiffCoverage(Gate):
             facts=facts,
             message=message,
         )
+
+
+def _plural(count: int, forms: tuple[str, str, str]) -> str:
+    """`count` z polską odmianą: 1 plik, 2 pliki, 5 plików."""
+    if count == 1:
+        form = forms[0]
+    elif 2 <= count % 10 <= 4 and not 12 <= count % 100 <= 14:
+        form = forms[1]
+    else:
+        form = forms[2]
+    return f"{count} {form}"
+
+
+def _nothing_to_measure(change: ChangeContext, toolchains: list[TestToolchain]) -> str:
+    """Dlaczego naprawdę nie było czego mierzyć.
+
+    Jedno zdanie („zmiana nie dotyka kodu produkcyjnego w żadnym zainstalowanym
+    języku") opisywało trzy różne sytuacje naraz: pusty diff, diff złożony
+    wyłącznie z testów/plików generowanych/usunięć i diff w języku, którego nie
+    obsługuje żaden zainstalowany toolchain. Operator dostawał sugestię, że
+    brakuje mu packa językowego, również wtedy, gdy po prostu nie było zmiany.
+
+    Bramka i tak jest `skipped` — rozróżnienie zmienia nie werdykt, tylko to,
+    czy da się z komunikatu wyjść z właściwym wnioskiem.
+    """
+    covered = sorted({lang for tc in toolchains for lang in toolchain_languages(tc)})
+
+    if not change.files:
+        return (
+            "diff jest pusty — wersja oceniana nie różni się od bazowej, "
+            "więc nie ma czego mierzyć"
+        )
+
+    if not covered:
+        # Nie ma czym mierzyć, a nie: nie ma czego. To jedyny wariant, w którym
+        # winna jest instalacja, więc nie mieszamy go z resztą.
+        return (
+            "nie zainstalowano żadnego packa językowego "
+            "(`gatekeeper.test_toolchains` nie ma ani jednego wpisu), "
+            "więc nie ma czym mierzyć pokrycia"
+        )
+
+    support = f"obsługiwane języki: {', '.join(covered)}"
+
+    skipped_kinds: list[str] = []
+    tests = sum(1 for f in change.files if f.test)
+    generated = sum(1 for f in change.files if f.generated)
+    deleted = sum(1 for f in change.files if f.status == "D" and not f.test and not f.generated)
+    if tests:
+        skipped_kinds.append(_plural(tests, ("testowy", "testowe", "testowych")))
+    if generated:
+        skipped_kinds.append(_plural(generated, ("generowany", "generowane", "generowanych")))
+    if deleted:
+        skipped_kinds.append(_plural(deleted, ("usunięty", "usunięte", "usuniętych")))
+
+    # Pliki produkcyjne, które istnieją, ale żaden toolchain ich nie obsługuje —
+    # to jedyna sytuacja, w której doinstalowanie packa cokolwiek zmieni.
+    foreign = sorted(
+        {
+            f.language or f"bez rozpoznanego języka ({Path(f.path).suffix or 'brak rozszerzenia'})"
+            for f in change.files
+            if not f.test and not f.generated and f.status != "D" and f.language not in covered
+        }
+    )
+
+    parts = ["w diffie " + _plural(len(change.files), ("plik", "pliki", "plików"))]
+    if skipped_kinds:
+        parts.append("w tym " + ", ".join(skipped_kinds))
+    if foreign:
+        parts.append(
+            "kod produkcyjny tylko w językach bez zainstalowanego toolchaina: "
+            + ", ".join(foreign)
+        )
+    return (
+        "zmiana nie dotyka kodu produkcyjnego w żadnym zainstalowanym języku — "
+        f"{'; '.join(parts)} ({support})"
+    )
 
 
 def _empty_facts() -> dict[str, Any]:

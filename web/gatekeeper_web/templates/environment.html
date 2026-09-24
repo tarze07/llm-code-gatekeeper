@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block tytul %}Środowisko — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Środowisko</h1>
+<p class="podtytul">
+  Czym panel dysponuje na tej maszynie. Brak narzędzia nie jest awarią panelu:
+  bramka bez swojego narzędzia zwróci <code>error</code>, czyli „brak dowodu”.
+</p>
+
+{% if env.blockers %}
+  <div class="blad" role="alert">
+    <strong>Uruchamianie kontroli jest zablokowane:</strong>
+    <ul>{% for problem in env.blockers %}<li>{{ problem }}</li>{% endfor %}</ul>
+  </div>
+{% else %}
+  <div class="sukces" role="status">Panel może uruchamiać kontrole.</div>
+{% endif %}
+
+<div class="karta">
+  <h2>Izolacja</h2>
+  <dl class="fakty">
+    <dt>System plików</dt>
+    <dd>{{ 'Bubblewrap dostępny' if env.isolation_available else 'BRAK — wykonanie zablokowane' }}</dd>
+    <dt>Sieć</dt>
+    <dd>{{ 'odcinana dla testów' if env.network_isolation else 'brak odcięcia sieci' }}</dd>
+    <dt>Opis do raportu</dt>
+    <dd>{{ env.isolation_note }}</dd>
+  </dl>
+</div>
+
+<div class="karta przewijana">
+  <h2>Narzędzia</h2>
+  <table>
+    <thead><tr><th>Narzędzie</th><th>Stan</th><th>Wersja</th><th>Po co</th></tr></thead>
+    <tbody>
+      {% for tool in env.tools %}
+        <tr>
+          <td class="mono">{{ tool.name }}</td>
+          <td>
+            {% if tool.available %}
+              <span class="znacznik znacznik--pass">jest</span>
+            {% else %}
+              <span class="znacznik znacznik--neutralny">brak</span>
+            {% endif %}
+          </td>
+          <td class="mono">{{ tool.version or '—' }}</td>
+          <td>{{ tool.purpose }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="karta przewijana">
+  <h2>Bramki ({{ env.gates|length }})</h2>
+  <p class="brak">
+    Lista pochodzi z entry pointów, nie z listy wpisanej w panelu — nowa bramka
+    pojawia się tu po instalacji pakietu, bez zmian w kodzie panelu.
+  </p>
+  <table>
+    <thead><tr><th>Bramka</th><th>Nazwa</th><th>Budżet</th><th>Faktów</th></tr></thead>
+    <tbody>
+      {% for gate in env.gates %}
+        <tr>
+          <td class="mono">{{ gate.id }}</td>
+          <td>{{ gate.name }}</td>
+          <td>{{ gate.budget_s|sekundy }}</td>
+          <td>{{ gate.facts }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="karta">
+  <h2>Moduły językowe</h2>
+  <dl class="fakty">
+    {% for plugin in env.plugins %}
+      <dt><code>{{ plugin.group }}</code></dt>
+      <dd>
+        {{ plugin.label }}:
+        {% if plugin.names %}{{ plugin.names|join(', ') }}{% else %}<span class="brak">brak</span>{% endif %}
+      </dd>
+    {% endfor %}
+  </dl>
+  <h3>Zainstalowane pakiety</h3>
+  <dl class="fakty">
+    {% for name, version in env.packages.items() %}
+      <dt><code>{{ name }}</code></dt>
+      <dd>{% if version %}{{ version }}{% else %}<span class="brak">niezainstalowany</span>{% endif %}</dd>
+    {% endfor %}
+  </dl>
+</div>
+
+<div class="karta">
+  <h2>Miejsce na dysku</h2>
+  {% if env.disk_free_mb is not none %}
+    <p>{{ env.disk_free_mb }} MB wolnego z {{ env.disk_total_mb }} MB — katalog stanu <code>{{ env.state_dir }}</code>.</p>
+    <p class="brak">Każda bramka analizuje własną kopię ocenianego commita.</p>
+  {% else %}
+    <p class="brak">brak danych</p>
+  {% endif %}
+</div>
+{% endblock %}

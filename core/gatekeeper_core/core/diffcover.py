@@ -77,7 +77,7 @@ def run_diff_cover_on_report(
     """
     if not report_paths:
         return DiffCoverageResult()
-    with tempfile.TemporaryDirectory(prefix="gatekeeper-diffcov-") as tmp:
+    with tempfile.TemporaryDirectory(dir=repo, prefix="gatekeeper-diffcov-") as tmp:
         json_report = Path(tmp) / "diffcover.json"
         try:
             run_tool(

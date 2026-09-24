@@ -4,10 +4,12 @@ import sys
 
 import pytest
 
+from gatekeeper_core.adapters.base import ToolFailed, run_tool
 from gatekeeper_core.core.runner import (
     Sandbox,
     SandboxPolicy,
     SandboxUnavailable,
+    filesystem_isolation_available,
     network_isolation_available,
     scrub_environment,
 )
@@ -59,7 +61,7 @@ def test_domyslnie_proces_nie_ma_dostepu_do_sieci(tmp_path):
     result = Sandbox().run(python(code), cwd=tmp_path)
 
     assert result.stdout.strip() == "ODCIETA"
-    assert result.isolation == "network-namespace"
+    assert result.isolation == "filesystem-network"
 
 
 @pytest.mark.skipif(not network_isolation_available(), reason="brak przestrzeni nazw użytkownika")
@@ -75,7 +77,7 @@ def test_sieci_da_sie_zazadac_swiadomie(tmp_path):
     """Bramka odpytująca rejestr pakietów musi móc wyjść na zewnątrz."""
     result = Sandbox().run(python("print('ok')"), cwd=tmp_path, network=True)
 
-    assert result.isolation == "none"
+    assert result.isolation == "filesystem"
     assert result.stdout.strip() == "ok"
 
 
@@ -103,17 +105,84 @@ def test_brak_programu_jest_jawnym_bledem(tmp_path):
 
 
 def test_wymagana_izolacja_przerywa_gdy_niedostepna(tmp_path, monkeypatch):
-    monkeypatch.setattr("gatekeeper_core.core.runner.network_isolation_available", lambda: False)
+    monkeypatch.setattr("gatekeeper_core.core.runner.filesystem_isolation_available", lambda: False)
     sandbox = Sandbox(SandboxPolicy(require_isolation=True))
 
-    with pytest.raises(SandboxUnavailable, match="brak izolacji sieci"):
+    with pytest.raises(SandboxUnavailable, match="brak izolacji Bubblewrap"):
         sandbox.run(python("print(1)"), cwd=tmp_path)
 
 
-def test_bez_wymogu_izolacji_proces_dziala_ale_wynik_o_tym_mowi(tmp_path, monkeypatch):
-    monkeypatch.setattr("gatekeeper_core.core.runner.network_isolation_available", lambda: False)
+def test_brak_bubblewrap_nie_pozwala_na_nieizolowane_wykonanie(tmp_path, monkeypatch):
+    monkeypatch.setattr("gatekeeper_core.core.runner.filesystem_isolation_available", lambda: False)
+    marker = tmp_path / "executed"
+    with pytest.raises(SandboxUnavailable, match="brak izolacji Bubblewrap"):
+        Sandbox(SandboxPolicy(require_isolation=False)).run(
+            python("from pathlib import Path; Path('executed').touch()"), cwd=tmp_path
+        )
+    assert not marker.exists()
 
-    result = Sandbox().run(python("print('ok')"), cwd=tmp_path)
 
-    assert result.ok
-    assert result.isolation == "none"  # brak cichego udawania, że izolacja jest
+@pytest.mark.skipif(not filesystem_isolation_available(), reason="Bubblewrap niedostępny")
+def test_pliki_hosta_i_dowiazania_sa_niedostepne(tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    secret = tmp_path / "secret"
+    secret.write_text("private")
+    (work / "escape").symlink_to(secret)
+    result = Sandbox().run(python(
+        "from pathlib import Path\n"
+        "for p in (Path('../secret'), Path('escape')):\n"
+        "    try: p.read_text(); raise AssertionError('read escaped')\n"
+        "    except (FileNotFoundError, PermissionError): pass\n"
+        "for p in (Path('../secret'), Path('escape')):\n"
+        "    try: p.write_text('changed')\n"
+        "    except (FileNotFoundError, PermissionError): pass\n"
+        "Path('artifact').write_text('ok')\n"
+    ), cwd=work)
+    assert result.ok, result.stderr
+    assert secret.read_text() == "private"
+    assert (work / "artifact").read_text() == "ok"
+
+
+@pytest.mark.skipif(not filesystem_isolation_available(), reason="Bubblewrap niedostępny")
+def test_jawny_katalog_wejsciowy_jest_tylko_do_odczytu(tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    data = tmp_path / "input"
+    data.mkdir()
+    (data / "value").write_text("input")
+    sandbox = Sandbox(SandboxPolicy(read_only_paths=(data,)))
+    result = sandbox.run(python(
+        f"from pathlib import Path; p=Path({str(data / 'value')!r}); print(p.read_text()); "
+        "p.write_text('changed')"
+    ), cwd=work)
+    assert not result.ok
+    assert result.stdout.strip() == "input"
+    assert (data / "value").read_text() == "input"
+
+
+@pytest.mark.skipif(not filesystem_isolation_available(), reason="Bubblewrap niedostępny")
+def test_timeout_zabija_takze_proces_w_nowej_sesji(tmp_path):
+    result = Sandbox(SandboxPolicy(timeout_s=0.3)).run(python(
+        "import os,time\n"
+        "if os.fork() == 0:\n"
+        "    os.setsid(); time.sleep(30)\n"
+        "else: time.sleep(30)\n"
+    ), cwd=tmp_path)
+    assert result.timed_out
+    assert result.duration_s < 3
+
+
+@pytest.mark.skipif(not filesystem_isolation_available(), reason="Bubblewrap niedostępny")
+def test_node_modules_nie_moze_udostepnic_dowolnego_katalogu_hosta(tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "node_modules").symlink_to(tmp_path, True)
+    with pytest.raises(SandboxUnavailable, match="niezaufanym dowiązaniem"):
+        Sandbox().run(python("print('must not run')"), cwd=work)
+
+
+def test_awaria_izolacji_nie_udaje_braku_opcjonalnego_narzedzia(tmp_path, monkeypatch):
+    monkeypatch.setattr("gatekeeper_core.core.runner.filesystem_isolation_available", lambda: False)
+    with pytest.raises(ToolFailed, match="brak izolacji Bubblewrap"):
+        run_tool(python("print('must not run')"), tmp_path, Sandbox(), 1)

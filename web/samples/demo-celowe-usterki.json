@@ -1,0 +1,710 @@
+{
+  "run_id": "35e102d0d126",
+  "repo": "/repozytoria/taskboard-demo",
+  "base_sha": "c8b12de0a29a51f09c964a9a82b6d40c45f04bc3",
+  "head_sha": "b64b59efcd44ee72072a5bc52c33c16b12817882",
+  "started_at": "2026-09-07T09:10:01.595982+00:00",
+  "duration_s": 18.422,
+  "policy_version": 1,
+  "decision": {
+    "verdict": "BLOCK",
+    "reasons": [
+      {
+        "source": "blocking",
+        "rule": "secrets.found_in_diff",
+        "detail": "secrets.found_in_diff = True",
+        "gate": "G3.secrets",
+        "fingerprints": [
+          "f31efd709b8ba59a"
+        ]
+      },
+      {
+        "source": "blocking",
+        "rule": "deps.unknown_package",
+        "detail": "deps.unknown_package = True",
+        "gate": "G1.deps",
+        "fingerprints": [
+          "0f3113a050bc23c9"
+        ]
+      },
+      {
+        "source": "blocking",
+        "rule": "tests.pass_on_pre_change_code",
+        "detail": "tests.pass_on_pre_change_code = True",
+        "gate": "G2.cross_verify",
+        "fingerprints": [
+          "ef7385918e260e90",
+          "d354777028b90b03",
+          "01b093f0d8d55db0",
+          "cfa6f5c9caaae44d",
+          "64e8901c67c2d47c"
+        ]
+      },
+      {
+        "source": "blocking",
+        "rule": "provenance.unknown_origin",
+        "detail": "provenance.unknown_origin = True",
+        "gate": "G0.provenance",
+        "fingerprints": [
+          "f7df2d60dd9c4f3f"
+        ]
+      },
+      {
+        "source": "threshold",
+        "rule": "diff.out_of_scope_files",
+        "detail": "Zmiana dotyka plików spoza zadeklarowanego zakresu ticketu.",
+        "gate": "G0.scope",
+        "fingerprints": [
+          "94b0186c69aa290c"
+        ]
+      },
+      {
+        "source": "threshold",
+        "rule": "static.high_severity_count",
+        "detail": "Static checker zgłasza defekt w zmienionych liniach (nie styl — realny błąd).",
+        "gate": "G1.static",
+        "fingerprints": []
+      },
+      {
+        "source": "threshold",
+        "rule": "sanity.blocking_count",
+        "detail": "Nowy test nie dowodzi niczego — brak asercji albo asercja na stałą (G2.test_sanity).",
+        "gate": "G2.test_sanity",
+        "fingerprints": []
+      },
+      {
+        "source": "threshold",
+        "rule": "coverage.diff_ratio",
+        "detail": "Nowe linie produkcyjne słabo pokryte testami całego zestawu (G2.diff_coverage).",
+        "gate": "G2.diff_coverage",
+        "fingerprints": []
+      },
+      {
+        "source": "threshold",
+        "rule": "sast.critical_count",
+        "detail": "Reguła „nigdy” trafiła w zmienionych liniach.",
+        "gate": "G3.sast",
+        "fingerprints": []
+      },
+      {
+        "source": "threshold",
+        "rule": "sca.vulnerable_package_count",
+        "detail": "Nowo dodana zależność ma znaną podatność.",
+        "gate": "G3.sca",
+        "fingerprints": []
+      },
+      {
+        "source": "threshold",
+        "rule": "complexity.max",
+        "detail": "Funkcja w diffie przekracza złożoność cyklomatyczną 10 — rozbij na strażników (Uncle Bob / G1.complexity).",
+        "gate": "G1.complexity",
+        "fingerprints": []
+      },
+      {
+        "source": "threshold",
+        "rule": "complexity.over_threshold_count",
+        "detail": "W diffie są funkcje powyżej progu złożoności.",
+        "gate": "G1.complexity",
+        "fingerprints": []
+      },
+      {
+        "source": "human_review",
+        "rule": "deps.new_external_package",
+        "detail": "deps.new_external_package = True",
+        "gate": "G1.deps",
+        "fingerprints": []
+      }
+    ],
+    "warnings": [],
+    "suppressed": []
+  },
+  "gates": [
+    {
+      "gate": "G0.provenance",
+      "status": "fail",
+      "duration_s": 0.001,
+      "warn_only": false,
+      "message": "1 commitów bez oznaczenia pochodzenia",
+      "facts": {
+        "provenance.model": null,
+        "provenance.agent": null,
+        "provenance.session_id": null,
+        "provenance.commits": 1,
+        "provenance.generated_commits": 0,
+        "provenance.human_edited": false,
+        "provenance.unknown_origin": true,
+        "provenance.agent_ratio": 0.0
+      },
+      "findings": [
+        {
+          "gate": "G0.provenance",
+          "rule_id": "provenance.unknown_origin",
+          "severity": "low",
+          "title": "Żaden z 1 commitów nie mówi, co wyprodukowało tę zmianę",
+          "failure_scenario": "Przy incydencie nie da się ustalić, który model i która sesja wygenerowały wadliwy kod, więc ten sam defekt wróci z tego samego narzędzia. Dodaj trailer `Generated-By: <narzędzie>/<model>` w konfiguracji agenta.",
+          "file": null,
+          "line": null,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "b64b59ef"
+          },
+          "fingerprint": "f7df2d60dd9c4f3f"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G0.scope",
+      "status": "pass",
+      "duration_s": 0.002,
+      "warn_only": false,
+      "message": "179 linii w 9 plikach (pominięto 1 plików generowanych)",
+      "facts": {
+        "diff.total_lines": 188,
+        "diff.total_files": 10,
+        "diff.effective_lines": 179,
+        "diff.effective_files": 9,
+        "diff.generated_files": 1,
+        "diff.test_files": 2,
+        "diff.docs_only": false,
+        "diff.largest_file_lines": 40,
+        "diff.binary_files": 0,
+        "diff.has_ticket": true,
+        "diff.scope_map_matched": true,
+        "diff.out_of_scope_files": 7
+      },
+      "findings": [
+        {
+          "gate": "G0.scope",
+          "rule_id": "diff.out_of_scope_files",
+          "severity": "low",
+          "title": "7 plików poza zakresem ticketu AUTH-101",
+          "failure_scenario": "Ticket AUTH-101 ma zadeklarowany zakres w `policy/scope_map.yaml`, a ta zmiana dotyka plików spoza niego: `DELIBERATE-FAULTS.md`, `experiments/missing-dependency/package.json`, `experiments/synthetic-secret.env`, `frontend/tasks.ts`, `package.json` (+2). Może to być zamierzona zmiana współdzielona, albo PR robiący więcej, niż mówi jego opis — recenzent nie zgadnie, które.",
+          "file": "DELIBERATE-FAULTS.md",
+          "line": null,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "DELIBERATE-FAULTS.md, experiments/missing-dependency/package.json, experiments/synthetic-secret.env, frontend/tasks.ts, package.json, scripts/check-deliberate-faults.sh, server/UnsafePreview.cs",
+            "ticket": "AUTH-101"
+          },
+          "fingerprint": "94b0186c69aa290c"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G1.complexity",
+      "status": "fail",
+      "duration_s": 1.177,
+      "warn_only": false,
+      "message": "3 zmierzonych metod w diffie, 2 powyżej progu 10 (max M = 13)",
+      "facts": {
+        "complexity.max": 13,
+        "complexity.over_threshold_count": 2,
+        "complexity.methods_measured": 3,
+        "complexity.ts_files_checked": 1,
+        "complexity.eslint_available": true,
+        "complexity.csharp_files_checked": 1
+      },
+      "findings": [
+        {
+          "gate": "G1.complexity",
+          "rule_id": "complexity.too_high",
+          "severity": "medium",
+          "title": "priorityScore ma złożoność cyklomatyczną 13 (próg 10)",
+          "failure_scenario": "Funkcja `priorityScore` ma 13 liniowo niezależnych ścieżek (próg 10). Agent łatwo zostawia nieprzetestowaną gałąź w zagnieżdżeniu; rozbij warunki na strażników albo nazwane predykaty, zanim testy i mutacja będą w stanie to pokryć.",
+          "file": "frontend/tasks.ts",
+          "line": 7,
+          "confidence": 1.0,
+          "evidence": {
+            "complexity": 13,
+            "threshold": 10,
+            "nloc": 16,
+            "snippet": "export function priorityScore(title: string, daysLate: number): number {"
+          },
+          "fingerprint": "30935daada9e76ba"
+        },
+        {
+          "gate": "G1.complexity",
+          "rule_id": "complexity.too_high",
+          "severity": "medium",
+          "title": "UnsafePreview.EstimateMinutes ma złożoność cyklomatyczną 13 (próg 10)",
+          "failure_scenario": "Funkcja `UnsafePreview.EstimateMinutes` ma 13 liniowo niezależnych ścieżek (próg 10). Agent łatwo zostawia nieprzetestowaną gałąź w zagnieżdżeniu; rozbij warunki na strażników albo nazwane predykaty, zanim testy i mutacja będą w stanie to pokryć.",
+          "file": "server/UnsafePreview.cs",
+          "line": 14,
+          "confidence": 1.0,
+          "evidence": {
+            "complexity": 13,
+            "threshold": 10,
+            "nloc": 17,
+            "snippet": "public static int EstimateMinutes(string title, int daysLate)"
+          },
+          "fingerprint": "8fbf46ec641d4468"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G1.deps",
+      "status": "fail",
+      "duration_s": 0.017,
+      "warn_only": false,
+      "message": "sprawdzono 2 nowych pakietów",
+      "facts": {
+        "deps.new_packages": [
+          "taskboard-nonexistent-gatekeeper-demo-20260907-c8b12de",
+          "lodash"
+        ],
+        "deps.new_package_count": 2,
+        "deps.new_external_package": true,
+        "deps.unknown_package": true,
+        "deps.typosquat_suspect": false,
+        "deps.too_young": false,
+        "deps.no_source_repo": false,
+        "deps.manifests_changed": 2
+      },
+      "findings": [
+        {
+          "gate": "G1.deps",
+          "rule_id": "deps.unknown_package",
+          "severity": "critical",
+          "title": "Pakiet `taskboard-nonexistent-gatekeeper-demo-20260907-c8b12de` nie istnieje w rejestrze npm",
+          "failure_scenario": "Instalacja zależności na dowolnym środowisku przerwie się błędem „No matching distribution found for taskboard-nonexistent-gatekeeper-demo-20260907-c8b12de”. Jeżeli ktoś opublikuje pakiet o tej nazwie wcześniej niż my zauważymy, zainstalujemy jego kod z uprawnieniami naszego procesu budowania.",
+          "file": "experiments/missing-dependency/package.json",
+          "line": null,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "taskboard-nonexistent-gatekeeper-demo-20260907-c8b12de@1.0.0",
+            "ecosystem": "npm"
+          },
+          "fingerprint": "0f3113a050bc23c9"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G1.static",
+      "status": "fail",
+      "duration_s": 3.656,
+      "warn_only": false,
+      "message": "1 znalezisk w zmienionych liniach (1 wysokiej wagi)",
+      "facts": {
+        "static.finding_count": 1,
+        "static.high_severity_count": 1,
+        "static.ts_files_checked": 2,
+        "static.tsconfig_found": true,
+        "static.tsc_available": false,
+        "static.js_files_checked": 0,
+        "static.eslint_config_found": true,
+        "static.eslint_available": true,
+        "static.csharp_files_checked": 2,
+        "static.csproj_found": true,
+        "static.dotnet_available": true
+      },
+      "findings": [
+        {
+          "gate": "G1.static",
+          "rule_id": "eslint.no-eval",
+          "severity": "high",
+          "title": "`eval` can be harmful.",
+          "failure_scenario": "Linter zgłasza `no-eval`: `eval` can be harmful.. Reguły „problem” (no-undef, no-unreachable, no-eval i podobne) wskazują kod, który zachowa się inaczej, niż wygląda, albo wykona coś niebezpiecznego — nie kwestię formatowania.",
+          "file": "frontend/tasks.ts",
+          "line": 26,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "no-eval:`eval` can be harmful.",
+            "level": 2
+          },
+          "fingerprint": "ac89e3eaca700f2b"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G2.cross_verify",
+      "status": "fail",
+      "duration_s": 13.956,
+      "warn_only": false,
+      "message": "0 testów dowodzi zmiany, 5 przechodzi na starym kodzie, 0 bez rozstrzygnięcia · nałożono 2 plików testowych, uruchomiono vitest na 1 plikach (`node_modules` z ocenianego repo) · nałożono 2 plików testowych w 1 projektach",
+      "facts": {
+        "tests.new_count": 5,
+        "tests.checked": 5,
+        "tests.pass_on_pre_change_code": true,
+        "tests.passing_on_old_code": [
+          "frontend/tasks.test.ts::priority feature works because the old summary still works",
+          "frontend/tasks.test.ts::priority feature is ready because true is true",
+          "frontend/tasks.test.ts::priority feature has a test without an assertion",
+          "tests/TaskStoreTests.cs::TaskStoreTests.PreviewWorksBecauseTrueIsTrue",
+          "tests/TaskStoreTests.cs::TaskStoreTests.PreviewWorksBecauseOldStoreStillAddsTasks"
+        ],
+        "tests.weak_evidence": 0,
+        "tests.proved": 0,
+        "tests.characterization_used": 0,
+        "tests.isolation_broken": false
+      },
+      "findings": [
+        {
+          "gate": "G2.cross_verify",
+          "rule_id": "tests.pass_on_pre_change_code",
+          "severity": "high",
+          "title": "Test `priority feature works because the old summary still works` przechodzi na kodzie sprzed zmiany",
+          "failure_scenario": "Test `frontend/tasks.test.ts::priority feature works because the old summary still works` daje wynik zielony również bez tej zmiany, więc nie odróżnia kodu przed od kodu po. Gdyby implementacja została jutro cofnięta albo napisana błędnie, ten test nadal by przechodził — czyli nie chroni niczego. Jeżeli to celowo test charakteryzujący istniejące zachowanie, oznacz go `@pytest.mark.characterization`.",
+          "file": "frontend/tasks.test.ts",
+          "line": 27,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "frontend/tasks.test.ts::priority feature works because the old summary still works",
+            "body_hash": "b97ac4d2553919cc"
+          },
+          "fingerprint": "ef7385918e260e90"
+        },
+        {
+          "gate": "G2.cross_verify",
+          "rule_id": "tests.pass_on_pre_change_code",
+          "severity": "high",
+          "title": "Test `priority feature is ready because true is true` przechodzi na kodzie sprzed zmiany",
+          "failure_scenario": "Test `frontend/tasks.test.ts::priority feature is ready because true is true` daje wynik zielony również bez tej zmiany, więc nie odróżnia kodu przed od kodu po. Gdyby implementacja została jutro cofnięta albo napisana błędnie, ten test nadal by przechodził — czyli nie chroni niczego. Jeżeli to celowo test charakteryzujący istniejące zachowanie, oznacz go `@pytest.mark.characterization`.",
+          "file": "frontend/tasks.test.ts",
+          "line": 32,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "frontend/tasks.test.ts::priority feature is ready because true is true",
+            "body_hash": "a36192380840a19e"
+          },
+          "fingerprint": "d354777028b90b03"
+        },
+        {
+          "gate": "G2.cross_verify",
+          "rule_id": "tests.pass_on_pre_change_code",
+          "severity": "high",
+          "title": "Test `priority feature has a test without an assertion` przechodzi na kodzie sprzed zmiany",
+          "failure_scenario": "Test `frontend/tasks.test.ts::priority feature has a test without an assertion` daje wynik zielony również bez tej zmiany, więc nie odróżnia kodu przed od kodu po. Gdyby implementacja została jutro cofnięta albo napisana błędnie, ten test nadal by przechodził — czyli nie chroni niczego. Jeżeli to celowo test charakteryzujący istniejące zachowanie, oznacz go `@pytest.mark.characterization`.",
+          "file": "frontend/tasks.test.ts",
+          "line": 37,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "frontend/tasks.test.ts::priority feature has a test without an assertion",
+            "body_hash": "1fef9d5fdc0518e9"
+          },
+          "fingerprint": "01b093f0d8d55db0"
+        },
+        {
+          "gate": "G2.cross_verify",
+          "rule_id": "tests.pass_on_pre_change_code",
+          "severity": "high",
+          "title": "Test `PreviewWorksBecauseTrueIsTrue` przechodzi na kodzie sprzed zmiany",
+          "failure_scenario": "Test `tests/TaskStoreTests.cs::TaskStoreTests.PreviewWorksBecauseTrueIsTrue` daje wynik zielony również bez tej zmiany, więc nie odróżnia kodu przed od kodu po. Gdyby implementacja została jutro cofnięta albo napisana błędnie, ten test nadal by przechodził — czyli nie chroni niczego. Jeżeli to celowo test charakteryzujący istniejące zachowanie, oznacz go `@pytest.mark.characterization`.",
+          "file": "tests/TaskStoreTests.cs",
+          "line": 6,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "tests/TaskStoreTests.cs::TaskStoreTests.PreviewWorksBecauseTrueIsTrue",
+            "body_hash": "fc106c79b6d77b87"
+          },
+          "fingerprint": "cfa6f5c9caaae44d"
+        },
+        {
+          "gate": "G2.cross_verify",
+          "rule_id": "tests.pass_on_pre_change_code",
+          "severity": "high",
+          "title": "Test `PreviewWorksBecauseOldStoreStillAddsTasks` przechodzi na kodzie sprzed zmiany",
+          "failure_scenario": "Test `tests/TaskStoreTests.cs::TaskStoreTests.PreviewWorksBecauseOldStoreStillAddsTasks` daje wynik zielony również bez tej zmiany, więc nie odróżnia kodu przed od kodu po. Gdyby implementacja została jutro cofnięta albo napisana błędnie, ten test nadal by przechodził — czyli nie chroni niczego. Jeżeli to celowo test charakteryzujący istniejące zachowanie, oznacz go `@pytest.mark.characterization`.",
+          "file": "tests/TaskStoreTests.cs",
+          "line": 13,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "tests/TaskStoreTests.cs::TaskStoreTests.PreviewWorksBecauseOldStoreStillAddsTasks",
+            "body_hash": "20ba216a94357bb3"
+          },
+          "fingerprint": "64e8901c67c2d47c"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G2.diff_coverage",
+      "status": "pass",
+      "duration_s": 14.478,
+      "warn_only": false,
+      "message": "1/37 nowych linii produkcyjnych pokrytych testami (3%)",
+      "facts": {
+        "coverage.diff_ratio": 0.02702702702702703,
+        "coverage.total_lines": 37,
+        "coverage.covered_lines": 1,
+        "coverage.tool_available": true
+      },
+      "findings": [],
+      "artifacts": []
+    },
+    {
+      "gate": "G2.test_sanity",
+      "status": "fail",
+      "duration_s": 2.849,
+      "warn_only": false,
+      "message": "3 znalezisk jakości w 5 nowych/zmienionych testach (3 blokujących)",
+      "facts": {
+        "sanity.checked_count": 5,
+        "sanity.finding_count": 3,
+        "sanity.blocking_count": 3,
+        "sanity.rule_ids": [
+          "test.constant_assertion",
+          "test.no_assertion"
+        ]
+      },
+      "findings": [
+        {
+          "gate": "G2.test_sanity",
+          "rule_id": "test.constant_assertion",
+          "severity": "high",
+          "title": "Test `priority feature is ready because true is true` asertuje stałą, nie zachowanie",
+          "failure_scenario": "Linia 33 w `priority feature is ready because true is true` to `expect(...).toBe` na wyrażeniu zawsze prawdziwym niezależnie od testowanego kodu (stała albo `x` porównane z `x`) — test przejdzie nawet po całkowitym usunięciu implementacji.",
+          "file": "frontend/tasks.test.ts",
+          "line": 33,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "expect(true).toBe(true)",
+            "line": 33,
+            "test": "frontend/tasks.test.ts::priority feature is ready because true is true"
+          },
+          "fingerprint": "19b85dcce2cafbc6"
+        },
+        {
+          "gate": "G2.test_sanity",
+          "rule_id": "test.no_assertion",
+          "severity": "high",
+          "title": "Test `priority feature has a test without an assertion` nie zawiera żadnej asercji",
+          "failure_scenario": "Test `priority feature has a test without an assertion` przejdzie niezależnie od tego, co zwróci testowany kod — nie ma w nim ani `expect(...)`, ani `assert(...)`. Zielony wynik niczego nie potwierdza.",
+          "file": "frontend/tasks.test.ts",
+          "line": 37,
+          "confidence": 1.0,
+          "evidence": {
+            "test": "frontend/tasks.test.ts::priority feature has a test without an assertion"
+          },
+          "fingerprint": "e23dad3e2b906450"
+        },
+        {
+          "gate": "G2.test_sanity",
+          "rule_id": "test.constant_assertion",
+          "severity": "high",
+          "title": "Test `PreviewWorksBecauseTrueIsTrue` asertuje stałą, nie zachowanie",
+          "failure_scenario": "Linia 9 w `PreviewWorksBecauseTrueIsTrue` to `Assert.True` na wyrażeniu, które jest zawsze prawdziwe niezależnie od testowanego kodu (stała albo `x == x`) — test przejdzie nawet po całkowitym usunięciu implementacji.",
+          "file": "tests/TaskStoreTests.cs",
+          "line": 9,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "Assert.True(true)",
+            "line": 9,
+            "test": "tests/TaskStoreTests.cs::TaskStoreTests.PreviewWorksBecauseTrueIsTrue"
+          },
+          "fingerprint": "0ff05b6dfd3b62e4"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G3.sast",
+      "status": "fail",
+      "duration_s": 2.145,
+      "warn_only": false,
+      "message": "2 znalezisk reguł „nigdy” w zmienionych liniach (2 krytycznych)",
+      "facts": {
+        "sast.finding_count": 2,
+        "sast.critical_count": 2,
+        "sast.rule_ids": [
+          "sast.no-eval-on-input-js",
+          "sast.no-tls-verify-disabled-cs"
+        ],
+        "sast.rule_packs": [
+          "core",
+          "csharp",
+          "ts"
+        ]
+      },
+      "findings": [
+        {
+          "gate": "G3.sast",
+          "rule_id": "sast.no-eval-on-input-js",
+          "severity": "critical",
+          "title": "Dynamiczne wykonanie kodu na danych z zewnątrz.",
+          "failure_scenario": "Wejście sterujące trafia do interpretera JS-a, więc wartość taka jak `fetch(...).then(r=>r.json())` podmieniona na złośliwy string wykona dowolny kod z uprawnieniami procesu (Node) albo sesji (przeglądarka). Osobna reguła od Pythona: `exec` w Node-owym `child_process` to zupełnie inna funkcja (uruchamia proces, nie interpretuje kodu) i nie ma prawa trafić w tę samą regułę, co realny `eval`/`new Function`.",
+          "file": "frontend/tasks.ts",
+          "line": 26,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "no-eval-on-input-js:frontend/tasks.ts",
+            "cwe": "CWE-95: Eval Injection",
+            "owasp": null
+          },
+          "fingerprint": "4028d9e8e8a0cebf"
+        },
+        {
+          "gate": "G3.sast",
+          "rule_id": "sast.no-tls-verify-disabled-cs",
+          "severity": "critical",
+          "title": "Wyłączona weryfikacja certyfikatu TLS.",
+          "failure_scenario": "Callback zawsze zwraca `true` niezależnie od błędów łańcucha certyfikatów, więc połączenie przyjmie dowolny certyfikat — atak man-in-the-middle jest niewidoczny dla aplikacji aż do wycieku albo podmiany danych.",
+          "file": "server/UnsafePreview.cs",
+          "line": 9,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "no-tls-verify-disabled-cs:server/UnsafePreview.cs",
+            "cwe": "CWE-295: Improper Certificate Validation",
+            "owasp": null
+          },
+          "fingerprint": "8123968b9546b785"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G3.sca",
+      "status": "fail",
+      "duration_s": 1.095,
+      "warn_only": false,
+      "message": "sprawdzono 2/2 nowych pakietów (npm), 1 z podatnościami",
+      "facts": {
+        "sca.checked_package_count": 2,
+        "sca.checked_ecosystems": [
+          "npm"
+        ],
+        "sca.vulnerable_package_count": 1,
+        "sca.unresolved_package_count": 0,
+        "sca.finding_count": 5,
+        "sca.tool_available": true
+      },
+      "findings": [
+        {
+          "gate": "G3.sca",
+          "rule_id": "sca.1106913",
+          "severity": "high",
+          "title": "lodash: Command Injection in lodash",
+          "failure_scenario": "Nowo dodany pakiet npm `lodash` ma znaną podatność high (Command Injection in lodash, https://github.com/advisories/GHSA-35jh-r3h4-6jhm). To dług wnoszony do repozytorium w tym PR-ze, nie coś, co już w nim było — instalacja tej wersji naraża produkcję na lukę, która ma już publiczny identyfikator.",
+          "file": "package.json",
+          "line": null,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "lodash:1106913",
+            "package": "lodash",
+            "advisory_severity": "high",
+            "url": "https://github.com/advisories/GHSA-35jh-r3h4-6jhm"
+          },
+          "fingerprint": "47578f5a7a350bb1"
+        },
+        {
+          "gate": "G3.sca",
+          "rule_id": "sca.1108258",
+          "severity": "high",
+          "title": "lodash: Regular Expression Denial of Service (ReDoS) in lodash",
+          "failure_scenario": "Nowo dodany pakiet npm `lodash` ma znaną podatność moderate (Regular Expression Denial of Service (ReDoS) in lodash, https://github.com/advisories/GHSA-29mw-wpgm-hmr9). To dług wnoszony do repozytorium w tym PR-ze, nie coś, co już w nim było — instalacja tej wersji naraża produkcję na lukę, która ma już publiczny identyfikator.",
+          "file": "package.json",
+          "line": null,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "lodash:1108258",
+            "package": "lodash",
+            "advisory_severity": "moderate",
+            "url": "https://github.com/advisories/GHSA-29mw-wpgm-hmr9"
+          },
+          "fingerprint": "b43f6e5e8e5eceed"
+        },
+        {
+          "gate": "G3.sca",
+          "rule_id": "sca.1115806",
+          "severity": "high",
+          "title": "lodash: lodash vulnerable to Code Injection via `_.template` imports key names",
+          "failure_scenario": "Nowo dodany pakiet npm `lodash` ma znaną podatność high (lodash vulnerable to Code Injection via `_.template` imports key names, https://github.com/advisories/GHSA-r5fr-rjxr-66jc). To dług wnoszony do repozytorium w tym PR-ze, nie coś, co już w nim było — instalacja tej wersji naraża produkcję na lukę, która ma już publiczny identyfikator.",
+          "file": "package.json",
+          "line": null,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "lodash:1115806",
+            "package": "lodash",
+            "advisory_severity": "high",
+            "url": "https://github.com/advisories/GHSA-r5fr-rjxr-66jc"
+          },
+          "fingerprint": "cac303fea1e411e2"
+        },
+        {
+          "gate": "G3.sca",
+          "rule_id": "sca.1115810",
+          "severity": "high",
+          "title": "lodash: lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`",
+          "failure_scenario": "Nowo dodany pakiet npm `lodash` ma znaną podatność moderate (lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`, https://github.com/advisories/GHSA-f23m-r3pf-42rh). To dług wnoszony do repozytorium w tym PR-ze, nie coś, co już w nim było — instalacja tej wersji naraża produkcję na lukę, która ma już publiczny identyfikator.",
+          "file": "package.json",
+          "line": null,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "lodash:1115810",
+            "package": "lodash",
+            "advisory_severity": "moderate",
+            "url": "https://github.com/advisories/GHSA-f23m-r3pf-42rh"
+          },
+          "fingerprint": "5d333388584edbc2"
+        },
+        {
+          "gate": "G3.sca",
+          "rule_id": "sca.1120370",
+          "severity": "high",
+          "title": "lodash: Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions",
+          "failure_scenario": "Nowo dodany pakiet npm `lodash` ma znaną podatność moderate (Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions, https://github.com/advisories/GHSA-xxjr-mmjv-4gpg). To dług wnoszony do repozytorium w tym PR-ze, nie coś, co już w nim było — instalacja tej wersji naraża produkcję na lukę, która ma już publiczny identyfikator.",
+          "file": "package.json",
+          "line": null,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "lodash:1120370",
+            "package": "lodash",
+            "advisory_severity": "moderate",
+            "url": "https://github.com/advisories/GHSA-xxjr-mmjv-4gpg"
+          },
+          "fingerprint": "f4b48d6eadb588c6"
+        }
+      ],
+      "artifacts": []
+    },
+    {
+      "gate": "G3.secrets",
+      "status": "fail",
+      "duration_s": 0.365,
+      "warn_only": false,
+      "message": "1 sekretów w zmienionych plikach, 0 zastanych",
+      "facts": {
+        "secrets.found": true,
+        "secrets.found_in_diff": true,
+        "secrets.count": 1,
+        "secrets.count_in_diff": 1,
+        "secrets.unresolved_paths": 0,
+        "secrets.tool_version": "8.21.2"
+      },
+      "findings": [
+        {
+          "gate": "G3.secrets",
+          "rule_id": "secrets.found_in_diff",
+          "severity": "critical",
+          "title": "Uncovered a GitHub Personal Access Token, potentially leading to unauthorized repository access and sensitive content exposure. w `experiments/synthetic-secret.env`",
+          "failure_scenario": "Sekret trafia do historii gita w tym PR. Od momentu merge'a jest dostępny dla każdego z dostępem do repozytorium i dla każdego klona — rotacja klucza jest jedynym skutecznym środkiem zaradczym, samo usunięcie linii nie wystarczy.",
+          "file": "experiments/synthetic-secret.env",
+          "line": 3,
+          "confidence": 1.0,
+          "evidence": {
+            "snippet": "github-pat:REDA…(8 znaków)",
+            "gitleaks_rule": "github-pat",
+            "redacted": "REDA…(8 znaków)",
+            "entropy": 4.821928,
+            "tool_fingerprint": "/tmp/gatekeeper-wt-XXXXXXXX/wt/experiments/synthetic-secret.env:github-pat:3"
+          },
+          "fingerprint": "f31efd709b8ba59a"
+        }
+      ],
+      "artifacts": []
+    }
+  ],
+  "not_checked": [
+    "testy mutacyjne, flaky-testy, contract-diff (G2) — kamień 4, w toku (G2.test_sanity i G2.diff_coverage zbudowane)",
+    "G2.cross_verify (nowe testy przeciw kodowi sprzed zmiany) — Python i C#; adapter TS/JS (vitest/jest) w planie",
+    "IaC i licencje (G3) — kamień 3 w toku; SCA sam w sobie obejmuje PyPI/npm/NuGet, poza tym zakresem zależności to jeszcze dług",
+    "CRAP (złożoność × brak pokrycia) — wymaga G2.diff_coverage bez `warn_only`; G1.complexity mierzy samą złożoność już dziś (PLAN-G1-complexity.md §8)",
+    "review semantyczny LLM (G4) — kamień 5",
+    "gotowość wdrożeniowa: migracje, rollback, obserwowalność (G6) — kamień 6",
+    "izolacja Bubblewrap: prywatny system plików i PID; sieć testów odcięta, sieć dostępna wyłącznie narzędziom żądającym jej jawnie"
+  ]
+}

@@ -173,7 +173,16 @@ class CoverageReport(Protocol):
 class TestToolchain(Protocol):
     """Discovery + jakość testów + cross-verify + producent raportu pokrycia
     dla jednego języka. Jedyny protokół poziomu 2, który sam uruchamia
-    podprocesy (test runner ocenianego repo), nie tylko klasyfikuje wynik."""
+    podprocesy (test runner ocenianego repo), nie tylko klasyfikuje wynik.
+
+    Toolchain obsługujący więcej niż jedną wartość `ChangedFile.language`
+    deklaruje dodatkowo `languages: tuple[str, ...]` — tak robi pack TS/JS,
+    gdzie jeden `vitest`/`jest` uruchamia testy obu języków naraz i rozbicie
+    na dwa toolchainy oznaczałoby dwa przebiegi tego samego runnera oraz
+    dwa raporty pokrycia zamiast jednego. Bramki G2 czytają to przez
+    `toolchain_languages()` poniżej, więc `language` (l. poj.) zostaje
+    wystarczające dla toolchaina jednojęzycznego (python, csharp).
+    """
 
     language: str
 
@@ -190,6 +199,22 @@ class TestToolchain(Protocol):
     def produce_coverage_report(
         self, change: ChangeContext, config: dict[str, Any]
     ) -> CoverageReport: ...
+
+
+def toolchain_languages(toolchain: Any) -> tuple[str, ...]:
+    """Wartości `ChangedFile.language`, które ten toolchain obsługuje.
+
+    `languages` (l. mn.) ma pierwszeństwo nad `language` — ten drugi zostaje
+    kontraktem minimalnym, bo `TestToolchain.language` jest też etykietą
+    toolchaina w komunikatach. Zwraca pustą krotkę, gdy nie ma ani jednego:
+    bramka G2 nie znajdzie wtedy żadnego pliku produkcyjnego dla tego
+    toolchaina i po prostu go pominie, zamiast wywrócić cały przebieg.
+    """
+    plural = getattr(toolchain, "languages", None)
+    if plural:
+        return tuple(plural)
+    single = getattr(toolchain, "language", None)
+    return (single,) if single else ()
 
 
 # ------------------------------------------------------------------- G3.sast

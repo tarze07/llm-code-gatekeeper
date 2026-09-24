@@ -47,6 +47,9 @@ jobs:
       # - run: pip install --quiet "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=ts"
       # - run: pip install --quiet "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=csharp"
 
+      - name: Izolacja procesów
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       - name: Instalacja bramy
         # CLI (`gatekeeper`) żyje w llm-code-gatekeeper-core, instalowany tu
         # tranzytywnie jako zależność tego pack'a — nie ma osobnej linii.

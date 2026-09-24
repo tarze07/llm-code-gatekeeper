@@ -16,6 +16,14 @@ dev = [
     "pytest>=8.0",
 ]
 
+# Binaria wołane jako podprocesy przez `G2.diff_coverage` (`core.diffcover`),
+# nie biblioteki importowane w kodzie — ta sama konwencja co `gates` w
+# python-packu. Narzędzia npm (tsc/eslint/vitest/jest) tu nie występują:
+# instaluje je oceniane repo, nie pip.
+gates = [
+    "diff-cover>=8.0",
+]
+
 [project.entry-points."gatekeeper.static_checkers"]
 csharp = "gatekeeper_csharp.adapters.dotnet:CsharpStaticChecker"
 

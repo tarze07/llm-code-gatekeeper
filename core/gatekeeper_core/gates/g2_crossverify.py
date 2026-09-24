@@ -9,10 +9,11 @@ kodu z agenta: zielony zestaw testów, który niczego nie dowodzi.
 
 Ta bramka sama nie ma żadnej logiki językowej — jest agregatorem poziomu 1
 (`core/plugins.py`): pętla po zainstalowanych `TestToolchain` (grupa
-`gatekeeper.test_toolchains`; dziś tylko `testing.toolchain.PythonTestToolchain`
-— TS/JS i C# nie mają jeszcze odpowiednika, patrz README/PLAN.md). Brak
-zainstalowanego toolchaina to `skipped`, nie błąd — bramka nie ma czego
-dowodzić, jeśli żaden dostawca nie umie uruchomić testów danego języka.
+`gatekeeper.test_toolchains`; dostarczają go dziś wszystkie trzy pack'i:
+Python (`ast` + pytest), C# (Roslyn + `dotnet test`) i TS/JS (ESTree +
+vitest/jest)). Brak zainstalowanego toolchaina dla danego języka to
+`skipped`, nie błąd — bramka nie ma czego dowodzić, jeśli żaden dostawca
+nie umie uruchomić testów tego języka.
 
 Trzy rzeczy decydują o tym, czy ta bramka przeżyje w zespole:
 
@@ -43,6 +44,7 @@ from ..core.plugins import (
     TestToolchain,
     ToolchainIsolationBroken,
     ToolchainUnavailable,
+    toolchain_languages,
 )
 from . import Gate, register
 
@@ -96,11 +98,11 @@ class CrossVerify(Gate):
         touched_production = False
 
         for toolchain in toolchains:
-            language = getattr(toolchain, "language", None)
+            languages = toolchain_languages(toolchain)
             production = [
                 f
                 for f in change.files
-                if not f.test and not f.generated and f.status != "D" and f.language == language
+                if not f.test and not f.generated and f.status != "D" and f.language in languages
             ]
             if not production:
                 # Zmiana bez kodu produkcyjnego w tym języku: stary i nowy kod
@@ -186,7 +188,10 @@ class CrossVerify(Gate):
             )
 
         return self.result(
-            status="fail" if facts["tests.pass_on_pre_change_code"] else "pass",
+            status=(
+                "error" if facts["tests.weak_evidence"]
+                else "fail" if facts["tests.pass_on_pre_change_code"] else "pass"
+            ),
             duration_s=time.monotonic() - started,
             facts=facts,
             findings=findings,

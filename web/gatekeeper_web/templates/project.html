@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% import "_makra.html" as m %}
+{% block tytul %}{{ project.name }} — projekt{% endblock %}
+
+{% block tresc %}
+<h1>{{ project.name }}</h1>
+<p class="podtytul">
+  <span class="mono">{{ project.slug }}</span>
+  {% if project.runnable %}
+    · <span class="znacznik znacznik--pass">gotowy do uruchamiania</span>
+  {% else %}
+    · <span class="znacznik znacznik--neutralny">tylko przeglądanie raportów</span>
+  {% endif %}
+</p>
+
+{% if blad %}<div class="blad" role="alert">{{ blad }}</div>{% endif %}
+
+<div class="karta">
+  <h2>Ustawienia</h2>
+  <form method="post" action="/projekty/{{ project.id }}/ustawienia" class="filtry">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div>
+      <label for="name">Nazwa</label>
+      <input id="name" name="name" value="{{ project.name }}" required maxlength="200">
+    </div>
+    <div>
+      <label for="repo_path">Ścieżka lokalnego repozytorium</label>
+      <input id="repo_path" name="repo_path" value="{{ project.repo_path or '' }}"
+             maxlength="4096" size="46" autocomplete="off">
+    </div>
+    <div>
+      <label for="policy_profile_id">Profil polityki</label>
+      <select id="policy_profile_id" name="policy_profile_id">
+        <option value="">— brak —</option>
+        {% for p in profiles %}
+          <option value="{{ p.id }}" {% if project.policy_profile_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="glowny" type="submit">Zapisz</button>
+  </form>
+  <p class="brak">
+    Repozytorium musi leżeć w katalogu dozwolonym dla panelu
+    ({% for root in allowed_roots %}<code>{{ root }}</code>{% if not loop.last %}, {% endif %}{% endfor %})
+    i być korzeniem repozytorium Git. Ścieżka jest sprawdzana także przy każdym
+    uruchomieniu — katalog mógł się w międzyczasie zmienić.
+  </p>
+</div>
+
+<div class="karta">
+  <h2>Polityka</h2>
+  {% if profile %}
+    <p>
+      Profil <a href="/polityki/{{ profile.id }}">{{ profile.name }}</a>,
+      {% if active_revision %}
+        aktywna wersja <strong>{{ active_revision.label }}</strong>
+        (hash <code>{{ active_revision.content_hash[:16] }}</code>,
+        aktywowana {{ active_revision.activated_at|czas }}).
+      {% else %}
+        <span class="brak">brak aktywnej wersji — panel nie uruchomi kontroli bez kryteriów oceny.</span>
+      {% endif %}
+    </p>
+  {% else %}
+    <p class="brak">Profil nieprzypisany. <a href="/polityki">Utwórz albo wybierz profil</a>.</p>
+  {% endif %}
+</div>
+
+<div class="karta">
+  <h2>Wersje Git</h2>
+  {% if refs_error %}
+    <div class="blad">{{ refs_error }}</div>
+  {% elif refs %}
+    <p class="brak">Najnowsze {{ refs|length }} referencji z repozytorium.</p>
+    <div class="przewijana">
+      <table>
+        <thead><tr><th>Nazwa</th><th>Rodzaj</th><th>SHA</th><th>Opis commita</th></tr></thead>
+        <tbody>
+          {% for ref in refs %}
+            <tr>
+              <td class="mono">{{ ref.name }}</td>
+              <td>{{ ref.kind }}</td>
+              <td class="mono">{{ ref.sha|sha }}</td>
+              <td>{{ ref.subject }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p><a href="/nowa-kontrola?projekt={{ project.id }}">Uruchom kontrolę na tym projekcie →</a></p>
+  {% else %}
+    <p class="brak">Brak zarejestrowanego repozytorium — nie ma czego pokazać.</p>
+  {% endif %}
+</div>
+
+<div class="karta przewijana">
+  <h2>Ostatnie zadania</h2>
+  {% if jobs %}
+    <table>
+      <thead><tr><th>Zadanie</th><th>Stan</th><th>Zlecono</th><th>Wynik</th></tr></thead>
+      <tbody>
+        {% for job in jobs %}
+          <tr>
+            <td><a href="/zadania/{{ job.id }}">#{{ job.id }}</a></td>
+            <td>{{ m.stan_zadania(job) }}</td>
+            <td>{{ job.created_at|czas }}</td>
+            <td>
+              {% if job.has_result %}
+                <a href="/projekty/{{ project.id }}/przebiegi/{{ job.run_id }}">{{ job.run_id }}</a>
+              {% else %}
+                <span class="brak">brak raportu</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="brak">Żadnego zadania jeszcze nie zlecono.</p>
+  {% endif %}
+</div>
+
+<div class="karta przewijana">
+  <h2>Ostatnie przebiegi</h2>
+  {% if runs %}
+    <table>
+      <thead><tr><th>Decyzja</th><th>Przebieg</th><th>Znaleziska</th><th>Start</th><th>Źródło</th></tr></thead>
+      <tbody>
+        {% for row in runs %}
+          <tr>
+            <td>{{ m.decyzja(row.verdict) }}</td>
+            <td class="mono"><a href="/projekty/{{ project.id }}/przebiegi/{{ row.run_id }}">{{ row.run_id }}</a></td>
+            <td>{{ row.finding_count }}</td>
+            <td>{{ row.started_at|czas }}</td>
+            <td>{{ 'zaimportowany' if row.origin == 'imported' else 'z silnika' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="brak">Brak przebiegów.</p>
+  {% endif %}
+</div>
+{% endblock %}

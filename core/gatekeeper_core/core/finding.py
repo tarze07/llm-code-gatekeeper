@@ -133,7 +133,7 @@ GateStatus = Literal["pass", "fail", "error", "skipped"]
 class GateResult:
     gate: str
     status: GateStatus
-    duration_s: float = 0.0
+    duration_s: float | None = 0.0
     findings: list[Finding] = field(default_factory=list)
     facts: dict[str, Any] = field(default_factory=dict)
     artifacts: list[Path] = field(default_factory=list)
@@ -148,7 +148,7 @@ class GateResult:
         return {
             "gate": self.gate,
             "status": self.status,
-            "duration_s": round(self.duration_s, 3),
+            "duration_s": round(self.duration_s, 3) if self.duration_s is not None else None,
             "warn_only": self.warn_only,
             "message": self.message,
             "facts": _jsonable(self.facts),
@@ -215,7 +215,7 @@ class RunResult:
     gate_results: list[GateResult]
     decision: Decision
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    duration_s: float = 0.0
+    duration_s: float | None = 0.0
     policy_version: int = 0
     not_checked: list[str] = field(default_factory=list)
 
@@ -237,7 +237,7 @@ class RunResult:
             "base_sha": self.base_sha,
             "head_sha": self.head_sha,
             "started_at": self.started_at.isoformat(),
-            "duration_s": round(self.duration_s, 3),
+            "duration_s": round(self.duration_s, 3) if self.duration_s is not None else None,
             "policy_version": self.policy_version,
             "decision": self.decision.to_dict(),
             "gates": [g.to_dict() for g in self.gate_results],

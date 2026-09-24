@@ -24,19 +24,18 @@ jednolinijkowe.
 from __future__ import annotations
 
 import json
-import os
 import re
-import subprocess
 import tempfile
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from gatekeeper_core.adapters.base import relative_to_repo
 from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.core.plugins import ComplexityOutcome, MethodComplexity
+from gatekeeper_core.core.runner import Sandbox, SandboxPolicy, SandboxUnavailable
 
+from ..node import node_env
 from .linters import ESLINT, resolve_bin
 
 _MESSAGE_RE = re.compile(r"^(?P<descriptor>.+?) has a complexity of (?P<complexity>\d+)\.")
@@ -50,24 +49,6 @@ class _TsMethod:
     end_lineno: int
     complexity: int
     nloc: int = 0
-
-
-@lru_cache(maxsize=1)
-def _global_node_modules() -> str | None:
-    """`npm root -g` — dołączane do `NODE_PATH` procesu eslinta, żeby
-    `require("@typescript-eslint/parser")` (specyfikator „goły", nie
-    ścieżka bezwzględna — resolucja przez `exports` w `package.json`
-    pakietu jest wtedy tą samą ścieżką co przy zwykłej instalacji lokalnej,
-    bez odtwarzania jej ręcznie) w wygenerowanym configu w ogóle coś
-    znalazł — Node nie przeszukuje globalnego `node_modules` domyślnie."""
-    try:
-        result = subprocess.run(
-            ["npm", "root", "-g"], capture_output=True, text=True, timeout=15, check=True
-        )
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return None
-    root = result.stdout.strip()
-    return root or None
 
 
 _ESLINT_CONFIG = """module.exports = [
@@ -183,16 +164,13 @@ class TsComplexityAnalyzer:
             return ComplexityOutcome(methods=[], facts=facts)
 
         eslint_bin = resolve_bin(change.repo, ESLINT)
-        env = dict(os.environ)
-        global_modules = _global_node_modules()
-        if global_modules:
-            previous = env.get("NODE_PATH")
-            env["NODE_PATH"] = (
-                f"{global_modules}{os.pathsep}{previous}" if previous else global_modules
-            )
+        # `NODE_PATH` z globalnym `node_modules` — żeby `require(
+        # "@typescript-eslint/parser")` w wygenerowanym configu w ogóle coś
+        # znalazł (Node nie przeszukuje globalnego katalogu domyślnie).
+        env = node_env()
 
-        with tempfile.TemporaryDirectory(prefix="gatekeeper-complexity-") as tmp:
-            config_path = Path(tmp) / "eslint.config.js"
+        with tempfile.TemporaryDirectory(dir=change.repo, prefix="gatekeeper-complexity-") as tmp:
+            config_path = Path(tmp) / "eslint.config.cjs"
             config_path.write_text(_ESLINT_CONFIG, encoding="utf-8")
             command = [
                 eslint_bin,
@@ -204,23 +182,21 @@ class TsComplexityAnalyzer:
                 *files,
             ]
             try:
-                result = subprocess.run(
-                    command,
-                    cwd=change.repo,
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    timeout=budget_s,
-                    check=False,
+                sandbox = Sandbox(
+                    SandboxPolicy(
+                        memory_mb=None,
+                        read_only_paths=tuple(
+                            Path(p) for p in env.get("NODE_PATH", "").split(":") if p
+                        ),
+                    )
                 )
-            except FileNotFoundError:
+                result = sandbox.run(command, cwd=change.repo, env=env, timeout_s=budget_s)
+            except SandboxUnavailable as exc:
                 facts["complexity.eslint_available"] = False
+                return ComplexityOutcome(methods=[], facts=facts, error=str(exc))
+            if not result.ok and (result.timed_out or result.returncode != 1):
                 return ComplexityOutcome(
-                    methods=[], facts=facts, error="eslint nie jest zainstalowany"
-                )
-            except subprocess.TimeoutExpired:
-                return ComplexityOutcome(
-                    methods=[], facts=facts, error=f"eslint przekroczył limit {budget_s:g}s"
+                    methods=[], facts=facts, error=f"eslint: {result.tail() or 'timeout'}"
                 )
 
         methods: list[MethodComplexity] = []

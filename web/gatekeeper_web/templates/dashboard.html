@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% import "_makra.html" as m %}
+{% block tytul %}Pulpit — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Pulpit</h1>
+<p class="podtytul">
+  Zapisane przebiegi i ich decyzje. Zakończony przebieg z decyzją BLOCK jest
+  poprawnie wykonanym sprawdzeniem, a nie awarią panelu.
+</p>
+
+<div class="siatka">
+  <div class="kafel">
+    <div class="liczba">{{ total }}</div>
+    <div class="opis">zapisanych przebiegów</div>
+  </div>
+  <div class="kafel">
+    <div class="liczba">{{ counts.get('BLOCK', 0) }}</div>
+    <div class="opis">BLOCK — zmiana zatrzymana</div>
+  </div>
+  <div class="kafel">
+    <div class="liczba">{{ counts.get('PASS-WITH-REVIEW', 0) }}</div>
+    <div class="opis">PASS-WITH-REVIEW — do człowieka</div>
+  </div>
+  <div class="kafel">
+    <div class="liczba">{{ counts.get('PASS', 0) }}</div>
+    <div class="opis">PASS — bez ręcznego review</div>
+  </div>
+</div>
+
+{% if blockers %}
+  <div class="uwaga" role="status">
+    <strong>Problemy środowiska:</strong>
+    <ul>{% for problem in blockers %}<li>{{ problem }}</li>{% endfor %}</ul>
+    <p>Szczegóły w zakładce <a href="/srodowisko">Środowisko</a>.</p>
+  </div>
+{% endif %}
+
+<h2>Kolejka</h2>
+<div class="karta">
+  {% if not supervisor_active %}
+    <p class="brak">
+      Nadzorca kolejki nie działa — zlecone zadania poczekają na jego start.
+    </p>
+  {% endif %}
+  {% if aktywne %}
+    <ul>
+      {% for job in aktywne %}
+        <li>
+          <a href="/zadania/{{ job.id }}">Zadanie #{{ job.id }}</a>
+          — {{ m.stan_zadania(job) }} · zlecone {{ job.created_at|czas }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="brak">Nic nie czeka w kolejce.</p>
+  {% endif %}
+  <p><a href="/nowa-kontrola">Uruchom nową kontrolę →</a></p>
+</div>
+
+{% if not projects %}
+  <div class="karta">
+    <h2>Zacznij od projektu</h2>
+    <p>
+      Panel przechowuje raporty w projektach. Załóż projekt w zakładce
+      <a href="/projekty">Projekty</a>, a potem zaimportuj raport
+      z <code>gatekeeper run --format json</code> przez
+      <a href="/import">Import raportu</a>.
+    </p>
+  </div>
+{% endif %}
+
+<h2>Ostatnie przebiegi</h2>
+{% if recent %}
+  <div class="karta przewijana">
+    <table>
+      <caption class="brak">Dziesięć ostatnich zapisanych przebiegów</caption>
+      <thead>
+        <tr>
+          <th scope="col">Decyzja</th>
+          <th scope="col">Projekt</th>
+          <th scope="col">Zakres</th>
+          <th scope="col">Znaleziska</th>
+          <th scope="col">Bramki</th>
+          <th scope="col">Start</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in recent %}
+          <tr>
+            <td>{{ m.decyzja(row.verdict) }}</td>
+            <td>{{ row.project_name }}</td>
+            <td class="mono">
+              <a href="/projekty/{{ row.project_id }}/przebiegi/{{ row.run_id }}">{{ row.run_id }}</a><br>
+              {{ row.base_sha|sha }} → {{ row.head_sha|sha }}
+            </td>
+            <td>{{ row.finding_count }}</td>
+            <td>
+              {{ row.gate_count }}
+              {% if row.gate_error_count %}
+                <span class="znacznik znacznik--review">{{ row.gate_error_count }}× błąd</span>
+              {% endif %}
+            </td>
+            <td>{{ row.started_at|czas }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="karta"><p class="brak">Brak zapisanych przebiegów.</p></div>
+{% endif %}
+
+{% if audit %}
+  <h2>Ślad działań</h2>
+  <div class="karta">
+    <ul>
+      {% for event in audit %}
+        <li><code>{{ event.kind }}</code> · {{ event.at|czas }}{% if event.detail %} · {{ event.detail }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+{% endblock %}
