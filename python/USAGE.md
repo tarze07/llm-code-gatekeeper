@@ -287,7 +287,7 @@ Reguły stylistyczne ruffa (import order, formatowanie) i eslinta poza rdzeniowy
 
 ### `G3.sast` — reguły „nigdy" (semgrep)
 
-Zestaw reguł w `rules/semgrep/never.yaml`: wzorce, które **nie mają poprawnego zastosowania w tym repo**. Semgrep sam dobiera język per plik, więc jedna bramka pokrywa Pythona, TS/JS i C# naraz — bez osobnego adaptera na język:
+Reguły „nigdy”: wzorce, które **nie mają poprawnego zastosowania w tym repo**. Każdy pack dokłada własny plik reguł przez entry point `gatekeeper.semgrep_rule_packs` (`gatekeeper_python/rules/semgrep/python.yaml`, `gatekeeper_ts/rules/semgrep/ts.yaml`, `gatekeeper_csharp/rules/semgrep/csharp.yaml`), a jedna bramka uruchamia semgrep na wszystkich zainstalowanych naraz:
 
 | Język | Czego pilnuje |
 |---|---|
@@ -704,9 +704,9 @@ Tak dla G0–G3, z jednym świadomym wyjątkiem — i warto to wiedzieć zawczas
 | `G1.deps` | tak — czyta `package.json`, pyta rejestr npm | tak — czyta `.csproj`/`Directory.Packages.props`/`packages.config`, pyta rejestr NuGet |
 | `G1.static` | tak — `tsc --noEmit` (wymaga `tsconfig.json`) + `eslint` (wymaga configu) | tak — `dotnet build` (kompilator *jest* kontrolą typów w trybie strict) |
 | `G3.secrets` | tak — gitleaks jest niezależny od języka | tak — gitleaks jest niezależny od języka |
-| `G3.sast` | tak — reguły „nigdy” dla eval/shell-injection/TLS (`rules/semgrep/never.yaml`) | tak — reguły „nigdy” dla TLS/SQLi/shell-injection/deserializacji |
+| `G3.sast` | tak — reguły „nigdy” dla eval/shell-injection/TLS (`gatekeeper_ts/rules/semgrep/ts.yaml`) | tak — reguły „nigdy” dla TLS/SQLi/shell-injection/deserializacji |
 | `G3.sca` | tak — `npm audit` na nowo dodanych zależnościach | tak — `dotnet list package --vulnerable` na nowo dodanych zależnościach |
-| `G2.cross_verify` | **nie** — dziś tylko Python/pytest. Adapter dla vitest/jest w planie | **nie** — dziś tylko Python/pytest. Adapter dla `dotnet test` w planie |
+| `G2.cross_verify` | tak — vitest albo jest (`ts/PLAN-G2.md`) | tak — `dotnet test`, wymaga osobno zainstalowanego `gatekeeper-cs-helper` |
 
 `G1.static` pomija język cicho (status `pass`, bez wołania narzędzia), gdy w repo brakuje configu, którego to narzędzie wymaga — `tsconfig.json` dla tsc, `.eslintrc*`/`eslint.config.*` dla eslinta, `.csproj` dla `dotnet build`. To nie jest defekt, tylko brak przedmiotu do sprawdzenia; fakty `static.tsconfig_found`/`static.eslint_config_found`/`static.csproj_found` mówią wprost, co się stało.
 
