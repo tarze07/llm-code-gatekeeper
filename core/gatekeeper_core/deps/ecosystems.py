@@ -71,7 +71,7 @@ class PyPIEcosystem:
         # WSZYSTKICH nowych zależności naraz i gasi dowód na resztę.
         for dep in deps:
             name = manifests.normalize(self.ecosystem, dep.name)
-            with tempfile.TemporaryDirectory(prefix="gatekeeper-sca-") as tmp:
+            with tempfile.TemporaryDirectory(dir=repo, prefix="gatekeeper-sca-") as tmp:
                 requirements = Path(tmp) / "requirements.txt"
                 requirements.write_text((dep.raw or dep.name) + "\n", encoding="utf-8")
                 try:

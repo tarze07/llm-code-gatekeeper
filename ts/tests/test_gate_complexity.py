@@ -35,7 +35,7 @@ def test_funkcja_powyzej_progu_blokuje(repo):
 
     result = ComplexityGuard({}).run(change)
 
-    assert result.status == "fail"
+    assert result.status == "fail", result.message
     assert result.facts["complexity.over_threshold_count"] == 1
     assert result.facts["complexity.max"] > 10
     assert result.findings[0].rule_id == "complexity.too_high"
@@ -50,5 +50,5 @@ def test_prosta_funkcja_przechodzi(repo):
 
     result = ComplexityGuard({}).run(change)
 
-    assert result.status == "pass"
+    assert result.status == "pass", result.message
     assert result.findings == []

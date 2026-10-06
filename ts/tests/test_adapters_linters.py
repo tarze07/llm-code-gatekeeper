@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from gatekeeper_core.adapters.base import ToolFailed
 from gatekeeper_core.core.finding import Severity
 
 from gatekeeper_ts.adapters.linters import (
@@ -102,3 +104,13 @@ def test_eslint_blad_parsera_ma_rule_id_none():
 def test_pusty_raport_eslint_nie_wywraca_adaptera():
     assert parse_eslint("", REPO, "G1.static") == []
     assert parse_eslint("[]", REPO, "G1.static") == []
+
+
+def test_smieciowy_output_eslint_jest_bledem_nie_cichym_pass():
+    """REVIEW.md §5 P1: zepsuty eslint (urwany output, traceback na stdout
+    zamiast JSON-a) nie ma prawa wyglądać jak czysty przebieg — to brak
+    dowodu, więc `ToolFailed`, nie `[]`."""
+    with pytest.raises(ToolFailed):
+        parse_eslint("to nie jest JSON", REPO, "G1.static")
+    with pytest.raises(ToolFailed):
+        parse_eslint("{urwany json...", REPO, "G1.static")

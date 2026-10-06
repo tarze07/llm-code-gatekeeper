@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% import "_makra.html" as m %}
+{% block tytul %}Przebieg {{ run.run_id }} — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+{% if komunikat %}<div class="sukces" role="status">{{ komunikat }}</div>{% endif %}
+
+<h1>Przebieg <span class="mono">{{ run.run_id }}</span></h1>
+<p class="podtytul">
+  Projekt <strong>{{ run.project_name }}</strong> ·
+  <span class="mono">{{ run.base_sha|sha }} → {{ run.head_sha|sha }}</span> ·
+  start {{ run.started_at|czas }} · {{ run.duration_s|sekundy }}
+</p>
+
+{# Trzy poziomy, których mylenie jest najczęstszym błędem prezentacji wyniku:
+   czy praca się wykonała, co oddały pojedyncze bramki, jaka jest decyzja. #}
+<div class="siatka">
+  <div class="kafel">
+    <div class="opis">Zadanie</div>
+    <div class="liczba" style="font-size:1.2rem">{{ run.job_state_label }}</div>
+    <div class="opis">
+      {% if run.origin == 'imported' %}
+        raport wczytany do panelu; sprawdzenie wykonał <code>gatekeeper run</code>
+      {% else %}
+        sprawdzenie wykonane przez panel
+      {% endif %}
+    </div>
+  </div>
+  <div class="kafel">
+    <div class="opis">Bramki</div>
+    <div class="liczba" style="font-size:1.2rem">
+      {{ run.gates|length }} uruchomionych
+    </div>
+    <div class="opis">
+      {% for status, ile in run.gate_status_counts.items() %}{{ status }}: {{ ile }}{% if not loop.last %} · {% endif %}{% endfor %}
+    </div>
+  </div>
+  <div class="kafel">
+    <div class="opis">Polityka</div>
+    <div class="liczba" style="font-size:1.2rem">{{ m.decyzja(run.verdict) }}</div>
+    <div class="opis">
+      {{ run.verdict_label }}{% if run.policy_version %} · wersja polityki {{ run.policy_version }}{% endif %}
+    </div>
+  </div>
+  <div class="kafel">
+    <div class="opis">Znaleziska</div>
+    <div class="liczba">{{ run.findings|length }}</div>
+    <div class="opis">
+      {% for waga, ile in run.severity_counts.items() %}{{ waga }}: {{ ile }}{% if not loop.last %} · {% endif %}{% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="karta">
+  <h2>Pobierz raport</h2>
+  <p>
+    <a href="/api/v1/projects/{{ run.project_id }}/runs/{{ run.run_id }}/report?format=html">HTML (samodzielny plik)</a> ·
+    <a href="/api/v1/projects/{{ run.project_id }}/runs/{{ run.run_id }}/report?format=markdown">Markdown</a> ·
+    <a href="/api/v1/projects/{{ run.project_id }}/runs/{{ run.run_id }}/report?format=json">JSON</a>
+  </p>
+  <p class="brak">
+    Eksport zawiera wszystkie {{ run.findings|length }} znalezisk. Limit dziesięciu
+    znalezisk obowiązuje w komentarzu do PR, nie tutaj.
+    Format źródłowy: {{ row.format_version }}, zapisano {{ row.stored_at|czas }}{% if row.source_label %} z pliku <code>{{ row.source_label }}</code>{% endif %}.
+  </p>
+</div>
+
+{% if run.conflicting_gates %}
+  <h2>Co wymaga wyjaśnienia</h2>
+  {% for gate in run.conflicting_gates %}
+    <div class="uwaga">
+      <strong>{{ gate.gate }}</strong> — {{ m.status_bramki(gate) }}
+      {% for note in gate.notes %}<p>{{ note }}</p>{% endfor %}
+      {% if gate.blocking_reasons %}
+        <ul>
+          {% for r in gate.blocking_reasons %}
+            <li>
+              <code>{{ r.rule }}</code> — {{ r.detail }}
+              {% if r.fact %} <strong>({{ r.fact.display }}{% if r.fact.detail %}, {{ r.fact.detail }}{% endif %})</strong>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% endif %}
+
+<h2>Dlaczego taka decyzja</h2>
+<div class="karta">
+  {% if run.reasons %}
+    <h3>Powody decyzji ({{ run.reasons|length }})</h3>
+    <ul>{% for r in run.reasons %}{{ m.powod(r) }}{% endfor %}</ul>
+  {% else %}
+    <p>Żadna reguła polityki nie została naruszona.</p>
+  {% endif %}
+
+  {% if run.warnings %}
+    <h3>Ostrzeżenia — nie blokują ({{ run.warnings|length }})</h3>
+    <ul>{% for r in run.warnings %}{{ m.powod(r) }}{% endfor %}</ul>
+  {% endif %}
+
+  {% if run.suppressed %}
+    <h3>Wyciszone wyjątkiem ({{ run.suppressed|length }})</h3>
+    <ul>{% for r in run.suppressed %}{{ m.powod(r) }}{% endfor %}</ul>
+  {% endif %}
+
+  {% if run.unattached_reasons %}
+    <h3>Powody bez przypisanej bramki ({{ run.unattached_reasons|length }})</h3>
+    <p class="brak">Reguły wyliczone z samej zmiany, np. dopasowanie ścieżek wrażliwych.</p>
+    <ul>{% for r in run.unattached_reasons %}{{ m.powod(r) }}{% endfor %}</ul>
+  {% endif %}
+</div>
+
+<h2>Bramki</h2>
+<button id="rozwin-wszystko" class="zwykly" type="button" hidden aria-expanded="false">Rozwiń wszystkie bramki</button>
+{% for gate in run.gates %}
+  <details class="karta bramka">
+    <summary>
+      <strong class="mono">{{ gate.gate }}</strong>
+      {{ m.status_bramki(gate) }}
+      {% if gate.findings %}<span class="znacznik znacznik--neutralny">{{ gate.findings|length }} znalezisk</span>{% endif %}
+      {% if gate.blocking_reasons %}<span class="znacznik znacznik--block">narusza politykę</span>{% endif %}
+      <span class="brak"> {{ gate.duration_s|sekundy }}</span>
+    </summary>
+
+    {% if gate.message %}<p>{{ gate.message }}</p>{% endif %}
+    {% for note in gate.notes %}<div class="uwaga">{{ note }}</div>{% endfor %}
+
+    {% if gate.reasons %}
+      <h3>Reguły polityki dotyczące tej bramki</h3>
+      <ul>{% for r in gate.reasons %}{{ m.powod(r) }}{% endfor %}</ul>
+    {% endif %}
+
+    <h3>Fakty ({{ gate.facts|length }})</h3>
+    {% if gate.facts %}
+      <dl class="fakty">{% for f in gate.facts %}{{ m.fakt(f) }}{% endfor %}</dl>
+    {% else %}
+      <p class="brak">Bramka nie zadeklarowała żadnego faktu — nie ma czym zasilić polityki.</p>
+    {% endif %}
+
+    {% if gate.findings %}
+      <h3>Znaleziska tej bramki ({{ gate.findings|length }})</h3>
+      <ul>
+        {% for f in gate.findings %}
+          <li>
+            <span class="waga waga--{{ f.severity }}">{{ f.severity_label }}</span> —
+            {{ m.znalezisko_link(run, f) }}
+            <span class="brak mono">{{ f.location }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </details>
+{% endfor %}
+
+<h2>Znaleziska <span id="licznik-znalezisk">{{ run.findings|length }} z {{ run.findings|length }}</span></h2>
+<div class="karta">
+  {# Nie <form>: CSP zabrania inline'owych handlerów, a filtrowanie i tak
+     dzieje się w app.js na już wczytanej liście. #}
+  <div class="filtry" role="group" aria-label="Filtry znalezisk">
+    <div>
+      <label for="filtr-waga">Waga</label>
+      <select id="filtr-waga">
+        <option value="">wszystkie</option>
+        {% for waga in run.severity_counts %}
+          <option value="{{ waga }}">{{ waga }} ({{ run.severity_counts[waga] }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="filtr-bramka">Bramka</label>
+      <select id="filtr-bramka">
+        <option value="">wszystkie</option>
+        {% for gate in run.gates %}
+          {% if gate.findings %}<option value="{{ gate.gate }}">{{ gate.gate }} ({{ gate.findings|length }})</option>{% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="filtr-tekst">Szukaj w treści</label>
+      <input id="filtr-tekst" type="search" autocomplete="off">
+    </div>
+    <span class="brak">Filtry działają na wczytanej liście; bez JavaScriptu widać komplet.</span>
+  </div>
+</div>
+
+<div data-findings-root>
+  {% for f in run.findings %}
+    <article class="znalezisko" data-finding data-severity="{{ f.severity }}" data-gate="{{ f.gate }}"
+             data-search="{{ (f.title ~ ' ' ~ f.rule_id ~ ' ' ~ (f.file or '') ~ ' ' ~ f.failure_scenario)|lower }}">
+      <h4>{{ m.znalezisko_link(run, f) }}</h4>
+      <div class="meta">
+        {% if oceny.get(f.fingerprint) %}{{ m.ocena(oceny[f.fingerprint]) }} · {% endif %}
+        <span class="waga waga--{{ f.severity }}">waga {{ f.severity_label }}</span> ·
+        <code>{{ f.rule_id }}</code> · {{ f.gate }} ·
+        <span class="mono">{{ f.location }}</span> ·
+        pewność {{ f.confidence }} ·
+        <code>{{ f.fingerprint }}</code>
+      </div>
+      <p>{{ f.failure_scenario }}</p>
+    </article>
+  {% else %}
+    <div class="karta"><p class="brak">Ten przebieg nie zgłosił żadnego znaleziska.</p></div>
+  {% endfor %}
+</div>
+
+<h2>Incydent na produkcji</h2>
+<div class="karta">
+  {% if row.caused_incident %}
+    <div class="blad" role="status">
+      Ten przebieg jest oznaczony jako incydent.
+      {% if row.incident_note %}<br>{{ row.incident_note }}{% endif %}
+    </div>
+    <p class="brak">
+      Oznaczenie nie zmienia decyzji przebiegu — dopisuje fakt, który zdarzył
+      się później. Liczy się do escape rate w <a href="/metryki">metrykach</a>.
+    </p>
+  {% else %}
+    <form method="post"
+          action="/projekty/{{ run.project_id }}/przebiegi/{{ run.run_id }}/incydent"
+          class="filtry">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <label for="incydent-note">Co się stało na produkcji</label>
+        <input id="incydent-note" name="note" maxlength="2000" size="50" autocomplete="off">
+      </div>
+      <button class="zwykly" type="submit">Oznacz jako incydent</button>
+    </form>
+    <p class="brak">
+      Osobne działanie od oceny znaleziska. Zero incydentów i brak oznaczania
+      incydentów wyglądają w bazie tak samo, a znaczą co innego.
+    </p>
+  {% endif %}
+</div>
+
+<h2>Czego ta brama nie sprawdza</h2>
+<div class="karta">
+  {% if run.not_checked %}
+    <ul>{% for item in run.not_checked %}<li>{{ item }}</li>{% endfor %}</ul>
+  {% else %}
+    <p class="brak">
+      Raport nie zawiera listy ograniczeń — to brak danych, a nie deklaracja,
+      że brama sprawdza wszystko.
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

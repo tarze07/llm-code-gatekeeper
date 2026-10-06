@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block tytul %}{{ profile.name }} — profil polityki{% endblock %}
+
+{% block tresc %}
+<h1>{{ profile.name }}</h1>
+<p class="podtytul"><a href="/polityki">← Profile polityki</a></p>
+
+<div class="karta">
+  <h2>Wersja aktywna</h2>
+  {% if active %}
+    <p>
+      <strong>{{ active.label }}</strong> ·
+      hash <code>{{ active.content_hash[:16] }}</code> ·
+      aktywowana {{ active.activated_at|czas }}
+      {% if active.author %} przez {{ active.author }}{% endif %}
+      {% if active.note %}<br><em>{{ active.note }}</em>{% endif %}
+    </p>
+  {% else %}
+    <p class="brak">Brak aktywnej wersji. Utwórz szkic i aktywuj go świadomie.</p>
+  {% endif %}
+
+  {% if summary %}
+    <h3>Reguły blokujące ({{ summary.blocking|length }})</h3>
+    <ul>{% for rule in summary.blocking %}<li><code>{{ rule }}</code></li>{% endfor %}</ul>
+
+    <h3>Progi ({{ summary.thresholds|length }})</h3>
+    <div class="przewijana">
+      <table>
+        <thead><tr><th>Fakt</th><th>min</th><th>max</th><th>Skutek</th><th>Komunikat</th></tr></thead>
+        <tbody>
+          {% for fact, spec in summary.thresholds.items() %}
+            <tr>
+              <td class="mono">{{ fact }}</td>
+              <td>{{ spec.min if spec.min is not none else '—' }}</td>
+              <td>{{ spec.max if spec.max is not none else '—' }}</td>
+              <td>{{ spec.on_violation }}</td>
+              <td>{{ spec.message }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Bramki tylko ostrzegające ({{ summary.warn_only|length }})</h3>
+    {% if summary.warn_only %}
+      <p>{% for gate in summary.warn_only %}<code>{{ gate }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+      <p class="brak">Ich wynik nie blokuje zmiany — ale dowodu, którego nie dostarczyły, to nie zastępuje.</p>
+    {% else %}
+      <p class="brak">Żadna bramka nie jest w trybie warn-only.</p>
+    {% endif %}
+
+    <h3>Wyjątki ({{ summary.exemptions|length }})</h3>
+    {% if summary.exemptions %}
+      <ul>
+        {% for ex in summary.exemptions %}
+          <li>
+            <code>{{ ex.rule }}</code> — {{ ex.owner }}, do {{ ex.expires }}
+            {% if ex.expired %}<span class="znacznik znacznik--block">wygasł</span>{% endif %}
+            <div class="brak">{{ ex.reason }}</div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="brak">Brak wyjątków.</p>
+    {% endif %}
+
+    <p class="brak">Błąd bramki: <code>{{ summary.on_gate_error }}</code>.</p>
+  {% endif %}
+</div>
+
+<div class="karta">
+  <h2>Nowy szkic</h2>
+  {% if ze_startowej %}
+    <p class="brak">
+      Ten profil nie ma jeszcze żadnej wersji, więc pola niżej wypełnia
+      <strong>polityka startowa panelu</strong> — działający punkt wyjścia,
+      nie polityka docelowa. Progi są kalibracją narzędzia: przejrzyj je pod
+      swój projekt, zanim aktywujesz. Aktywacja jest osobnym działaniem
+      i dotyczy wyłącznie przyszłych zadań.
+    </p>
+  {% else %}
+    <p class="brak">
+      Szkic startuje z treści wersji aktywnej. Aktywacja jest osobnym działaniem
+      i dotyczy wyłącznie przyszłych zadań.
+    </p>
+  {% endif %}
+  <form method="post" action="/polityki/{{ profile.id }}/szkice">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <p>
+      <label for="policy_yaml">gates.yaml</label>
+      <textarea id="policy_yaml" name="policy_yaml" rows="16" style="width:100%"
+                spellcheck="false">{{ draft_source }}</textarea>
+    </p>
+    <p>
+      <label for="exceptions_yaml">exceptions.yaml (opcjonalnie)</label>
+      <textarea id="exceptions_yaml" name="exceptions_yaml" rows="6" style="width:100%"
+                spellcheck="false">{{ draft_exceptions }}</textarea>
+    </p>
+    <p>
+      <label for="scope_map_yaml">scope_map.yaml (opcjonalnie)</label>
+      <textarea id="scope_map_yaml" name="scope_map_yaml" rows="6" style="width:100%"
+                spellcheck="false">{{ draft_scope_map }}</textarea>
+    </p>
+    <div class="filtry">
+      <div>
+        <label for="author">Autor</label>
+        <input id="author" name="author" maxlength="120" autocomplete="off">
+      </div>
+      <div>
+        <label for="note">Uzasadnienie</label>
+        <input id="note" name="note" maxlength="500" size="40" autocomplete="off">
+      </div>
+      <button class="glowny" type="submit">Zapisz szkic</button>
+    </div>
+  </form>
+</div>
+
+<div class="karta przewijana">
+  <h2>Historia wersji</h2>
+  <table>
+    <thead><tr><th>Wersja</th><th>Stan</th><th>Hash</th><th>Autor</th><th>Utworzona</th><th>Uzasadnienie</th></tr></thead>
+    <tbody>
+      {% for rev in revisions %}
+        <tr>
+          <td><a href="/polityki/wersje/{{ rev.id }}">{{ rev.label }}</a></td>
+          <td>
+            {% if rev.state == 'active' %}
+              <span class="znacznik znacznik--pass">aktywna</span>
+            {% elif rev.state == 'draft' %}
+              <span class="znacznik znacznik--review">szkic</span>
+            {% else %}
+              <span class="znacznik znacznik--neutralny">wycofana</span>
+            {% endif %}
+          </td>
+          <td class="mono">{{ rev.content_hash[:16] }}</td>
+          <td>{{ rev.author or '—' }}</td>
+          <td>{{ rev.created_at|czas }}</td>
+          <td>{{ rev.note or '' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="brak">Brak wersji.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

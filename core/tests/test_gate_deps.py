@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from gatekeeper_core.core.change import ChangeContext
+from gatekeeper_core.core.policy import Policy
 from gatekeeper_core.deps.manifests import NPM, NUGET, PYPI
 from gatekeeper_core.deps.registries import RegistryUnavailable
+from gatekeeper_core.gates import gate_config_errors
 from gatekeeper_core.gates.g1_deps import DepGuard
 from tests.conftest import FakeRegistry
 
@@ -31,12 +35,17 @@ def build(repo, before: str, after: str, filename: str = "pyproject.toml") -> Ch
     return ChangeContext.from_git(repo.path, "main", "HEAD")
 
 
-def gate(packages: dict | None = None, nuget_packages: dict | None = None, **config) -> DepGuard:
+def gate(
+    packages: dict | None = None,
+    nuget_packages: dict | None = None,
+    npm_packages: dict | None = None,
+    **config,
+) -> DepGuard:
     return DepGuard(
         config or {},
         registries={
             PYPI: FakeRegistry(PYPI, packages if packages is not None else KNOWN),
-            NPM: FakeRegistry(NPM, {}),
+            NPM: FakeRegistry(NPM, npm_packages or {}),
             NUGET: FakeRegistry(NUGET, nuget_packages or {}),
         },
     )
@@ -45,6 +54,10 @@ def gate(packages: dict | None = None, nuget_packages: dict | None = None, **con
 def manifest(*deps: str) -> str:
     body = ", ".join(f'"{d}"' for d in deps)
     return f'[project]\nname = "demo"\ndependencies = [{body}]\n'
+
+
+def package_json(deps: dict[str, str]) -> str:
+    return json.dumps({"dependencies": deps})
 
 
 def test_halucynowany_pakiet_jest_blokowany(repo):
@@ -207,3 +220,160 @@ def test_fakty_sa_zawsze_kompletne(repo, status):
 
     for fact in DepGuard.facts:
         assert fact in result.facts, f"brak faktu {fact} — polityka odwoła się do pustki"
+
+
+# ----------------------------------------------------------- allow_packages
+
+
+def test_allow_packages_gole_imie_z_kropka_dziala_dla_nuget(repo):
+    """REVIEW.md P1: allow_packages szedł kiedyś zawsze przez normalizację PyPI
+    (PEP 503 zjada `.` → `-`), więc gołe `"Acme.Tools"` nigdy nie trafiało w
+    `provider.normalize` NuGet-owego `"Acme.Tools"` (tylko lowercase, kropka
+    zostaje). Po naprawie wpis normalizuje się per ekosystem w miejscu
+    porównania, więc dopasowanie działa."""
+    repo.write("Demo.csproj", csproj("Newtonsoft.Json"))
+    repo.commit("baza")
+    repo.checkout("feature", create=True)
+    repo.write("Demo.csproj", csproj("Newtonsoft.Json", "Acme.Tools"))
+    repo.commit("feat: wewnetrzny pakiet nuget")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    result = gate(
+        nuget_packages={"newtonsoft.json": {"age_days": 4000}},
+        allow_packages=["Acme.Tools"],
+    ).run(change)
+
+    assert result.facts["deps.new_packages"] == []
+    assert result.status == "pass"
+
+
+def test_allow_packages_nuget_jest_case_insensitive(repo):
+    repo.write("Demo.csproj", csproj("Newtonsoft.Json"))
+    repo.commit("baza")
+    repo.checkout("feature", create=True)
+    repo.write("Demo.csproj", csproj("Newtonsoft.Json", "Acme.Tools"))
+    repo.commit("feat: wewnetrzny pakiet nuget")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    # wpis małymi literami, pakiet w manifeście wielkimi — NuGet nie dba o wielkość liter
+    result = gate(
+        nuget_packages={"newtonsoft.json": {"age_days": 4000}},
+        allow_packages=["acme.tools"],
+    ).run(change)
+
+    assert result.facts["deps.new_packages"] == []
+    assert result.status == "pass"
+
+
+def test_allow_packages_npm_scoped_bare_entry(repo):
+    repo.write("package.json", package_json({}))
+    repo.commit("baza")
+    repo.checkout("feature", create=True)
+    repo.write("package.json", package_json({"@acme/cli": "^1.0.0"}))
+    repo.commit("feat: wewnetrzny pakiet npm scoped")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    result = gate(allow_packages=["@acme/cli"]).run(change)
+
+    assert result.facts["deps.new_packages"] == []
+    assert result.status == "pass"
+
+
+def test_allow_packages_forma_kwalifikowana_dziala_tylko_w_swoim_ekosystemie(repo):
+    """`"npm:foo-tool"` zezwala na `foo-tool` w npm, ale NIE w PyPI — ta sama
+    goła nazwa w dwóch ekosystemach to dwa różne pakiety różnych autorów."""
+    repo.write("package.json", package_json({}))
+    repo.write("pyproject.toml", manifest("requests"))
+    repo.commit("baza")
+    repo.checkout("feature", create=True)
+    repo.write("package.json", package_json({"foo-tool": "^1.0.0"}))
+    repo.write("pyproject.toml", manifest("requests", "foo-tool"))
+    repo.commit("feat: foo-tool w dwoch ekosystemach")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    result = gate(
+        npm_packages={"foo-tool": {"age_days": 4000}},
+        allow_packages=["npm:foo-tool"],
+    ).run(change)
+
+    # npm:foo-tool jest wewnetrzny i odpada z listy, pypi:foo-tool zostaje
+    # i trafia do sprawdzenia (nieznany w `KNOWN`, więc bramka go blokuje).
+    assert result.facts["deps.new_packages"] == ["foo-tool"]
+    assert result.status == "fail"
+    assert result.facts["deps.unknown_package"] is True
+
+
+def test_allow_packages_dziala_naraz_dla_dwoch_ekosystemow_w_jednym_pr(repo):
+    """Gole imie w `allow_packages` ma dzialac w KAZDYM ekosystemie naraz —
+    mieszany PR (Python + npm) nie ma dostawac polowicznej allowlisty."""
+    repo.write("package.json", package_json({}))
+    repo.write("pyproject.toml", manifest("requests"))
+    repo.commit("baza")
+    repo.checkout("feature", create=True)
+    repo.write("package.json", package_json({"shared-name": "^1.0.0"}))
+    repo.write("pyproject.toml", manifest("requests", "shared-name"))
+    repo.commit("feat: shared-name w dwoch ekosystemach")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    result = gate(allow_packages=["shared-name"]).run(change)
+
+    assert result.facts["deps.new_packages"] == []
+    assert result.status == "pass"
+
+
+def test_allow_packages_nieznany_prefiks_ekosystemu_jest_bledem_konfiguracji():
+    with pytest.raises(ValueError, match="npmm"):
+        gate(allow_packages=["npmm:left-pad"])
+
+
+def test_allow_packages_puste_imie_po_prefiksie_jest_bledem_konfiguracji():
+    with pytest.raises(ValueError):
+        gate(allow_packages=["npm:"])
+
+
+@pytest.mark.parametrize(
+    ("filename", "before", "broken"),
+    [
+        ("package.json", package_json({"left-pad": "1.0.0"}), '{"dependencies": {"evil": '),
+        ("app.csproj", csproj("Newtonsoft.Json"), "<Project><ItemGroup>"),
+        ("pyproject.toml", manifest("requests"), '[project\ndependencies = ["evil"]'),
+    ],
+)
+def test_zepsuty_manifest_jest_bledem_a_nie_brakiem_nowych_pakietow(
+    repo, filename, before, broken
+):
+    change = build(repo, before, broken, filename=filename)
+    result = gate().run(change)
+
+    assert result.status == "error"
+    assert filename in result.message
+    assert result.facts["deps.manifests_changed"] == 1
+
+
+def test_nowy_manifest_bez_wersji_bazowej_nadal_jest_czytany(repo):
+    repo.write("README.md", "x\n")
+    repo.commit("baza")
+    repo.checkout("feature", create=True)
+    repo.write("package.json", package_json({"left-pad": "1.0.0"}))
+    repo.commit("feat: package.json")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    result = gate(npm_packages={"left-pad": {"age_days": 3000}}).run(change)
+
+    assert result.status == "pass"
+    assert result.facts["deps.new_packages"] == ["left-pad"]
+
+
+def test_lint_wylapuje_literowke_w_prefiksie_allow_packages():
+    policy = Policy.from_dict(
+        {
+            "version": 1,
+            "gates": {"G1.deps": {"allow_packages": ["acme", "npmm:@acme/cli", 7]}},
+        }
+    )
+    errors = gate_config_errors(policy)
+
+    assert len(errors) == 2
+    assert all(e.startswith("`gates.G1.deps`:") for e in errors)
+    assert any("npmm" in e for e in errors)
+    assert DepGuard.config_errors({"allow_packages": ["acme", "nuget:Acme.Tools"]}) == []

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from gatekeeper_core.adapters.base import ToolFailed
 from gatekeeper_core.core.finding import Severity
 
 from gatekeeper_python.adapters.linters import (
@@ -91,3 +93,23 @@ def test_mypy_ignoruje_smieci_przed_json_lines():
     payload = "Success: no issues found\n" + MYPY_GOLDEN.read_text(encoding="utf-8")
     findings = parse_mypy(payload, REPO, "G1.static")
     assert len(findings) == 3
+
+
+def test_pusty_raport_mypy_nie_wywraca_adaptera():
+    """Payload legalnie pusty (mypy bez błędów, brak targetów) — `[]`, nie wyjątek."""
+    assert parse_mypy("", REPO, "G1.static") == []
+
+
+def test_uszkodzona_linia_json_mypy_jest_bledem_nie_cichym_pass():
+    """REVIEW.md §5 P1: linia, która zaczyna się od `{` (wygląda jak zaczęty
+    obiekt JSON Lines), ale jest uszkodzona/urwana, to utracony dowód, nie
+    „zero błędów" — musi być `ToolFailed`, nie ciche pominięcie, w odróżnieniu
+    od śmieci PRZED JSON Lines (`test_mypy_ignoruje_smieci_przed_json_lines`),
+    które legalnie nie zaczynają się od `{`."""
+    payload = (
+        '{"file": "x.py", "line": 2, "message": "błąd", "code": "arg-type", '
+        '"severity": "error"}\n'
+        '{"file": "x.py", "line": 3, "message": "urwana lin'  # bez zamknięcia
+    )
+    with pytest.raises(ToolFailed):
+        parse_mypy(payload, REPO, "G1.static")

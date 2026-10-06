@@ -14,20 +14,17 @@ porównywało `body_hash` tego samego testu, nie dwóch różnych nodeidów.
 from __future__ import annotations
 
 import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from gatekeeper_core.core.runner import Sandbox, SandboxPolicy, SandboxUnavailable
 
 HELPER = "gatekeeper-cs-helper"
 
 
 class HelperUnavailable(RuntimeError):
-    """`gatekeeper-cs-helper` nie jest zainstalowany (`dotnet tool install
-    --global gatekeeper-cs-helper`) — analogia do `ToolMissing` w
-    `adapters/base.py`, ale ten moduł nie woła `run_tool`/`Sandbox`: dyskryminacja
-    testu jest czystą analizą syntax tree bez efektów ubocznych, więc nie
-    potrzebuje izolacji sieci/pamięci narzucanej testowanemu kodowi."""
+    """Brak helpera lub niemożność jego uruchomienia w Bubblewrap."""
 
 
 @dataclass(frozen=True)
@@ -46,20 +43,14 @@ class TestItem:
 def run_helper(command: str, root: Path, relative_paths: list[str]) -> dict[str, Any]:
     if not relative_paths:
         return {}
+    sandbox = Sandbox(SandboxPolicy(memory_mb=None))
     try:
-        result = subprocess.run(
-            [HELPER, command, "--files", *relative_paths],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=60.0,
-            check=False,
+        result = sandbox.run(
+            [HELPER, command, "--files", *relative_paths], cwd=root, timeout_s=60.0,
         )
-    except FileNotFoundError as exc:
-        raise HelperUnavailable(
-            f"`{HELPER}` nie jest zainstalowany — `dotnet tool install --global {HELPER}`"
-        ) from exc
-    if result.returncode != 0:
+    except SandboxUnavailable as exc:
+        raise HelperUnavailable(str(exc)) from exc
+    if not result.ok:
         raise HelperUnavailable(
             f"`{HELPER} {command}` zakończył się błędem: {result.stderr.strip()}"
         )

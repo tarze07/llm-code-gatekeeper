@@ -48,7 +48,7 @@ def render_markdown(run: RunResult, max_findings: int = 10) -> str:
     out: list[str] = [MARKER, f"## {icon} {label} — brama jakości"]
     out.append(
         f"`{run.base_sha[:7]}` → `{run.head_sha[:7]}` · "
-        f"{len(run.gate_results)} bramki · {run.duration_s:.1f}s · "
+        f"{len(run.gate_results)} bramki · {_duration(run.duration_s)} · "
         f"polityka v{run.policy_version} · "
         # Identyfikator przebiegu jest w raporcie, bo bez niego `gatekeeper incident`
         # wymagałby szukania po bazie — a wtedy nikt nigdy nie oznaczy incydentu.
@@ -86,7 +86,7 @@ def render_markdown(run: RunResult, max_findings: int = 10) -> str:
         suffix = " _(warn-only)_" if g.warn_only else ""
         out.append(
             f"| `{g.gate}` | {icon} {g.status}{suffix} | "
-            f"{g.duration_s:.1f}s | {g.message} |"
+            f"{_duration(g.duration_s)} | {g.message} |"
         )
 
     if run.decision.warnings:
@@ -108,6 +108,10 @@ def render_markdown(run: RunResult, max_findings: int = 10) -> str:
         out.append("\n</details>")
 
     return "\n".join(out) + "\n"
+
+
+def _duration(value: float | None) -> str:
+    return "brak danych" if value is None else f"{value:.1f}s"
 
 
 def _render_finding(f: Finding) -> str:

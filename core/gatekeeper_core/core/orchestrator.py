@@ -12,25 +12,24 @@ Zastępuje sekwencyjną pętlę z kamienia 1. Trzy zasady, wszystkie z PLAN.md �
 3. **Budżet czasowy jest egzekwowany, nie sugerowany.** Bramka po przekroczeniu
    limitu dostaje status `error` — czyli „brak dowodu", nie „przeszło".
 
-Ograniczenie, o którym trzeba wiedzieć: bramki to funkcje Pythona, a wątku nie
-da się w Pythonie zabić. Po przekroczeniu budżetu orkiestrator przestaje czekać
-i oznacza bramkę jako błąd, ale jej wątek dobiega końca w tle. Twarde ubijanie
-dotyczy procesów potomnych i tym zajmuje się `core.runner`.
+Każda bramka działa w osobnym procesie i na własnej kopii wskazanego
+commita. Proces nadzorujący egzekwuje budżet i sprząta kopię po zakończeniu
+lub zabiciu bramki.
 """
 
 from __future__ import annotations
 
 import time
-import traceback
 import uuid
 from collections.abc import Iterable, Sequence
-from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from ..gates import Gate, build_gates
 from .change import ChangeContext
+from .execution import run_wave
 from .finding import GateResult, RunResult
 from .policy import Policy
+from .progress import RunControl
 from .runner import describe_isolation
 
 #: Jawna lista luk. Trafia do raportu, żeby nikt nie wziął zielonej bramy za
@@ -133,7 +132,14 @@ def run_gates(
     only: Iterable[str] | None = None,
     fast_path: bool = True,
     max_workers: int = 4,
+    control: RunControl | None = None,
 ) -> RunResult:
+    """Uruchamia bramki i podejmuje decyzję.
+
+    `control` jest opcjonalny: CLI go nie podaje, panel WWW przekazuje przez
+    niego postęp i żądanie anulowania. Bez niego zachowanie jest identyczne
+    jak przed jego dodaniem.
+    """
     started = time.monotonic()
     gate_list = list(gates) if gates is not None else build_gates(policy, only=only)
     plan = build_plan(gate_list, change, fast_path=fast_path)
@@ -141,7 +147,21 @@ def run_gates(
     results: list[GateResult] = []
     statuses: dict[str, str] = {}
 
-    for wave in plan.waves:
+    if control is not None:
+        control.total = len(gate_list)
+        control.completed = 0
+        control.emit(
+            "plan",
+            message=f"{len(plan.gates)} kontroli w {len(plan.waves)} falach",
+        )
+
+    for index, wave in enumerate(plan.waves, start=1):
+        if control is not None:
+            control.raise_if_cancelled()
+            control.emit(
+                "wave_started",
+                message=f"fala {index} z {len(plan.waves)}: {', '.join(g.id for g in wave)}",
+            )
         runnable: list[tuple[Gate, list[str]]] = []
         blocked: list[tuple[Gate, list[str]]] = []
         for gate in wave:
@@ -163,15 +183,13 @@ def run_gates(
                 )
             )
             statuses[gate.id] = "skipped"
+            if control is not None:
+                control.completed += 1
+                control.emit("gate_finished", gate=gate.id, status="skipped")
 
-        if len(runnable) == 1:
-            wave_results = [_run_one(runnable[0][0], change, policy)]
-        else:
-            with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                futures: dict[Future[GateResult], Gate] = {
-                    pool.submit(_run_one, gate, change, policy): gate for gate, _ in runnable
-                }
-                wave_results = _collect(futures, policy)
+        wave_results = run_wave(
+            [gate for gate, _ in runnable], change, policy, max_workers, control=control
+        )
 
         for result in wave_results:
             results.append(result)
@@ -179,6 +197,9 @@ def run_gates(
 
     for gate_id, reason in plan.skipped.items():
         results.append(GateResult(gate=gate_id, status="skipped", message=reason))
+        if control is not None:
+            control.completed += 1
+            control.emit("gate_finished", gate=gate_id, status="skipped", message=reason)
 
     results.sort(key=lambda r: r.gate)
     facts = {k: v for r in results for k, v in r.facts.items()}
@@ -200,54 +221,3 @@ def run_gates(
         policy_version=policy.version,
         not_checked=not_checked,
     )
-
-
-def _collect(futures: dict[Future[GateResult], Gate], policy: Policy) -> list[GateResult]:
-    """Czeka na falę, pilnując budżetu każdej bramki z osobna."""
-    out: list[GateResult] = []
-    for future, gate in futures.items():
-        try:
-            out.append(future.result(timeout=gate.budget_s + _GRACE_S))
-        except TimeoutError:
-            out.append(
-                GateResult(
-                    gate=gate.id,
-                    status="error",
-                    duration_s=gate.budget_s,
-                    message=(
-                        f"przekroczony budżet czasowy ({gate.budget_s:.0f}s) — bramka nie "
-                        "dostarczyła dowodu; wątek dobiegnie końca w tle"
-                    ),
-                    warn_only=policy.is_warn_only(gate.id),
-                )
-            )
-    return out
-
-
-_GRACE_S = 5.0
-
-
-def _run_one(gate: Gate, change: ChangeContext, policy: Policy) -> GateResult:
-    warn_only = policy.is_warn_only(gate.id)
-    started = time.monotonic()
-    try:
-        result = gate.run(change)
-    except Exception:  # noqa: BLE001 — awaria bramki nie może wywrócić przebiegu
-        result = GateResult(
-            gate=gate.id,
-            status="error",
-            duration_s=time.monotonic() - started,
-            message=_short_traceback(),
-        )
-    result.warn_only = warn_only
-    if result.duration_s > gate.budget_s:
-        result.message = (
-            f"{result.message} · przekroczony budżet czasowy "
-            f"({result.duration_s:.0f}s > {gate.budget_s:.0f}s)"
-        ).strip(" ·")
-    return result
-
-
-def _short_traceback() -> str:
-    lines = traceback.format_exc().strip().splitlines()
-    return f"wyjątek w bramce: {lines[-1]}" if lines else "wyjątek w bramce"

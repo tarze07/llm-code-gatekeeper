@@ -9,6 +9,7 @@ pozytywny.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from importlib.resources import files
 from pathlib import Path
 
@@ -112,6 +113,12 @@ def run_semgrep(
         str(max_memory_mb),
         *(targets or ["."]),
     ]
+    sandbox = Sandbox(replace(
+        sandbox.policy,
+        read_only_paths=sandbox.policy.read_only_paths + tuple(
+            Path(c).resolve() for c in configs if Path(c).exists()
+        ),
+    ))
     # semgrep: 0 = czysto, 1 = znaleziska
     result = run_tool(command, repo, sandbox, timeout_s, ok_returncodes=(0, 1))
     return parse_semgrep(result.stdout, repo, gate)

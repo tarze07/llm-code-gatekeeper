@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from gatekeeper_core.adapters.base import ToolFailed
 from gatekeeper_core.adapters.dotnet_projects import (
     find_project_for,
     parse_dotnet_list_vulnerable,
@@ -86,3 +89,11 @@ def test_dotnet_list_vulnerable_obsluguje_pakiety_tranzytywne():
 def test_pusty_raport_dotnet_list_vulnerable_nie_wywraca_adaptera():
     assert parse_dotnet_list_vulnerable("", REPO, {"x"}, "G3.sca") == []
     assert parse_dotnet_list_vulnerable('{"projects": []}', REPO, set(), "G3.sca") == []
+
+
+def test_smieciowy_output_dotnet_list_vulnerable_jest_bledem_nie_cichym_pass():
+    """REVIEW.md §5 P1: `dotnet list package` zawsze kończy się kodem 0, więc
+    tylko treść JSON-a odróżnia czysty wynik od urwanego/zepsutego —
+    niesparsowalny payload musi być `ToolFailed`, nie cichy `[]`."""
+    with pytest.raises(ToolFailed):
+        parse_dotnet_list_vulnerable("to nie jest JSON", REPO, {"x"}, "G3.sca")

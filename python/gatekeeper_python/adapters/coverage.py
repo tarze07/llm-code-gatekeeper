@@ -59,7 +59,7 @@ def run_diff_coverage(
     robi to dla `G2.cross_verify`) — pytanie tu brzmi „czy diff pokrywa *jakikolwiek*
     test", nie tylko nowe.
     """
-    with tempfile.TemporaryDirectory(prefix="gatekeeper-diffcov-") as tmp:
+    with tempfile.TemporaryDirectory(dir=repo, prefix="gatekeeper-diffcov-") as tmp:
         tmp_path = Path(tmp)
         data_file = tmp_path / COVERAGE_DATA_FILE
         xml_report = tmp_path / "coverage.xml"

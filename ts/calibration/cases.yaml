@@ -6,9 +6,28 @@
 # samo, patrz jego `calibration/cases.yaml`).
 #
 # Uruchomienie: `gatekeeper calibrate` (wymaga zainstalowanego
-# `llm-code-gatekeeper-core`, `eslint` i `@typescript-eslint/parser`)
+# `llm-code-gatekeeper-core`, `eslint`, `@typescript-eslint/parser`,
+# a dla przypadku G2 także `vitest` — patrz `requires_tools` per przypadek)
 
 cases:
+  - name: test-bez-dowodu
+    description: >-
+      Nowy test asertuje zachowanie, które w tym PR-ze się nie zmieniło
+      (`add`, podczas gdy zmianą jest `classify`) — musi przejść na kodzie
+      sprzed zmiany, czyli wyzwolić `tests.pass_on_pre_change_code`
+      (G2.cross_verify, TsTestToolchain). G2.cross_verify jest w `warn_only`,
+      więc oczekiwany werdykt to PASS z ostrzeżeniem, nie BLOCK —
+      analogicznie do `test-bez-dowodu` w python- i csharp-packu.
+
+      Fixture nie wozi `node_modules`: `vitest.config.js` włącza `globals`,
+      a testowy plik nie importuje niczego spoza repo, więc wystarcza vitest
+      z instalacji globalnej (stąd `requires_tools: [vitest]`).
+    fixture: test-bez-dowodu
+    requires_tools: [vitest, node]
+    expect:
+      verdict: PASS
+      warning_rules: [tests.pass_on_pre_change_code]
+
   - name: zlozonosc-powyzej-progu
     description: >-
       Nowa funkcja z 10 zagnieżdżonymi `if` (M=11) — powyżej progu McCabe

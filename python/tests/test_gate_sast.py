@@ -78,7 +78,7 @@ def test_brak_semgrepa_jest_bledem_bramki(repo, monkeypatch):
     repo.commit("zmiana")
     change = ChangeContext.from_git(repo.path, "main", "HEAD")
 
-    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name, **kwargs: None)
     result = SastGuard({}).run(change)
 
     assert result.status == "error"

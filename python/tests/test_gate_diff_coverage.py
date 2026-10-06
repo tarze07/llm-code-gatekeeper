@@ -42,7 +42,7 @@ def test_czesciowe_pokrycie_galezi_daje_ratio_ponizej_jednosci(repo):
     )
     result = DiffCoverage({}).run(change)
 
-    assert result.status == "pass"
+    assert result.status == "pass", result.message
     assert result.facts["coverage.diff_ratio"] == 0.5
     assert result.facts["coverage.covered_lines"] == 2
     assert result.facts["coverage.total_lines"] == 4
@@ -60,8 +60,8 @@ def test_pelne_pokrycie_obu_galezi_daje_ratio_rowne_jeden(repo):
     )
     result = DiffCoverage({}).run(change)
 
-    assert result.status == "pass"
-    assert result.facts["coverage.diff_ratio"] == 1.0
+    assert result.status == "pass", result.message
+    assert result.facts["coverage.diff_ratio"] == 1.0, result.message
 
 
 def test_brak_zmian_produkcyjnych_jest_pomijany(repo):

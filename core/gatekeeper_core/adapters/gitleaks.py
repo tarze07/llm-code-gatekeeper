@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ..core.finding import Finding, Severity
+from ..core.runner import Sandbox, SandboxPolicy, SandboxUnavailable
 
 BINARY = "gitleaks"
 INSTALL_HINT = (
@@ -65,8 +65,12 @@ def is_available() -> bool:
 def version() -> str | None:
     if not is_available():
         return None
-    proc = subprocess.run([BINARY, "version"], capture_output=True, text=True, check=False)
-    return proc.stdout.strip() or None
+    try:
+        with tempfile.TemporaryDirectory(prefix="gitleaks-version-") as tmp:
+            proc = Sandbox().run([BINARY, "version"], cwd=tmp, timeout_s=10)
+        return proc.stdout.strip() if proc.ok else None
+    except SandboxUnavailable:
+        return None
 
 
 def parse_report(payload: str, root: Path | str | None = None) -> list[Leak]:
@@ -107,7 +111,7 @@ def scan(
     """Skan katalogu roboczego (bez historii gita — tę pokrywa osobny job)."""
     if not is_available():
         raise ToolMissing(INSTALL_HINT)
-    with tempfile.TemporaryDirectory(prefix="gitleaks-") as tmp:
+    with tempfile.TemporaryDirectory(dir=source, prefix=".gatekeeper-gitleaks-") as tmp:
         report = Path(tmp) / "report.json"
         cmd = [
             BINARY,
@@ -127,12 +131,15 @@ def scan(
         if config_path:
             cmd += ["--config", str(config_path)]
         cmd += extra_args or []
+        sandbox = Sandbox(SandboxPolicy(
+            read_only_paths=(config_path.resolve(),) if config_path else (),
+        ))
         try:
-            proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=timeout_s, check=False
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise ToolFailed(f"gitleaks przekroczył limit {timeout_s:g}s") from exc
+            proc = sandbox.run(cmd, cwd=source, timeout_s=timeout_s)
+        except SandboxUnavailable as exc:
+            raise ToolMissing(str(exc)) from exc
+        if proc.timed_out:
+            raise ToolFailed(f"gitleaks przekroczył limit {timeout_s:g}s")
         if proc.returncode != 0:
             raise ToolFailed(
                 f"gitleaks zakończył się kodem {proc.returncode}: {proc.stderr[-500:]}"

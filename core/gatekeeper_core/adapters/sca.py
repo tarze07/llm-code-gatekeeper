@@ -33,8 +33,18 @@ def parse_pip_audit(
     `new_packages` to znormalizowane nazwy (PEP 503) nowo dodanych zależności —
     filtr, bez którego bramka raportowałaby cały dług zastanych zależności
     przy pierwszym uruchomieniu.
+
+    `payload` puste/`None` → `"{}"` (brak zależności = legalnie zero wpisów;
+    `run_pip_audit()` i tak odrzuca pusty stdout wcześniej jako `ToolFailed`).
+    Każdy inny niesparsowalny payload musi też skończyć jako `ToolFailed`,
+    nie jako nieobsłużony `JSONDecodeError` lecący przez `PyPIEcosystem.
+    scan_sca()` (`deps/ecosystems.py`) — tamten `except ToolFailed` by go nie
+    złapał i wywalił cały przebieg bramki, a nie tylko ten jeden pakiet.
     """
-    data = json.loads(payload or "{}")
+    try:
+        data = json.loads(payload or "{}")
+    except json.JSONDecodeError as exc:
+        raise ToolFailed(f"pip-audit nie zwrócił poprawnego JSON-a: {payload[:500]!r}") from exc
     findings: list[Finding] = []
     for dep in data.get("dependencies") or []:
         name = str(dep.get("name") or "")

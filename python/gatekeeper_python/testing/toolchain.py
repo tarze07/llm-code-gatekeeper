@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from gatekeeper_core.adapters.base import ToolFailed, ToolMissing
-from gatekeeper_core.core.change import ChangeContext, ChangedFile
+from gatekeeper_core.core.change import ChangeContext, ChangedFile, write_worktree_file
 from gatekeeper_core.core.plugins import ToolchainIsolationBroken
 from gatekeeper_core.core.runner import Sandbox, SandboxPolicy
 
@@ -117,9 +117,7 @@ class PythonTestToolchain:
             content = change.file_at(change.head_sha, file.path)
             if content is None:
                 continue
-            target = worktree / file.path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            write_worktree_file(worktree, file.path, content)
             count += 1
         return count
 

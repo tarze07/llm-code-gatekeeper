@@ -285,7 +285,7 @@ Core-only `calibration/cases.yaml` **nie** dostaje tych przypadków — bez pyth
 |---|---|
 | **CRAP** | `CRAP = comp² × (1−cov)³ + comp` potrzebuje `G2.diff_coverage`; dziś coverage jest `warn_only` i tylko Python. Nowa bramka `G2.crap` po zdjęciu `warn_only` z coverage |
 | **NLOC / rozmiar funkcji** | Uncle Bob wymienia obok McCabe; fakt `nloc` zbieramy od razu, progu nie włączamy, dopóki nie skalibrujemy na własnych PR-ach (PLAN.md §6) |
-| **TS/JS** | eslint `complexity` albo visitor na TypeScript Compiler API — osobne zlecenie, jak G2 dla TS |
+| **TS/JS** | eslint `complexity` (zrobione, `adapters/complexity.py`). Wariant „visitor na TypeScript Compiler API" jest nieaktualny: od TypeScript 7 to API nie istnieje w warstwie JS — patrz `ts/PLAN-G2.md` §0 |
 | **C#** | ten sam helper Roslyn co `PLAN-G2.md` (`gatekeeper-cs-helper complexity`) — nie budować drugiego parsera C# |
 | **Delta M** (było 8, jest 12) | v1 ocenia kształt po zmianie, nie przyrost; delta kusi do gier („rozbijam jedną funkcję na trzy po M=9”) |
 | **Próg per ścieżka** | wymaga rozszerzenia `Threshold`; auth/payments zostają na G5 `paths_match` |

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -168,6 +168,8 @@ class Exemption:
         return self.expires < (today or date.today())
 
     def matches(self, reason: Reason) -> bool:
+        if self.rule != reason.rule:
+            return False
         if self.fingerprints:
             return bool(set(self.fingerprints) & set(reason.fingerprints))
         return self.rule == reason.rule
@@ -313,9 +315,17 @@ class Policy:
                 warnings.append(reason)
                 return
             active = [e for e in self.exemptions if e.matches(reason) and not e.is_expired()]
-            if active:
+            if any(not e.fingerprints for e in active):
                 suppressed.append(reason)
                 return
+            covered = {fp for e in active for fp in e.fingerprints}
+            exempted = tuple(fp for fp in reason.fingerprints if fp in covered)
+            if exempted:
+                suppressed.append(replace(reason, fingerprints=exempted))
+                remaining = tuple(fp for fp in reason.fingerprints if fp not in covered)
+                if not remaining:
+                    return
+                reason = replace(reason, fingerprints=remaining)
             {"block": blockers, "review": reviews, "warn": warnings}[action].append(reason)
 
         for expr in self.blocking:

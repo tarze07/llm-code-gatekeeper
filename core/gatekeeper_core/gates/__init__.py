@@ -45,6 +45,15 @@ class Gate:
         pluginu, którego akurat nie ma w danym środowisku."""
         return cls.facts
 
+    @classmethod
+    def config_errors(cls, config: dict[str, Any]) -> list[str]:
+        """Błędy w sekcji `gates.<id>` polityki, wykrywalne bez uruchamiania.
+
+        `policy lint` woła to dla każdej skonfigurowanej bramki, żeby literówka
+        w konfiguracji wyszła przy walidacji, a nie dopiero przy starcie
+        przebiegu. Domyślnie bramka niczego nie sprawdza."""
+        return []
+
     # pomocnicze
     def result(self, **kwargs: Any) -> GateResult:
         return GateResult(gate=self.id, **kwargs)
@@ -76,10 +85,30 @@ def known_gate_ids() -> set[str]:
     return {gate.id for gate in all_gates()}
 
 
+def gate_config_errors(policy: Any) -> list[str]:
+    """`Gate.config_errors()` dla każdej bramki skonfigurowanej w `policy.gates`.
+
+    Nieznane identyfikatory pomija — te zgłasza już `Policy.lint()`."""
+    by_id = {cls.id: cls for cls in all_gates()}
+    errors: list[str] = []
+    for gate_id in sorted(policy.gates):
+        cls = by_id.get(gate_id)
+        if cls is None:
+            continue
+        errors.extend(
+            f"`gates.{gate_id}`: {e}" for e in cls.config_errors(policy.gate_config(gate_id))
+        )
+    return errors
+
+
 def build_gates(policy: Any, only: Iterable[str] | None = None) -> list[Gate]:
     selected = set(only) if only else None
+    available = all_gates()
+    unknown = (selected or set()) - {cls.id for cls in available}
+    if unknown:
+        raise ValueError(f"nieznane bramki: {', '.join(sorted(unknown))}")
     gates: list[Gate] = []
-    for cls in all_gates():
+    for cls in available:
         if selected and cls.id not in selected:
             continue
         gates.append(cls(policy.gate_config(cls.id)))

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% import "_makra.html" as m %}
+{% block tytul %}{{ finding.title }} — znalezisko{% endblock %}
+
+{% block tresc %}
+<p class="podtytul">
+  <a href="/projekty/{{ run.project_id }}/przebiegi/{{ run.run_id }}">← Przebieg {{ run.run_id }}</a>
+  · projekt {{ run.project_name }}
+</p>
+
+<h1>{{ finding.title }}</h1>
+<p class="podtytul">
+  <span class="waga waga--{{ finding.severity }}">waga {{ finding.severity_label }}</span> ·
+  reguła <code>{{ finding.rule_id }}</code> · bramka <code>{{ finding.gate }}</code> ·
+  pewność {{ finding.confidence }}
+</p>
+
+<div class="karta">
+  <h2>Scenariusz awarii</h2>
+  <p>{{ finding.failure_scenario }}</p>
+</div>
+
+<div class="karta">
+  <h2>Lokalizacja</h2>
+  {% if finding.has_location %}
+    <p class="mono">{{ finding.location }}</p>
+    <p class="brak">
+      Panel pokazuje ścieżkę i linię z raportu. Podglądu treści pliku nie ma:
+      wymaga on odczytu ze wskazanego SHA zarejestrowanego repozytorium
+      i osobnej redakcji.
+    </p>
+  {% else %}
+    <p class="brak">Znalezisko nie wskazuje pliku — dotyczy całej zmiany albo metadanych commita.</p>
+  {% endif %}
+</div>
+
+<div class="karta">
+  <h2>Dowód</h2>
+  {% if finding.evidence %}
+    <dl class="fakty">
+      {% for item in finding.evidence %}
+        <dt><code>{{ item.key }}</code></dt>
+        <dd class="mono">{{ item.value }}</dd>
+      {% endfor %}
+    </dl>
+    <p class="brak">
+      Wartości są zredagowane przy imporcie: ścieżki katalogów roboczych bramek
+      i pola o nazwach sugerujących sekret nie trafiają do panelu w oryginale.
+    </p>
+  {% else %}
+    <p class="brak">Bramka nie dołączyła dowodu do tego znaleziska.</p>
+  {% endif %}
+</div>
+
+<div class="karta">
+  <h2>Ocena trafności</h2>
+  {% if ocena %}
+    <p>
+      Aktualna ocena: {{ m.ocena(ocena) }}
+      {% if ocena.author %}· {{ ocena.author }}{% endif %}
+      · {{ ocena.created_at|czas }}
+      {% if ocena.note %}<br><em>{{ ocena.note }}</em>{% endif %}
+    </p>
+  {% else %}
+    <p class="brak">Nikt jeszcze nie ocenił tego znaleziska.</p>
+  {% endif %}
+
+  <form method="post"
+        action="/projekty/{{ run.project_id }}/przebiegi/{{ run.run_id }}/znaleziska/{{ finding.fingerprint }}/ocena"
+        class="filtry">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div>
+      <label for="verdict">Ocena</label>
+      <select id="verdict" name="verdict" required>
+        <option value="true_positive">potwierdzony problem</option>
+        <option value="false_positive">fałszywy alarm</option>
+      </select>
+    </div>
+    <div>
+      <label for="author">Kto ocenia</label>
+      <input id="author" name="author" maxlength="120" autocomplete="off">
+    </div>
+    <div>
+      <label for="note">Komentarz</label>
+      <input id="note" name="note" maxlength="2000" size="40" autocomplete="off">
+    </div>
+    <button class="glowny" type="submit">Zapisz ocenę</button>
+  </form>
+  <p class="brak">
+    Ocena <strong>nie</strong> zmienia decyzji tego przebiegu i nie tworzy
+    wyjątku od reguły. Służy do liczenia precyzji bramki — wyjątek dodaje się
+    świadomie w polityce.
+  </p>
+
+  {% if historia|length > 1 %}
+    <details>
+      <summary>Historia ocen ({{ historia|length }})</summary>
+      <ul>
+        {% for wpis in historia %}
+          <li>
+            {{ m.ocena(wpis) }} · {{ wpis.created_at|czas }}
+            {% if wpis.author %} · {{ wpis.author }}{% endif %}
+            {% if wpis.note %} — {{ wpis.note }}{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% endif %}
+</div>
+
+<div class="karta">
+  <h2>Fingerprint</h2>
+  <p class="mono">{{ finding.fingerprint }}</p>
+  <p class="brak">
+    Liczony z treści, nie z numeru linii, więc przeżywa rebase. Ocena
+    trafności („potwierdzony problem” / „fałszywy alarm”) będzie zapisywana
+    pod tym identyfikatorem w kontekście projektu — samo CLI robi to dziś
+    poleceniem <code>gatekeeper verdict {{ finding.fingerprint }}</code>.
+  </p>
+</div>
+
+{% if gate %}
+  <div class="karta">
+    <h2>Kontekst bramki {{ gate.gate }}</h2>
+    <p>{{ m.status_bramki(gate) }} {{ gate.message }}</p>
+    {% for note in gate.notes %}<div class="uwaga">{{ note }}</div>{% endfor %}
+    {% if gate.facts %}
+      <dl class="fakty">{% for f in gate.facts %}{{ m.fakt(f) }}{% endfor %}</dl>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

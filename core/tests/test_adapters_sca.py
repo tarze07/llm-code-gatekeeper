@@ -13,6 +13,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from gatekeeper_core.adapters.base import ToolFailed
 from gatekeeper_core.adapters.sca import parse_npm_audit, parse_pip_audit
 from gatekeeper_core.core.finding import Severity
 
@@ -54,6 +57,15 @@ def test_pip_audit_pakiet_bez_znanych_podatnosci_golden_file():
 def test_pusty_raport_pip_audit_nie_wywraca_adaptera():
     assert parse_pip_audit("", "requirements.txt", {"six"}, "G3.sca") == []
     assert parse_pip_audit('{"dependencies": []}', "requirements.txt", set(), "G3.sca") == []
+
+
+def test_smieciowy_output_pip_audit_jest_bledem_nie_cichym_pass():
+    """REVIEW.md §5 P1: dotąd `parse_pip_audit` nie łapał `JSONDecodeError`
+    wcale — niesparsowalny payload wywalałby się przez `PyPIEcosystem.
+    scan_sca()` (`except ToolFailed` go nie złapie), psując cały przebieg
+    G3.sca, nie tylko jeden pakiet. Teraz to jawny `ToolFailed`."""
+    with pytest.raises(ToolFailed):
+        parse_pip_audit("to nie jest JSON", "requirements.txt", {"six"}, "G3.sca")
 
 
 def test_pip_audit_normalizuje_wielkosc_liter_pakietu():

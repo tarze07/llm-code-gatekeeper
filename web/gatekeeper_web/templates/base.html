@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block tytul %}Panel bramy jakości{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#tresc">Przejdź do treści</a>
+  <header class="top">
+    <div class="marka">Brama jakości <small>— panel lokalny</small></div>
+    <nav class="glowna" aria-label="Nawigacja główna">
+      {% set sciezka = request.url.path %}
+      <a href="/" {% if sciezka == '/' %}aria-current="page"{% endif %}>Pulpit</a>
+      <a href="/nowa-kontrola" {% if sciezka.startswith('/nowa-kontrola') %}aria-current="page"{% endif %}>Nowa kontrola</a>
+      <a href="/zadania" {% if sciezka.startswith('/zadania') %}aria-current="page"{% endif %}>Zadania</a>
+      <a href="/przebiegi" {% if sciezka.startswith('/przebiegi') %}aria-current="page"{% endif %}>Historia</a>
+      <a href="/projekty" {% if sciezka.startswith('/projekty') and '/przebiegi/' not in sciezka %}aria-current="page"{% endif %}>Projekty</a>
+      <a href="/polityki" {% if sciezka.startswith('/polityki') %}aria-current="page"{% endif %}>Polityki</a>
+      <a href="/metryki" {% if sciezka.startswith('/metryki') %}aria-current="page"{% endif %}>Metryki</a>
+      <a href="/srodowisko" {% if sciezka.startswith('/srodowisko') %}aria-current="page"{% endif %}>Środowisko</a>
+      <a href="/import" {% if sciezka.startswith('/import') %}aria-current="page"{% endif %}>Import raportu</a>
+    </nav>
+  </header>
+
+  <main id="tresc">
+    {% block tresc %}{% endblock %}
+  </main>
+
+  <footer class="stopka">
+    Panel lokalny, jeden operator. Uruchamia narzędzia na wskazanym kodzie
+    w izolacji Bubblewrap — stan izolacji pokazuje zakładka
+    <a href="/srodowisko">Środowisko</a>.
+    {% if zalogowany %}
+    <form method="post" action="/wyloguj" class="wyloguj">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="zwykly" type="submit">Wyloguj</button>
+    </form>
+    {% endif %}
+  </footer>
+</body>
+</html>

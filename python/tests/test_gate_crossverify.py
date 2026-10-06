@@ -108,7 +108,7 @@ def test_blad_importu_nowego_modulu_to_slaby_dowod(repo):
     """Nowy moduł nie istnieje w bazie — test się nie zaimportuje.
 
     To dowód, ale słaby: nie mówi nic o zachowaniu, tylko o tym, że plik
-    jeszcze nie istniał. Liczony osobno, nie blokuje.
+    jeszcze nie istniał. Liczony osobno; brak dowodu daje status error.
     """
     repo.write("calc.py", BASE_CODE)
     repo.commit("baza")
@@ -124,7 +124,7 @@ def test_blad_importu_nowego_modulu_to_slaby_dowod(repo):
 
     result = CrossVerify({}).run(change)
 
-    assert result.status == "pass"
+    assert result.status == "error"
     assert result.facts["tests.weak_evidence"] == 1
     assert result.facts["tests.proved"] == 0
 

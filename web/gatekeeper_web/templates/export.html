@@ -1,0 +1,170 @@
+<!doctype html>
+{# Samodzielny raport do archiwum: bez JavaScriptu, bez zasobów zewnętrznych,
+   ze stylem w treści. Ma się otwierać z dysku za rok i niczego nie wykonywać. #}
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Raport bramy jakości — {{ run.run_id }}</title>
+  <style>
+    body { font: 15px/1.55 system-ui, "Segoe UI", Roboto, sans-serif; color: #16191d;
+           max-width: 60rem; margin: 0 auto; padding: 24px; background: #fff; }
+    h1 { font-size: 1.5rem; margin-bottom: 4px; }
+    h2 { font-size: 1.15rem; margin-top: 28px; border-bottom: 1px solid #d7dce3; padding-bottom: 4px; }
+    h3 { font-size: 1rem; margin-top: 18px; }
+    code, .mono { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    th, td { border: 1px solid #d7dce3; padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { background: #f2f4f8; font-size: 0.86rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .znacznik { display: inline-block; padding: 1px 8px; border-radius: 999px; font-weight: 600;
+                font-size: 0.85rem; border: 1px solid #d7dce3; }
+    .block { background: #fdecee; color: #a5192a; border-color: #f3c2c8; }
+    .review { background: #fdf4e3; color: #8a5a00; border-color: #f0d9a8; }
+    .pass { background: #e9f6ee; color: #12653a; border-color: #b9e0c9; }
+    .uwaga { background: #fff8e6; border: 1px solid #f0dca8; border-left: 5px solid #c98a00;
+             padding: 8px 12px; margin: 8px 0; }
+    .znalezisko { border: 1px solid #d7dce3; border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; }
+    .meta { color: #5a6472; font-size: 0.88rem; }
+    .brak { color: #5a6472; font-style: italic; }
+    dl { display: grid; grid-template-columns: minmax(180px, max-content) 1fr; gap: 2px 16px; }
+    dt { color: #5a6472; }
+    dd { margin: 0; }
+    @media print { body { max-width: none; } .znalezisko { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <h1>Raport bramy jakości</h1>
+  <p class="meta">
+    Projekt <strong>{{ run.project_name }}</strong> · przebieg <span class="mono">{{ run.run_id }}</span> ·
+    <span class="mono">{{ run.base_sha|sha }} → {{ run.head_sha|sha }}</span> ·
+    start {{ run.started_at|czas }} · czas {{ run.duration_s|sekundy }}
+    {% if run.policy_version %} · polityka v{{ run.policy_version }}{% endif %}
+  </p>
+
+  <table>
+    <caption class="meta">Trzy poziomy wyniku — zadanie, bramki, polityka — opisują różne rzeczy.</caption>
+    <tr><th scope="row">Zadanie</th><td>{{ run.job_state_label }}</td></tr>
+    <tr>
+      <th scope="row">Bramki</th>
+      <td>
+        {{ run.gates|length }} uruchomionych —
+        {% for status, ile in run.gate_status_counts.items() %}{{ status }}: {{ ile }}{% if not loop.last %}, {% endif %}{% endfor %}
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">Polityka</th>
+      <td>
+        <span class="znacznik {{ 'block' if run.verdict == 'BLOCK' else ('review' if run.verdict == 'PASS-WITH-REVIEW' else 'pass') }}">{{ run.verdict }}</span>
+        {{ run.verdict_label }}
+      </td>
+    </tr>
+    <tr><th scope="row">Znaleziska</th><td>{{ run.findings|length }}</td></tr>
+  </table>
+
+  {% if run.conflicting_gates %}
+    <h2>Co wymaga wyjaśnienia</h2>
+    {% for gate in run.conflicting_gates %}
+      <div class="uwaga">
+        <strong>{{ gate.gate }}</strong> — status <code>{{ gate.status }}</code>
+        {% for note in gate.notes %}<p>{{ note }}</p>{% endfor %}
+        {% if gate.blocking_reasons %}
+          <ul>
+            {% for r in gate.blocking_reasons %}
+              <li><code>{{ r.rule }}</code> — {{ r.detail }}
+                {% if r.fact %}<strong>({{ r.fact.display }}{% if r.fact.detail %}, {{ r.fact.detail }}{% endif %})</strong>{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <h2>Dlaczego taka decyzja</h2>
+  {% if run.reasons %}
+    <table>
+      <thead><tr><th>Źródło</th><th>Reguła</th><th>Szczegół</th><th>Bramka</th></tr></thead>
+      <tbody>
+        {% for r in run.reasons %}
+          <tr>
+            <td>{{ r.source_label }}</td>
+            <td class="mono">{{ r.rule }}</td>
+            <td>{{ r.detail }}{% if r.fact %} <strong>({{ r.fact.display }}{% if r.fact.detail %}, {{ r.fact.detail }}{% endif %})</strong>{% endif %}</td>
+            <td class="mono">{{ r.gate or '—' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>Żadna reguła polityki nie została naruszona.</p>
+  {% endif %}
+
+  {% if run.warnings %}
+    <h3>Ostrzeżenia (nie blokują)</h3>
+    <ul>{% for r in run.warnings %}<li><code>{{ r.rule }}</code> — {{ r.detail }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if run.suppressed %}
+    <h3>Wyciszone wyjątkiem</h3>
+    <ul>{% for r in run.suppressed %}<li><code>{{ r.rule }}</code> — {{ r.detail }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  <h2>Bramki</h2>
+  <table>
+    <thead><tr><th>Bramka</th><th>Status</th><th>Czas</th><th>Podsumowanie</th></tr></thead>
+    <tbody>
+      {% for gate in run.gates %}
+        <tr>
+          <td class="mono">{{ gate.gate }}</td>
+          <td>{{ gate.status }} — {{ gate.status_label }}{% if gate.warn_only %} (warn-only){% endif %}</td>
+          <td>{{ gate.duration_s|sekundy }}</td>
+          <td>{{ gate.message }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% for gate in run.gates %}
+    <h3>{{ gate.gate }} — fakty</h3>
+    {% if gate.facts %}
+      <dl>
+        {% for f in gate.facts %}
+          <dt><code>{{ f.key }}</code></dt>
+          <dd>{% if f.missing %}<span class="brak">{{ f.display }}</span>{% else %}{{ f.display }}{% endif %}
+            {% if f.detail %}<span class="brak">({{ f.detail }})</span>{% endif %}</dd>
+        {% endfor %}
+      </dl>
+    {% else %}
+      <p class="brak">Bramka nie zadeklarowała żadnego faktu.</p>
+    {% endif %}
+  {% endfor %}
+
+  <h2>Znaleziska ({{ run.findings|length }})</h2>
+  {% for f in run.findings %}
+    <div class="znalezisko">
+      <strong>{{ f.title }}</strong>
+      <div class="meta">
+        waga {{ f.severity_label }} · <span class="mono">{{ f.rule_id }}</span> · {{ f.gate }} ·
+        <span class="mono">{{ f.location }}</span> · pewność {{ f.confidence }} ·
+        <span class="mono">{{ f.fingerprint }}</span>
+      </div>
+      <p>{{ f.failure_scenario }}</p>
+      {% if f.evidence %}
+        <dl>
+          {% for item in f.evidence %}
+            <dt><code>{{ item.key }}</code></dt><dd class="mono">{{ item.value }}</dd>
+          {% endfor %}
+        </dl>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="brak">Ten przebieg nie zgłosił żadnego znaleziska.</p>
+  {% endfor %}
+
+  <h2>Czego ta brama nie sprawdza</h2>
+  {% if run.not_checked %}
+    <ul>{% for item in run.not_checked %}<li>{{ item }}</li>{% endfor %}</ul>
+  {% else %}
+    <p class="brak">Raport nie zawiera listy ograniczeń — to brak danych, a nie deklaracja pełnego pokrycia.</p>
+  {% endif %}
+</body>
+</html>

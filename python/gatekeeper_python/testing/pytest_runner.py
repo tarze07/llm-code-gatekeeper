@@ -105,7 +105,7 @@ def run_pytest(
     if not nodeids:
         return RunOutput({}, 0, "", "")
     sandbox = sandbox or Sandbox(SandboxPolicy(timeout_s=timeout_s))
-    with tempfile.TemporaryDirectory(prefix="gatekeeper-junit-") as tmp:
+    with tempfile.TemporaryDirectory(dir=worktree, prefix="gatekeeper-junit-") as tmp:
         report = Path(tmp) / "junit.xml"
         cmd = [
             sys.executable,

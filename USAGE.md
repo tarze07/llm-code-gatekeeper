@@ -2,6 +2,8 @@
 
 Ten plik opisuje **praktyczne** użycie bramy dla każdego języka z osobna: co zainstalować, co zostanie sprawdzone, czego brakuje. Zawsze instalujesz `llm-code-gatekeeper-core` — sam z siebie sprawdza rozmiar/pochodzenie zmiany (`G0.*`), sekrety (`G3.secrets`) i nowe zależności PyPI/npm/NuGet (`G1.deps`/`G3.sca`) bez żadnego pack'a. Pack językowy dokłada wyłącznie `G1.static` (build/lint/typy) i część `G3.sast` (reguły „nigdy" specyficzne dla języka).
 
+**Polityka ma dwa profile** (w `core/policy/` i w `policy/` każdego pack'a): `gates.yaml` — adopcja, `G1.static`/`G2.*`/`G3.sast`/`G3.sca` są w `warn_only` i tylko ostrzegają; `gates.enforcing.yaml` — produkcja, pusty `warn_only`. Reszta treści jest identyczna. Po tygodniu obserwacji skopiuj `gates.enforcing.yaml` jako `policy/gates.yaml` (albo `gatekeeper run --policy policy/gates.enforcing.yaml`) — **zanim** Check Run stanie się required. Z profilem adopcji brama komentuje, nie chroni.
+
 Pełny opis mechanizmu (entry points, dwa poziomy dispatchu) — [`core/README.md`](core/README.md). Pełna instrukcja krok po kroku, wspólna dla wszystkich języków (polityka, interpretacja raportu, integracja z CI, FAQ) — [`python/USAGE.md`](python/USAGE.md).
 
 ---
@@ -55,13 +57,16 @@ Co dostajesz z pack'a `llm-code-gatekeeper-ts`:
 |---|---|
 | `G1.static` | `tsc --noEmit` (kontrola typów — to samo co mypy dla Pythona) + `eslint` (reguły „problem", nie styl) na zmienionych liniach |
 | `G1.complexity` | złożoność cyklomatyczna przez regułę `complexity` eslinta (wymaga też `@typescript-eslint/parser` dla plików `.ts`/`.tsx`) |
+| `G2.cross_verify` | nowe testy (`it`/`test`, także w `describe`) uruchomione przeciw kodowi **sprzed** zmiany przez vitest albo jest |
+| `G2.test_sanity` | linter jakości testów przez helper ESTree: brak asercji, asercja na stałą, echo mocka (`vi.fn`/`jest.fn`), tylko `toBeDefined`, połknięty wyjątek |
+| `G2.diff_coverage` | pokrycie różnicowe branch-aware (`vitest --coverage`/`jest --coverage` w formacie Cobertura + `diff-cover`) |
 | `G3.sast` | reguły „nigdy": `no-dangerous-html-unsanitized`, `no-eval-on-input-js`, `no-shell-true-js`, `no-tls-verify-disabled-js` |
 
 `G1.deps`/`G3.sca` (manifest `package.json`, rejestr npm, `npm audit`) działają **bez** tego pack'a — to core.
 
 `tsc` potrzebuje `tsconfig.json` w repo — bez niego `G1.static` przechodzi bez wołania narzędzia (brak dowodu, nie fałszywy alarm). `eslint` analogicznie potrzebuje configu (`eslint.config.js`/`.eslintrc.*`). Bramka woła najpierw `node_modules/.bin/tsc`/`eslint` projektu ocenianego repo, dopiero potem globalną binarkę.
 
-**`G2.cross_verify`/`test_sanity`/`diff_coverage` nie istnieją jeszcze dla TS/JS** — brak zarejestrowanego `TestToolchain` to `skipped` w raporcie, nie błąd. Native helper na TypeScript Compiler API jest zaplanowany, ale nie zbudowany.
+`G2.*` wymaga, żeby oceniane repo miało **vitest albo jest** w `package.json` i zainstalowane `node_modules` — repo na mocha/`node:test` dostanie `error`, nie cichy `pass` (fail-closed). Dla `G2.diff_coverage` potrzebny jest dodatkowo pakiet pokrycia w ocenianym repo (`@vitest/coverage-v8` dla vitesta) oraz `diff-cover` w środowisku bramy (`pip install "llm-code-gatekeeper-ts[gates] @ git+..."` albo wprost `pip install diff-cover`). Architektura i decyzje projektowe: [`ts/PLAN-G2.md`](ts/PLAN-G2.md).
 
 ---
 

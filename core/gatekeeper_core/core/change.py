@@ -97,6 +97,20 @@ class GitError(RuntimeError):
     pass
 
 
+def write_worktree_file(root: Path, relative: str, content: str) -> None:
+    """Nakładanie testów nie może podążać za dowiązaniami z commita bazowego."""
+    path = Path(relative)
+    if path.is_absolute() or ".." in path.parts:
+        raise GitError(f"ścieżka testu poza kopią roboczą: {relative}")
+    target = root
+    for part in path.parts:
+        target = target / part
+        if target.is_symlink():
+            raise GitError(f"dowiązanie w ścieżce nakładanego testu: {relative}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+
+
 def glob_to_regex(pattern: str) -> re.Pattern[str]:
     """Tłumaczy glob ze wsparciem `**` na wyrażenie regularne.
 
@@ -207,6 +221,7 @@ class ChangeContext:
     branch: str | None = None
     commits: list[Commit] = field(default_factory=list)
     config: DiffConfig = field(default_factory=DiffConfig)
+    scratch_dir: Path | None = None
 
     # ---------- widoki na diff ----------
 
@@ -253,22 +268,21 @@ class ChangeContext:
 
     @contextmanager
     def worktree_at(self, sha: str) -> Iterator[Path]:
-        """Osobny worktree na wskazanym commicie (potrzebny cross-verify).
+        """Niezależna kopia commita, bez współdzielonej konfiguracji i indeksu Git.
 
-        Sprząta po sobie także przy wyjątku — zaległe worktree potrafią
-        zapchać runnera w kilka dni.
+        Katalog nadrzędny może należeć do procesu nadzorującego bramkę:
+        wtedy posprząta on także kopie pozostawione po twardym timeoutcie.
         """
-        tmp = Path(tempfile.mkdtemp(prefix="gatekeeper-wt-"))
+        tmp = Path(tempfile.mkdtemp(prefix="gatekeeper-wt-", dir=self.scratch_dir))
         target = tmp / "wt"
         try:
-            _git(self.repo, "worktree", "add", "--detach", str(target), sha)
+            target.mkdir()
+            _git(target, "init", "-q", "--template=")
+            _git(target, "-c", "core.hooksPath=/dev/null", "fetch", "--no-tags",
+                 str(self.repo.resolve()), sha, self.base_sha)
+            _git(target, "-c", "core.hooksPath=/dev/null", "checkout", "--detach", sha)
             yield target
         finally:
-            subprocess.run(
-                ["git", "-C", str(self.repo), "worktree", "remove", "--force", str(target)],
-                capture_output=True,
-                check=False,
-            )
             shutil.rmtree(tmp, ignore_errors=True)
 
     # ---------- konstrukcja ----------

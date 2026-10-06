@@ -97,9 +97,12 @@ pytest --collect-only -q     # musi działać, zanim brama spróbuje tego samego
 ```bash
 cd ~/moj-projekt
 mkdir -p policy
-cp /ścieżka/do/llm-code-gatekeeper/policy/gates.yaml      policy/
-cp /ścieżka/do/llm-code-gatekeeper/policy/exceptions.yaml policy/
+cp /ścieżka/do/llm-code-gatekeeper/python/policy/gates.yaml           policy/
+cp /ścieżka/do/llm-code-gatekeeper/python/policy/gates.enforcing.yaml policy/
+cp /ścieżka/do/llm-code-gatekeeper/python/policy/exceptions.yaml      policy/
 ```
+
+Dwa profile, ta sama treść poza `warn_only`: `gates.yaml` (adopcja — `G1.static`, `G2.*`, `G3.sast`, `G3.sca` tylko ostrzegają) i `gates.enforcing.yaml` (produkcja — nic nie jest wyciszone). `gatekeeper` czyta domyślnie `policy/gates.yaml`, więc zaczynasz od adopcji. Po tygodniu obserwacji nadpisz `policy/gates.yaml` profilem enforcing — **zanim** Check Run stanie się required. Z profilem adopcji brama komentuje, nie chroni: naprawdę blokuje tylko sekret, nieistniejący pakiet, typosquat, za duży diff i złożoność.
 
 To nie jest formalność techniczna. Polityka — czyli to, co blokuje i jakie są limity — ma leżeć w ocenianym repozytorium, być wersjonowana razem z kodem i chroniona przez CODEOWNERS. Chodzi o to, żeby **agent nie mógł sobie poprawić kryteriów, według których jest oceniany**. To granica bezpieczeństwa całego systemu (PLAN.md §4).
 
@@ -284,7 +287,7 @@ Reguły stylistyczne ruffa (import order, formatowanie) i eslinta poza rdzeniowy
 
 ### `G3.sast` — reguły „nigdy" (semgrep)
 
-Zestaw reguł w `rules/semgrep/never.yaml`: wzorce, które **nie mają poprawnego zastosowania w tym repo**. Semgrep sam dobiera język per plik, więc jedna bramka pokrywa Pythona, TS/JS i C# naraz — bez osobnego adaptera na język:
+Reguły „nigdy”: wzorce, które **nie mają poprawnego zastosowania w tym repo**. Każdy pack dokłada własny plik reguł przez entry point `gatekeeper.semgrep_rule_packs` (`gatekeeper_python/rules/semgrep/python.yaml`, `gatekeeper_ts/rules/semgrep/ts.yaml`, `gatekeeper_csharp/rules/semgrep/csharp.yaml`), a jedna bramka uruchamia semgrep na wszystkich zainstalowanych naraz:
 
 | Język | Czego pilnuje |
 |---|---|
@@ -368,7 +371,7 @@ Bramka wtedy nie blokuje, ale **liczy te deklaracje i pokazuje je w metrykach**.
 
 Jeżeli Twój pakiet jest zainstalowany przez `pip install -e .`, import sięgnie po kod z katalogu roboczego zamiast z kopii kodu bazowego — i bramka porównywałaby nowy kod z nowym. Wykrywa to i zgłasza `error`, zamiast produkować bezwartościowy zielony wynik.
 
-Bramka wchodzi domyślnie w trybie `warn_only`: przez pierwszy tydzień ostrzega, nie blokuje. Po przeglądzie fałszywych alarmów usuń ją z `warn_only` w `policy/gates.yaml`.
+Bramka wchodzi domyślnie w trybie `warn_only`: przez pierwszy tydzień ostrzega, nie blokuje. Po przeglądzie fałszywych alarmów przejdź na profil `gates.enforcing.yaml` (albo usuń ją z `warn_only` w `policy/gates.yaml`).
 
 ---
 
@@ -410,7 +413,7 @@ thresholds:
 human_review_required_when:
   - paths_match: ["**/auth/**", "**/payments/**"]
 
-warn_only:
+warn_only:                         # profil adopcji; w gates.enforcing.yaml lista jest pusta
   - G2.cross_verify                # zdejmij po tygodniu obserwacji
   - G1.static
   - G3.sast
@@ -563,7 +566,7 @@ Ostatnia linijka to nie kwestia grzeczności. **Agent nie może mieć uprawnień
 | gdy odrzucasz znalezisko | `gatekeeper verdict … --false-positive` — bez tego precyzja jest niepoliczalna |
 | po incydencie na produkcji | `gatekeeper incident <run-id>` |
 | raz w tygodniu | `gatekeeper metrics --days 30`, `gatekeeper policy lint` (wygasające wyjątki) |
-| po tygodniu obserwacji nowej bramki | zdejmij ją z `warn_only` albo popraw progi |
+| po tygodniu obserwacji nowej bramki | zdejmij ją z `warn_only` (albo przejdź na `gates.enforcing.yaml`) albo popraw progi |
 | raz w miesiącu | przegląd reguł o niskiej precyzji; odświeżenie list pakietów: `python scripts/refresh_top_packages.py` |
 | przy zmianie w `policy/gates.yaml` albo w regułach | `gatekeeper calibrate` — łapie regresję, zanim złapie ją produkcja |
 
@@ -701,9 +704,9 @@ Tak dla G0–G3, z jednym świadomym wyjątkiem — i warto to wiedzieć zawczas
 | `G1.deps` | tak — czyta `package.json`, pyta rejestr npm | tak — czyta `.csproj`/`Directory.Packages.props`/`packages.config`, pyta rejestr NuGet |
 | `G1.static` | tak — `tsc --noEmit` (wymaga `tsconfig.json`) + `eslint` (wymaga configu) | tak — `dotnet build` (kompilator *jest* kontrolą typów w trybie strict) |
 | `G3.secrets` | tak — gitleaks jest niezależny od języka | tak — gitleaks jest niezależny od języka |
-| `G3.sast` | tak — reguły „nigdy” dla eval/shell-injection/TLS (`rules/semgrep/never.yaml`) | tak — reguły „nigdy” dla TLS/SQLi/shell-injection/deserializacji |
+| `G3.sast` | tak — reguły „nigdy” dla eval/shell-injection/TLS (`gatekeeper_ts/rules/semgrep/ts.yaml`) | tak — reguły „nigdy” dla TLS/SQLi/shell-injection/deserializacji |
 | `G3.sca` | tak — `npm audit` na nowo dodanych zależnościach | tak — `dotnet list package --vulnerable` na nowo dodanych zależnościach |
-| `G2.cross_verify` | **nie** — dziś tylko Python/pytest. Adapter dla vitest/jest w planie | **nie** — dziś tylko Python/pytest. Adapter dla `dotnet test` w planie |
+| `G2.cross_verify` | tak — vitest albo jest (`ts/PLAN-G2.md`) | tak — `dotnet test`, wymaga osobno zainstalowanego `gatekeeper-cs-helper` |
 
 `G1.static` pomija język cicho (status `pass`, bez wołania narzędzia), gdy w repo brakuje configu, którego to narzędzie wymaga — `tsconfig.json` dla tsc, `.eslintrc*`/`eslint.config.*` dla eslinta, `.csproj` dla `dotnet build`. To nie jest defekt, tylko brak przedmiotu do sprawdzenia; fakty `static.tsconfig_found`/`static.eslint_config_found`/`static.csproj_found` mówią wprost, co się stało.
 

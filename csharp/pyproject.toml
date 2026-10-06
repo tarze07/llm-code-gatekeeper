@@ -8,12 +8,20 @@ version = "0.3.0"
 description = "Pack C# dla llm-code-gatekeeper-core: dotnet build (G1.static), reguły „nigdy” SAST, G2.cross_verify/test_sanity/diff_coverage, złożoność cyklomatyczna (G1.complexity)"
 requires-python = ">=3.12"
 dependencies = [
-    "llm-code-gatekeeper-core>=0.1.0",
+    "llm-code-gatekeeper-core>=0.1.0,<0.2",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+]
+
+# Binaria wołane jako podprocesy przez `G2.diff_coverage` (`core.diffcover`),
+# nie biblioteki importowane w kodzie — ta sama konwencja co `gates` w
+# python-packu. Narzędzia npm (tsc/eslint/vitest/jest) tu nie występują:
+# instaluje je oceniane repo, nie pip.
+gates = [
+    "diff-cover>=8.0",
 ]
 
 [project.entry-points."gatekeeper.static_checkers"]

@@ -24,6 +24,14 @@ dotnet tool install --global gatekeeper-cs-helper --add-source /tmp/cs-helper-nu
 pytest -q
 ```
 
+`G1.static` przygotowuje pliki NuGet osobno w izolowanej kopii commita,
+a następnie uruchamia kompilację. Pakiety muszą być wcześniej dostępne
+w lokalnym cache `~/.nuget/packages` (zwykle po `dotnet restore` projektu
+na etapie przygotowania środowiska). Sama bramka nie pobiera pakietów
+z sieci. Brak pakietu lub awaria MSBuild daje status `error`, również przy
+domyślnym `require_dotnet_build=False`; błędy kompilatora w zmienionych
+liniach dają `fail`.
+
 ## Testy SAST
 
 ```bash

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block tytul %}Metryki — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Metryki</h1>
+<p class="podtytul">
+  Ostatnie {{ report.days }} dni, {{ report.runs }} przebiegów. Metryka bez
+  danych jest opisana jako brak danych — zero znaczy co innego.
+</p>
+
+<div class="karta">
+  <form method="get" action="/metryki" class="filtry">
+    <div>
+      <label for="projekt">Projekt</label>
+      <select id="projekt" name="projekt">
+        <option value="">wszystkie</option>
+        {% for p in projects %}
+          <option value="{{ p.id }}" {% if wybrany == p.id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="dni">Okres (dni)</label>
+      <input id="dni" name="dni" type="number" min="1" max="3650" value="{{ dni }}">
+    </div>
+    <button class="glowny" type="submit">Pokaż</button>
+  </form>
+</div>
+
+<div class="siatka">
+  {% for metric in report.metrics %}
+    <div class="kafel">
+      <div class="liczba" style="font-size:1.5rem">{{ metric.display }}</div>
+      <div class="opis">
+        {{ metric.name }}
+        {% if metric.target %}<br><span class="brak">cel: {{ metric.target }}</span>{% endif %}
+        {% if metric.note %}<br><span class="brak">{{ metric.note }}</span>{% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<h2>Reguły</h2>
+<div class="karta przewijana">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Reguła</th>
+        <th scope="col">Wystąpienia</th>
+        <th scope="col">Problemy</th>
+        <th scope="col">Ocenione</th>
+        <th scope="col">Trafne</th>
+        <th scope="col">Precyzja</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rule in report.rules %}
+        <tr>
+          <td class="mono">{{ rule.rule_id }}</td>
+          <td>{{ rule.occurrences }}</td>
+          <td>{{ rule.unique_findings }}</td>
+          <td>{{ rule.judged }}</td>
+          <td>{{ rule.true_positives }}</td>
+          <td>{% if rule.precision is none %}<span class="brak">brak ocen</span>{% else %}{{ rule.precision_display }}{% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="brak">Brak znalezisk w tym okresie.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% for note in report.notes %}<p class="brak">{{ note }}</p>{% endfor %}
+{% endblock %}

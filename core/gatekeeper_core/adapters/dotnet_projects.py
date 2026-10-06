@@ -16,7 +16,7 @@ from pathlib import Path
 
 from ..core.finding import Finding, Severity
 from ..core.runner import Sandbox
-from .base import relative_to_repo, run_tool
+from .base import ToolFailed, relative_to_repo, run_tool
 
 DOTNET = "dotnet"
 
@@ -82,11 +82,21 @@ def parse_dotnet_list_vulnerable(
     raport, nie blokada tego PR-a. Format obejmuje zarówno pakiety
     bezpośrednie (`topLevelPackages`), jak i tranzytywne (`transitivePackages`)
     — oba mają ten sam kształt wpisu.
+
+    `payload` puste/`None` → `"{}"` (brak projektów = legalnie zero wpisów).
+    Każdy inny niesparsowalny payload to `ToolFailed`, nie cichy `[]` —
+    ten sam wzorzec fail-closed co `run_npm_audit` w `adapters/sca.py`
+    (REVIEW.md §5 P1). `NuGetEcosystem.scan_sca()` (`deps/ecosystems.py`)
+    już łapie `ToolFailed` i przenosi te pakiety do `unresolved`, nie do
+    fałszywie czystego wyniku.
     """
     try:
         data = json.loads(payload or "{}")
-    except json.JSONDecodeError:
-        return []
+    except json.JSONDecodeError as exc:
+        raise ToolFailed(
+            f"`dotnet list package --vulnerable` nie zwrócił poprawnego JSON-a: "
+            f"{payload[:500]!r}"
+        ) from exc
     findings: list[Finding] = []
     for project in data.get("projects") or []:
         project_path = relative_to_repo(str(project.get("path") or ""), repo)

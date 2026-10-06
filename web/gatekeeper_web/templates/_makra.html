@@ -1,0 +1,75 @@
+{# Wspólne fragmenty. Decyzja polityki, status bramki i waga znaleziska mają
+   zawsze podpis tekstowy — kolor sam w sobie nie jest informacją. #}
+
+{% macro decyzja(verdict) %}
+  {% if verdict == 'BLOCK' %}
+    <span class="znacznik znacznik--block">BLOCK</span>
+  {% elif verdict == 'PASS-WITH-REVIEW' %}
+    <span class="znacznik znacznik--review">PASS-WITH-REVIEW</span>
+  {% else %}
+    <span class="znacznik znacznik--pass">PASS</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro status_bramki(gate) %}
+  {% if gate.status == 'pass' %}
+    <span class="znacznik znacznik--pass">pass — {{ gate.status_label }}</span>
+  {% elif gate.status == 'fail' %}
+    <span class="znacznik znacznik--block">fail — {{ gate.status_label }}</span>
+  {% elif gate.status == 'error' %}
+    <span class="znacznik znacznik--review">error — {{ gate.status_label }}</span>
+  {% else %}
+    <span class="znacznik znacznik--neutralny">skipped — {{ gate.status_label }}</span>
+  {% endif %}
+  {% if gate.warn_only %}
+    <span class="znacznik znacznik--neutralny">warn-only</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro fakt(f) %}
+  <dt><code>{{ f.key }}</code></dt>
+  <dd>
+    {% if f.missing %}<span class="brak">{{ f.display }}</span>{% else %}{{ f.display }}{% endif %}
+    {% if f.detail %}<span class="brak"> ({{ f.detail }})</span>{% endif %}
+  </dd>
+{% endmacro %}
+
+{% macro powod(r) %}
+  <li>
+    <strong>{{ r.source_label }}</strong> · <code>{{ r.rule }}</code>
+    {% if r.gate %}<span class="brak">({{ r.gate }})</span>{% endif %}
+    <div>{{ r.detail }}</div>
+    {% if r.fact %}
+      <div class="brak">
+        pomiar: {{ r.fact.display }}{% if r.fact.detail %} ({{ r.fact.detail }}){% endif %}
+      </div>
+    {% endif %}
+    {% if r.fingerprints %}
+      <div class="brak">znaleziska: {% for fp in r.fingerprints %}<code>{{ fp }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</div>
+    {% endif %}
+  </li>
+{% endmacro %}
+
+{% macro znalezisko_link(run, f) %}
+  <a href="/projekty/{{ run.project_id }}/przebiegi/{{ run.run_id }}/znaleziska/{{ f.fingerprint }}">{{ f.title }}</a>
+{% endmacro %}
+
+{% macro stan_zadania(job) %}
+  {% if job.state == 'completed' %}
+    <span class="znacznik znacznik--pass">{{ job.state_label }}</span>
+  {% elif job.state in ('failed', 'interrupted') %}
+    <span class="znacznik znacznik--block">{{ job.state_label }}</span>
+  {% elif job.state in ('running', 'preparing', 'cancelling') %}
+    <span class="znacznik znacznik--review">{{ job.state_label }}</span>
+  {% else %}
+    <span class="znacznik znacznik--neutralny">{{ job.state_label }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro ocena(review) %}
+  {% if review.verdict == 'true_positive' %}
+    <span class="znacznik znacznik--block">{{ review.label }}</span>
+  {% else %}
+    <span class="znacznik znacznik--neutralny">{{ review.label }}</span>
+  {% endif %}
+{% endmacro %}

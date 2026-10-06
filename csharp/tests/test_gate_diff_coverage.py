@@ -40,6 +40,6 @@ def test_nowa_linia_pokryta_testem_daje_ratio_jeden(dotnet_repo):
 
     result = DiffCoverage({}).run(change)
 
-    assert result.status == "pass"
-    assert result.facts["coverage.diff_ratio"] == 1.0
+    assert result.status == "pass", result.message
+    assert result.facts["coverage.diff_ratio"] == 1.0, result.message
     assert result.facts["coverage.tool_available"] is True

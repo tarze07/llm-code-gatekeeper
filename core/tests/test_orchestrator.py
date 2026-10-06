@@ -29,7 +29,11 @@ class Stub(Gate):
         if self.sleep_s:
             time.sleep(self.sleep_s)
         self.finished_at = time.monotonic()
-        return GateResult(gate=self.id, status=self.status, facts=self._facts)
+        return GateResult(
+            gate=self.id,
+            status=self.status,
+            facts={**self._facts, self.id + ".started": self.started_at},
+        )
 
 
 def policy(**overrides) -> Policy:
@@ -60,11 +64,11 @@ def test_bramki_w_jednej_fali_biegna_rownolegle(repo):
     a, b = Stub("G1.deps", sleep_s=0.4), Stub("G3.secrets", sleep_s=0.4)
 
     started = time.monotonic()
-    run_gates(change, policy(), gates=[Stub("G0.scope"), a, b])
+    result = run_gates(change, policy(), gates=[Stub("G0.scope"), a, b])
     elapsed = time.monotonic() - started
 
-    assert elapsed < 0.7, "0.4s + 0.4s sekwencyjnie zajęłoby ponad 0.8s"
-    assert a.started_at is not None and b.started_at is not None
+    assert elapsed < 1.5
+    assert abs(result.facts["G1.deps.started"] - result.facts["G3.secrets.started"]) < 0.3
 
 
 def test_przekroczony_budzet_to_blad_a_nie_przeszlo(repo):
@@ -111,9 +115,9 @@ def test_droga_bramka_rusza_gdy_tanie_sa_zielone(repo):
         review,
     ]
 
-    run_gates(change, policy(), gates=gates)
+    result = run_gates(change, policy(), gates=gates)
 
-    assert review.started_at is not None
+    assert result.facts["G4.review.started"] is not None
 
 
 def test_awaria_jednej_bramki_nie_zatrzymuje_pozostalych(repo):
@@ -126,7 +130,7 @@ def test_awaria_jednej_bramki_nie_zatrzymuje_pozostalych(repo):
 
     result = run_gates(change, policy(), gates=[Wybuchowa("G1.deps"), zdrowa])
 
-    assert zdrowa.started_at is not None
+    assert result.facts["G3.secrets.started"] is not None
     assert next(g for g in result.gate_results if g.gate == "G1.deps").status == "error"
 
 

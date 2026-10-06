@@ -112,7 +112,7 @@ def test_brak_ruffa_jest_bledem_bramki(repo, monkeypatch):
     repo.commit("zmiana")
     change = ChangeContext.from_git(repo.path, "main", "HEAD")
 
-    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name, **kwargs: None)
     result = StaticGuard({}).run(change)
 
     assert result.status == "error"

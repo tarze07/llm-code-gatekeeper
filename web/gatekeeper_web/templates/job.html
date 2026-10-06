@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% import "_makra.html" as m %}
+{% block tytul %}Zadanie #{{ job.id }} — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Zadanie #{{ job.id }}</h1>
+<p class="podtytul">
+  {% if project %}<a href="/projekty/{{ project.id }}">{{ project.name }}</a> · {% endif %}
+  zlecone {{ job.created_at|czas }}
+  {% if job.retry_of %} · ponowienie zadania #{{ job.retry_of }}{% endif %}
+</p>
+
+<div class="siatka">
+  <div class="kafel">
+    <div class="opis">Zadanie</div>
+    <div class="liczba" style="font-size:1.2rem" id="stan-zadania">{{ m.stan_zadania(job) }}</div>
+    <div class="opis" id="postep-tekst">
+      {% if job.is_terminal %}zakończone{% else %}w toku — odświeżanie co 2 sekundy{% endif %}
+    </div>
+  </div>
+  <div class="kafel">
+    <div class="opis">Wynik</div>
+    <div class="liczba" style="font-size:1.2rem">
+      {% if job.has_result %}
+        <a href="/projekty/{{ job.project_id }}/przebiegi/{{ job.run_id }}">raport</a>
+      {% else %}
+        <span class="brak">brak</span>
+      {% endif %}
+    </div>
+    <div class="opis">
+      {% if job.has_result %}
+        decyzja polityki jest w raporcie
+      {% else %}
+        decyzja polityki istnieje tylko dla zadania z zapisanym raportem
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if job.error %}
+  <div class="blad" role="alert"><strong>Powód zakończenia:</strong> {{ job.error }}</div>
+{% endif %}
+{% if job.cancel_requested and not job.is_terminal %}
+  <div class="uwaga" role="status">Zgłoszono zatrzymanie — czekamy na zamknięcie procesów bramek.</div>
+{% endif %}
+
+<div class="karta">
+  <h2>Zamrożone wejście</h2>
+  <p class="brak">
+    Zadanie wykonuje dokładnie te dane, nawet jeśli gałąź już się przesunęła
+    albo operator aktywował inną politykę.
+  </p>
+  <dl class="fakty">
+    <dt>Wersja bazowa</dt><dd class="mono">{{ opis.base_ref }}</dd>
+    <dt>Merge-base</dt><dd class="mono">{{ opis.merge_base|sha }}</dd>
+    <dt>Wersja oceniana</dt><dd class="mono">{{ opis.head_ref }} → {{ opis.head_sha|sha }}</dd>
+    <dt>Gałąź</dt><dd>{{ opis.branch or 'brak danych' }}</dd>
+    <dt>Ticket</dt><dd>{{ opis.ticket or 'brak' }}</dd>
+    <dt>Zakres</dt><dd>{{ opis.effective_files }} plików, {{ opis.effective_lines }} linii</dd>
+    <dt>Bramki</dt>
+    <dd>{% if opis.gates %}{{ opis.gates|join(', ') }}{% else %}wszystkie z polityki{% endif %}</dd>
+    <dt>Ścieżka szybka</dt><dd>{{ 'tak' if opis.fast_path else 'nie' }}</dd>
+    <dt>Polityka</dt><dd>wersja {{ opis.policy_revision }}, hash <code>{{ opis.policy_hash }}</code></dd>
+    <dt>Pliki blokad</dt>
+    <dd>
+      {% if opis.lockfiles %}
+        {% for name, digest in opis.lockfiles.items() %}<code>{{ name }}</code>: {{ digest }}{% if not loop.last %}, {% endif %}{% endfor %}
+      {% else %}<span class="brak">brak w repozytorium</span>{% endif %}
+    </dd>
+  </dl>
+  <p class="brak">
+    Nie obiecujemy identycznego wyniku SCA w czasie: rejestry podatności się
+    zmieniają, więc ten sam zakres jutro może dać inne znaleziska.
+  </p>
+</div>
+
+<div class="karta">
+  <h2>Działania</h2>
+  {% if not job.is_terminal %}
+    <form method="post" action="/zadania/{{ job.id }}/anuluj" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="zwykly" type="submit">Zatrzymaj kontrolę</button>
+    </form>
+  {% endif %}
+  <form method="post" action="/zadania/{{ job.id }}/ponow" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="mode" value="same_scope">
+    <button class="zwykly" type="submit">Powtórz ten sam zakres</button>
+  </form>
+  <form method="post" action="/zadania/{{ job.id }}/ponow" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="mode" value="latest">
+    <button class="zwykly" type="submit">Sprawdź najnowszą wersję</button>
+  </form>
+  <p class="brak">
+    Ponowienie tworzy nowe zadanie i nowy identyfikator przebiegu — nie
+    nadpisuje poprzedniego wyniku.
+  </p>
+</div>
+
+<h2>Postęp</h2>
+<div class="karta przewijana" data-job-events="{{ job.id }}"
+     data-terminal="{{ '1' if job.is_terminal else '' }}">
+  <table>
+    <thead><tr><th>#</th><th>Czas</th><th>Zdarzenie</th><th>Bramka</th><th>Szczegół</th><th>Postęp</th></tr></thead>
+    <tbody id="zdarzenia">
+      {% for event in events %}
+        <tr data-seq="{{ event.seq }}">
+          <td>{{ event.seq }}</td>
+          <td>{{ event.at|czas }}</td>
+          <td class="mono">{{ event.kind }}</td>
+          <td class="mono">{{ event.gate or '' }}</td>
+          <td>{{ event.message }}</td>
+          <td>
+            {% if event.total %}{{ event.completed }} z {{ event.total }}{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="brak">
+  Postęp to „ukończono N z M kontroli”, a nie procent pozostałego czasu —
+  bramki mają skrajnie różne budżety.
+</p>
+{% endblock %}

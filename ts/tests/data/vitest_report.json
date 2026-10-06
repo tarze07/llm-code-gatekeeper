@@ -1,0 +1,41 @@
+{
+  "testResults": [
+    {
+      "name": "/repo/tests/app.test.ts",
+      "status": "passed",
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "classify"
+          ],
+          "title": "zwraca non-negative dla dodatnich",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "classify"
+          ],
+          "title": "zwraca negative dla ujemnych",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "add"
+          ],
+          "title": "dodaje — ten test przechodzi tez na starym kodzie",
+          "status": "passed",
+          "failureMessages": []
+        }
+      ]
+    },
+    {
+      "name": "/repo/tests/broken.test.ts",
+      "status": "failed",
+      "message": "Error: Failed to load url ../src/nowy (resolved id: ../src/nowy)",
+      "assertionResults": []
+    }
+  ]
+}

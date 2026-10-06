@@ -1,0 +1,126 @@
+# Polityka bramy jakości — profil ENFORCING (produkcja).
+#
+# Ta sama treść co `gates.yaml` (profil adopcji), poza listą `warn_only`,
+# która tu jest pusta: G1.static, G2.*, G3.sast i G3.sca blokują. Kopiujesz
+# ten plik do ocenianego repo jako `policy/gates.yaml` (albo wskazujesz go
+# przez `--policy`), ZANIM Check Run stanie się required. `exceptions.yaml`
+# loader szuka obok pliku polityki, więc oba profile dzielą wyjątki.
+#
+# Ten plik jest wzorcem dla kopii w pack'ach (`python/`, `ts/`, `csharp/`)
+# i w polityce startowej panelu (`web/`) — patrz nagłówek `gates.yaml`.
+#
+# Zasady:
+#   * plik jest wersjonowany w repo i chroniony przez CODEOWNERS,
+#   * agent NIE ma uprawnień do jego modyfikacji — jeżeli oceniany może zmienić
+#     kryteria oceny, reszta systemu nie ma znaczenia (PLAN.md §4),
+#   * `gatekeeper policy lint` odrzuca literówki w nazwach faktów; listę
+#     dozwolonych faktów daje `gatekeeper policy facts`.
+version: 1
+
+# Dowolne trafienie => BLOCK.
+blocking:
+  - secrets.found_in_diff
+  - deps.unknown_package
+  - deps.typosquat_suspect
+  # Test, który przechodzi na kodzie sprzed zmiany, nie dowodzi niczego nowego.
+  - tests.pass_on_pre_change_code
+
+thresholds:
+  # Najskuteczniejsza pojedyncza reguła w całym systemie: duży diff od agenta
+  # jest nierecenzowalny, a przez to niebezpieczny. Pliki generowane
+  # (lockfile, snapshoty, migracje) są z tego liczenia wyłączone.
+  diff.effective_lines:
+    max: 400
+    message: "Diff jest zbyt duży, żeby dało się go rzetelnie zrecenzować — rozbij PR."
+  diff.effective_files:
+    max: 15
+    message: "Zbyt wiele plików w jednej zmianie — rozbij PR."
+  deps.new_package_count:
+    max: 3
+    on_violation: warn
+
+  # scope_map: kieruje do człowieka, nie blokuje, dopóki mapa nie pokrywa
+  # całego repo (patrz policy/scope_map.yaml).
+  diff.out_of_scope_files:
+    max: 0
+    on_violation: review
+    message: "Zmiana dotyka plików spoza zadeklarowanego zakresu ticketu."
+
+  # Progi świeżych bramek — w tym profilu blokują (w profilu adopcji
+  # wstrzymuje je `warn_only`).
+  static.high_severity_count:
+    max: 0
+    message: "Static checker zgłasza defekt w zmienionych liniach (nie styl — realny błąd)."
+  sanity.blocking_count:
+    max: 0
+    message: "Nowy test nie dowodzi niczego — brak asercji albo asercja na stałą (G2.test_sanity)."
+  coverage.diff_ratio:
+    min: 0.80
+    message: "Nowe linie produkcyjne słabo pokryte testami całego zestawu (G2.diff_coverage)."
+  sast.critical_count:
+    max: 0
+    message: "Reguła „nigdy” trafiła w zmienionych liniach."
+  sca.vulnerable_package_count:
+    max: 0
+    message: "Nowo dodana zależność ma znaną podatność."
+
+  # G1.complexity nie jest w `warn_only` w żadnym profilu — tania,
+  # deterministyczna bramka o niskim fałszywym alarmie (mierzy tylko metody,
+  # których ciało rusza diff), więc egzekwuje od pierwszego dnia
+  # (PLAN-G1-complexity.md §5.3).
+  complexity.max:
+    max: 10
+    message: >-
+      Funkcja w diffie przekracza złożoność cyklomatyczną 10 —
+      rozbij na strażników (Uncle Bob / G1.complexity).
+  complexity.over_threshold_count:
+    max: 0
+    message: "W diffie są funkcje powyżej progu złożoności."
+
+human_review_required_when:
+  - paths_match:
+      - "**/auth/**"
+      - "**/payments/**"
+      - "**/migrations/**"
+      - "infra/**"
+      - ".github/workflows/**"
+      - "policy/**"
+  - deps.new_external_package
+  - deps.too_young
+
+# Bramka, która się wywaliła, niczego nie udowodniła — domyślnie kieruje
+# zmianę do człowieka zamiast cicho ją przepuszczać.
+on_gate_error: review
+
+# Limit znalezisk w komentarzu do PR. Powyżej tej liczby zespół przestaje czytać.
+max_findings_reported: 10
+
+# Profil enforcing: żadna bramka nie jest wyciszona — `warn_only` zostaje
+# jawnie pusta, żeby różnica względem `gates.yaml` była widoczna w diffie.
+# Nową bramkę wprowadzasz tu przez dopisanie jej na tydzień, nie przez powrót
+# do profilu adopcji.
+warn_only: []
+
+# Konfiguracja per bramka.
+gates:
+  G1.complexity:
+    max_method: 10 # próg McCabe; 11+ blokuje (Uncle Bob: 1–10 „prosta")
+    include_tests: false # table-driven testy z wieloma `if` to nie dług produkcyjny
+  G1.deps:
+    min_age_days: 90
+    internal_prefixes: []
+    allow_packages: []
+  G3.secrets:
+    require_tool: true
+  G3.sast:
+    # Limit narzucany samemu semgrepowi (`--max-memory`), nie sandboksowi —
+    # silnik OCaml segfaultuje pod twardym `ulimit -v` niezależnie od
+    # realnego zużycia (core/runner.py, gates/g3_sast.py).
+    keep_env: []
+    max_memory_mb: 2000
+  G3.sca:
+    # Jedyna bramka z dostępem do sieci — jeżeli CI biegnie w środowisku bez
+    # wyjścia do internetu, ustaw `require_tool: false`, żeby dostać `skipped`
+    # zamiast `error` na każdym PR-ze dodającym zależność.
+    require_tool: true
+    keep_env: []

@@ -46,6 +46,8 @@ Native helpery `G2.cross_verify`/`test_sanity`/`diff_coverage` dla TS (TypeScrip
 
 > **Aktualizacja (ten sam dzień, po Fazie 1):** helper Roslyn dla C# (`gatekeeper-cs-helper`, `csharp/tools/`) został zbudowany — `G2.*` ma dziś odpowiednik dla Pythona i C#, TS/JS zostaje jedynym świadomie odłożonym. Powstała też nowa bramka **`G1.complexity`** (złożoność cyklomatyczna McCabe) z odpowiednikiem we wszystkich trzech pack'ach jednocześnie od startu — plan: `core/PLAN-G1-complexity.md`.
 
+> **Aktualizacja (2026-09-04):** TS/JS też dostał `G2.*` — `ts/gatekeeper_ts/testing/` + helper `tools/helper.cjs`, vitest i jest, plan: `ts/PLAN-G2.md`. Powyższy akapit „świadomie odłożone" jest tym samym w całości nieaktualny: **żaden z trzech języków nie zostaje bez `TestToolchain`**. Uwaga do zapisu historycznego: helper dla TS **nie** stoi na TypeScript Compiler API, bo od TypeScript 7 to API nie istnieje już w warstwie JS — stoi na ESTree z `@typescript-eslint/parser` (`ts/PLAN-G2.md` §0).
+
 ## Otwarty dług
 
 Po scaleniu repo (nota na górze) cztery workflow'y `ci.yml` per pack zostały zastąpione jednym korzeniowym `.github/workflows/ci.yml` z czterema jobami. Dług został ten sam: token `gh` używany w tych sesjach nie ma scope `workflow`, którego GitHub wymaga do push'a zmieniającego cokolwiek pod korzeniowym `.github/workflows/`, więc commit z tym plikiem czeka lokalnie. Odblokowanie: `gh auth refresh -h github.com -s workflow` (logowanie przez przeglądarkę), potem `git push`.

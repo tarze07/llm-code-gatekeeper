@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block tytul %}Import raportu — panel bramy jakości{% endblock %}
+
+{% block tresc %}
+<h1>Import raportu JSON</h1>
+<p class="podtytul">
+  Wynik polecenia <code>gatekeeper run --format json</code> albo pliku
+  wskazanego przez <code>--json-report</code>.
+</p>
+
+{% if blad %}<div class="blad" role="alert"><strong>Raport odrzucony.</strong> {{ blad }}</div>{% endif %}
+
+{% if projects %}
+  <div class="karta">
+    <form method="post" action="/import" enctype="multipart/form-data" class="filtry">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <label for="project_id">Projekt docelowy</label>
+        <select id="project_id" name="project_id" required>
+          {% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="file">Plik raportu (JSON, do {{ max_kb }} kB)</label>
+        <input id="file" name="file" type="file" accept="application/json,.json" required>
+      </div>
+      <button class="glowny" type="submit">Importuj</button>
+    </form>
+  </div>
+{% else %}
+  <div class="uwaga">
+    Najpierw załóż projekt w zakładce <a href="/projekty">Projekty</a> — raport
+    musi mieć gdzie trafić.
+  </div>
+{% endif %}
+
+<div class="karta">
+  <h2>Co panel robi z plikiem</h2>
+  <ul>
+    <li>Sprawdza rozmiar, format i strukturę, zanim cokolwiek zapisze.</li>
+    <li>
+      Rozpoznaje raport bez pola <code>report_version</code> jako format
+      historyczny i obsługuje go osobnym adapterem.
+    </li>
+    <li>
+      Redaguje ścieżki katalogów roboczych bramek i wartości pól o nazwach
+      sugerujących sekret.
+    </li>
+    <li>
+      Zapisuje raport w wybranym projekcie i oznacza go jako
+      <strong>zaimportowany</strong>. Pole <code>repo</code> z raportu jest
+      danymi — panel niczego na jego podstawie nie uruchamia.
+    </li>
+    <li>
+      Powtórny import tego samego pliku nie tworzy duplikatu. Ten sam
+      identyfikator przebiegu z inną treścią jest zgłaszany jako konflikt.
+    </li>
+  </ul>
+</div>
+{% endblock %}

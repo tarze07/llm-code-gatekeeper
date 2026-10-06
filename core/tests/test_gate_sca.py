@@ -174,3 +174,21 @@ def test_nowa_zaleznosc_nuget_z_podatnoscia_blokuje(repo, monkeypatch):
     assert result.status == "fail"
     assert result.facts["sca.checked_ecosystems"] == ["nuget"]
     assert result.findings[0].rule_id == "sca.GHSA-test"
+
+
+def test_zepsuty_manifest_jest_bledem_a_nie_brakiem_zaleznosci(repo, monkeypatch):
+    called = []
+    monkeypatch.setattr(sca, "run_npm_audit", lambda *a, **k: called.append(1) or [])
+
+    repo.write("package.json", '{"dependencies": {}}')
+    repo.commit("baza")
+    repo.checkout("feature", create=True)
+    repo.write("package.json", '{"dependencies": {"evil": ')
+    repo.commit("zepsuty manifest")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    result = ScaGuard({}).run(change)
+
+    assert result.status == "error"
+    assert "package.json" in result.message
+    assert called == []

@@ -76,7 +76,7 @@ def run_dotnet_test(
     stderr_parts: list[str] = []
     returncode = 0
     for project in projects:
-        with tempfile.TemporaryDirectory(prefix="gatekeeper-trx-") as tmp:
+        with tempfile.TemporaryDirectory(dir=worktree, prefix="gatekeeper-trx-") as tmp:
             results_dir = Path(tmp)
             trx_name = "results.trx"
             command = [

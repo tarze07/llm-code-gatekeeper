@@ -63,7 +63,19 @@ def run_ruff(
 
 
 def parse_mypy(payload: str, repo: Path, gate: str) -> list[Finding]:
-    """mypy `--output=json` daje JSON Lines, po jednym obiekcie na linię."""
+    """mypy `--output=json` daje JSON Lines, po jednym obiekcie na linię.
+
+    Dwa różne „nic nie znaczy" trzeba tu rozróżnić. Linia, która nie zaczyna
+    się od `{`, to śmieć PRZED właściwym JSON Lines (np. `Success: no issues
+    found` na stdout) — legalny, bo mypy go sam dopisuje, i pomijany bez
+    śladu (`test_mypy_ignoruje_smieci_przed_json_lines`). Linia, która
+    zaczyna się od `{`, ale nie parsuje się jako JSON, to nie śmieć — to
+    uszkodzony/urwany obiekt (np. output przyciętty przez sandbox), czyli
+    utracony dowód, nie „zero błędów". Taka linia fail-closed: `ToolFailed`
+    zamiast cichego pominięcia (REVIEW.md §5 P1) — `PythonStaticChecker.check()`
+    już łapie `ToolFailed` z `run_mypy()` i z `require_mypy: true` kończy
+    bramkę `error`, bez tego — `mypy_available=False`, znaleziska odrzucone.
+    """
     findings: list[Finding] = []
     for line in payload.splitlines():
         line = line.strip()
@@ -71,8 +83,8 @@ def parse_mypy(payload: str, repo: Path, gate: str) -> list[Finding]:
             continue
         try:
             item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+        except json.JSONDecodeError as exc:
+            raise ToolFailed(f"mypy: uszkodzona linia JSON Lines: {line[:500]!r}") from exc
         severity = str(item.get("severity") or "error")
         if severity == "note":
             continue  # notatki to podpowiedzi narzędzia, nie defekty

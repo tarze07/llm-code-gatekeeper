@@ -20,7 +20,7 @@ from urllib.parse import unquote, urlparse
 
 from ..core.change import ChangeContext
 from ..core.finding import Finding, Severity
-from ..core.runner import ExecResult, Sandbox, SandboxUnavailable
+from ..core.runner import ExecResult, ExecutableUnavailable, Sandbox, SandboxUnavailable
 
 
 class ToolMissing(RuntimeError):
@@ -56,8 +56,10 @@ def run_tool(
     """
     try:
         result = sandbox.run(command, cwd=cwd, env=env, timeout_s=timeout_s, network=network)
-    except SandboxUnavailable as exc:
+    except ExecutableUnavailable as exc:
         raise ToolMissing(str(exc)) from exc
+    except SandboxUnavailable as exc:
+        raise ToolFailed(str(exc)) from exc
     if result.timed_out:
         raise ToolFailed(f"{command[0]} przekroczył limit {timeout_s:g}s")
     if result.returncode not in ok_returncodes:

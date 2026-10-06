@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block tytul %}Błąd {{ status_code }} — panel bramy jakości{% endblock %}
+{% block tresc %}
+<h1>Błąd {{ status_code }}</h1>
+<div class="blad" role="alert">{{ detail }}</div>
+<p><a href="/">Wróć na pulpit</a></p>
+{% endblock %}

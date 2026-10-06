@@ -1,0 +1,60 @@
+{
+  "run_id": "0000demo0003",
+  "repo": "/repozytoria/taskboard-demo",
+  "base_sha": "1111111111111111111111111111111111111111",
+  "head_sha": "2222222222222222222222222222222222222222",
+  "started_at": "2026-09-05T08:00:00+00:00",
+  "duration_s": 4.2,
+  "policy_version": 1,
+  "decision": {
+    "verdict": "PASS",
+    "reasons": [],
+    "warnings": [],
+    "suppressed": []
+  },
+  "gates": [
+    {
+      "gate": "G0.scope",
+      "status": "pass",
+      "duration_s": 0.4,
+      "warn_only": false,
+      "message": "12 linii w 2 plikach",
+      "facts": {
+        "diff.effective_lines": 12,
+        "diff.effective_files": 2,
+        "diff.has_ticket": false,
+        "diff.scope_map_matched": false,
+        "diff.out_of_scope_files": 0
+      },
+      "findings": []
+    },
+    {
+      "gate": "G2.diff_coverage",
+      "status": "skipped",
+      "duration_s": 0.0,
+      "warn_only": false,
+      "message": "brak narzędzia pokrycia w ocenianym repozytorium",
+      "facts": {
+        "coverage.tool_available": false
+      },
+      "findings": []
+    },
+    {
+      "gate": "G3.secrets",
+      "status": "pass",
+      "duration_s": 1.1,
+      "warn_only": false,
+      "message": "0 sekretów w zmienionych plikach, 0 zastanych",
+      "facts": {
+        "secrets.found": false,
+        "secrets.found_in_diff": false,
+        "secrets.count": 0,
+        "secrets.count_in_diff": 0,
+        "secrets.unresolved_paths": 0,
+        "secrets.tool_version": "8.21.2"
+      },
+      "findings": []
+    }
+  ],
+  "not_checked": []
+}
