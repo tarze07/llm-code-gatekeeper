@@ -168,6 +168,16 @@ def parse_report(payload: str, root: Path, expected: list[str]) -> dict[str, Tes
 
     Testy spoza `expected` (istniejące testy w tym samym pliku, przypadki
     `each`) są pomijane, nie są błędem.
+
+    Uwaga do payloadu puste/niesparsowalne (celowo **nie** `ToolFailed`, w
+    odróżnieniu od `parse_eslint`/`parse_mypy`): każdy `nodeid` z `expected`,
+    który nie trafi do zwróconej mapy, dostaje w `run_tests()` status
+    `"missing"`, a `gates/g2_crossverify.py` liczy `"missing"` jak
+    `"error"`/`"skipped"` — jako `tests.weak_evidence`, co samo zmusza bramkę
+    do `status="error"`, nigdy do cichego `"pass"`. Zepsuty raport i legalnie
+    pusty raport trafiają więc do tego samego, już fail-closed, dalszego
+    traktowania — podnoszenie wyjątku tutaj nie zmieniłoby wyniku bramki,
+    tylko zdublowało miejsce decyzji.
     """
     outcomes: dict[str, TestOutcome] = {}
     if not payload.strip():

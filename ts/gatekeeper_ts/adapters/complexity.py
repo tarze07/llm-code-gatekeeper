@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from gatekeeper_core.adapters.base import relative_to_repo
+from gatekeeper_core.adapters.base import ToolFailed, relative_to_repo
 from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.core.plugins import ComplexityOutcome, MethodComplexity
 from gatekeeper_core.core.runner import Sandbox, SandboxPolicy, SandboxUnavailable
@@ -104,11 +104,20 @@ def _find_end_lineno(source_lines: list[str], start_lineno: int) -> int:
 
 def _parse_eslint_complexity(payload: str) -> list[tuple[str, list[_TsMethod]]]:
     """`(plik, [metody])` per plik z raportu eslinta — `source` w JSON-ie
-    eslinta niesie pełną treść pliku, więc nie trzeba go osobno czytać."""
+    eslinta niesie pełną treść pliku, więc nie trzeba go osobno czytać.
+
+    `payload` puste/`None` → `"[]"` to jedyny legalny „brak metod" (eslint
+    bez plików do sprawdzenia). Każdy inny niesparsowalny payload to brak
+    dowodu, nie „zero metod o złożoności" — fail-closed: `ToolFailed`
+    zamiast cichego `[]` (ten sam wzorzec co `parse_eslint` w `linters.py`,
+    REVIEW.md §5 P1). `TsComplexityAnalyzer.analyze()` łapie to i zwraca
+    `ComplexityOutcome(..., error=...)`, nie fałszywie czysty wynik."""
     try:
         data = json.loads(payload or "[]")
-    except json.JSONDecodeError:
-        return []
+    except json.JSONDecodeError as exc:
+        raise ToolFailed(
+            f"eslint (reguła complexity) nie zwrócił poprawnego JSON-a: {payload[:500]!r}"
+        ) from exc
     out: list[tuple[str, list[_TsMethod]]] = []
     for file_result in data:
         source_lines = str(file_result.get("source") or "").splitlines()
@@ -199,8 +208,14 @@ class TsComplexityAnalyzer:
                     methods=[], facts=facts, error=f"eslint: {result.tail() or 'timeout'}"
                 )
 
+        try:
+            parsed = _parse_eslint_complexity(result.stdout)
+        except ToolFailed as exc:
+            facts["complexity.eslint_available"] = False
+            return ComplexityOutcome(methods=[], facts=facts, error=str(exc))
+
         methods: list[MethodComplexity] = []
-        for file_path, ts_methods in _parse_eslint_complexity(result.stdout):
+        for file_path, ts_methods in parsed:
             relative = relative_to_repo(file_path, change.repo)
             for m in ts_methods:
                 methods.append(

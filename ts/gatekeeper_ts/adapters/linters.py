@@ -120,10 +120,22 @@ def eslint_scenario(rule_id: str, message: str) -> str:
 
 
 def parse_eslint(payload: str, repo: Path, gate: str) -> list[Finding]:
+    """`eslint --format json` → `Finding`.
+
+    `payload` puste/`None` → `"[]"` (eslint na czystym repo bez plików do
+    sprawdzenia legalnie nic nie wypisuje) — to jest jedyny przypadek
+    „legalnie pusto", więc nie przechodzi przez poniższy `except`. Każda
+    INNA wartość, której nie da się sparsować jako JSON (urwany output,
+    traceback na stdout, zepsuty `--format`), to nie „brak znalezisk", tylko
+    brak dowodu — fail-closed: `ToolFailed` zamiast cichego `[]` (REVIEW.md
+    §5 P1). `TsJsStaticChecker.check()` łapie `ToolFailed`: z `require_eslint:
+    true` bramka kończy się `error`, bez tego — `eslint_available=False` i
+    znaleziska z tego przebiegu są odrzucane, nie fałszywie zielone.
+    """
     try:
         data = json.loads(payload or "[]")
-    except json.JSONDecodeError:
-        return []
+    except json.JSONDecodeError as exc:
+        raise ToolFailed(f"eslint nie zwrócił poprawnego JSON-a: {payload[:500]!r}") from exc
     findings: list[Finding] = []
     for file_result in data:
         file = relative_to_repo(str(file_result.get("filePath") or ""), repo)

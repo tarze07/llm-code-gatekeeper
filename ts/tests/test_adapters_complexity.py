@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+from gatekeeper_core.adapters.base import ToolFailed
+
 from gatekeeper_ts.adapters.complexity import _find_end_lineno, _parse_eslint_complexity
 
 
@@ -54,6 +57,13 @@ def test_parsowanie_named_function_i_method_i_arrow():
 def test_pusty_payload_daje_pusta_liste():
     assert _parse_eslint_complexity("") == []
     assert _parse_eslint_complexity("[]") == []
+
+
+def test_smieciowy_output_eslint_jest_bledem_nie_cichym_pass():
+    """REVIEW.md §5 P1 — ten sam wzorzec co `parse_eslint`: zepsuty output
+    reguły `complexity` nie ma prawa wyglądać jak „zero metod"."""
+    with pytest.raises(ToolFailed):
+        _parse_eslint_complexity("to nie jest JSON")
 
 
 def test_znajduje_koniec_funkcji_po_zbalansowanych_nawiasach():
