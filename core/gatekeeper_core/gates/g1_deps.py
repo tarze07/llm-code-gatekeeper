@@ -13,11 +13,39 @@ Wykrywanie i parsowanie manifestów idzie przez zainstalowanych dostawców
 bramka sama nie wie, jak wygląda manifest PyPI/npm/NuGet, tylko że
 `provider.is_manifest(path)`/`provider.parse_manifest(...)` istnieją. Nowy
 ekosystem to nowy zarejestrowany provider, nie zmiana w tym pliku.
+
+## `allow_packages` — składnia (`policy/gates.yaml`, `gates.G1.deps.allow_packages`)
+
+Lista stringów. Dwie formy, obie akceptowane w jednej liście:
+
+- **gołe imię**, np. `"acme-tools"` — obowiązuje w **każdym** ekosystemie,
+  każdy porównywany przez normalizację *tego* ekosystemu (PEP 503 dla PyPI,
+  lowercase dla npm/NuGet). Zgodność wsteczna: tak wygląda każdy wpis przed
+  tą poprawką.
+- **forma kwalifikowana** `"<ekosystem>:<imię>"`, np. `"npm:@acme/cli"` albo
+  `"nuget:Microsoft.Extensions.Logging"` — obowiązuje tylko w jednym
+  ekosystemie (`pypi`/`npm`/`nuget`). Potrzebna, bo ta sama goła nazwa w
+  dwóch ekosystemach to dwa różne pakiety różnych autorów — zezwolenie na
+  `foo` w PyPI nie powinno przypadkiem przepuszczać `foo` w npm.
+
+Żadna z trzech obsługiwanych nazw pakietów nie zawiera `:`, więc jego
+obecność jednoznacznie wybiera formę kwalifikowaną; nieznany prefiks przed
+`:` (literówka typu `npmm:`) jest błędem konfiguracji (`ValueError` przy
+starcie bramki), nie cichą dziurą w allowliście.
+
+Każda forma jest normalizowana **per ekosystem w miejscu porównania**, tą
+samą funkcją, którą bramka normalizuje nazwę sprawdzanej zależności
+(`provider.normalize`, domyślnie `deps.manifests.normalize`) — przed tą
+poprawką cała allowlista szła przez normalizację PyPI (PEP 503: `.`/`_`/`-`
+są równoważne), co dla NuGet/npm dawało złe dopasowania (np. kropka w
+`Microsoft.Extensions.Logging` zjadana na `-`, więc nigdy nie trafiała w
+`provider.normalize` tego samego pakietu, który tylko dociąga wielkość liter).
 """
 
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from importlib.metadata import entry_points
 from typing import Any
 
@@ -35,9 +63,39 @@ TYPOSQUAT_AGE_DAYS = 365
 
 DEP_ECOSYSTEM_GROUP = "gatekeeper.dep_ecosystems"
 
+#: Ekosystemy, które można nazwać w kwalifikowanym wpisie `allow_packages`
+#: (`"<ekosystem>:<imię>"`). Te trzy to te, które core sam parsuje
+#: (`deps/manifests.py`) — pack językowy nie rejestruje tu niczego nowego,
+#: więc nie trzeba tej listy rozszerzać przy nowym packu.
+ALLOW_PACKAGES_ECOSYSTEMS = (manifests.PYPI, manifests.NPM, manifests.NUGET)
+
 
 def installed_ecosystems() -> list[EcosystemProvider]:
     return [ep.load()() for ep in entry_points(group=DEP_ECOSYSTEM_GROUP)]
+
+
+def _parse_allow_entry(entry: str) -> tuple[str | None, str]:
+    """Rozbija jeden wpis `allow_packages` na `(ekosystem | None, imię)`.
+
+    `None` jako ekosystem = wpis gołego imienia, obowiązuje wszędzie.
+    Żadna z obsługiwanych nazw pakietów (PyPI/npm/NuGet) nie zawiera `:`,
+    więc jego obecność jednoznacznie oznacza formę `"<ekosystem>:<imię>"` —
+    a nieznany prefiks jest literówką w konfiguracji, nie nazwą pakietu.
+    """
+    if ":" not in entry:
+        return None, entry
+    eco, _, name = entry.partition(":")
+    if eco not in ALLOW_PACKAGES_ECOSYSTEMS:
+        raise ValueError(
+            f"G1.deps: allow_packages — nieznany prefiks ekosystemu {eco!r} "
+            f"we wpisie {entry!r} (oczekiwano jednego z: "
+            f"{', '.join(ALLOW_PACKAGES_ECOSYSTEMS)})"
+        )
+    if not name:
+        raise ValueError(
+            f"G1.deps: allow_packages — brak nazwy pakietu po prefiksie we wpisie {entry!r}"
+        )
+    return eco, name
 
 
 @register
@@ -66,9 +124,21 @@ class DepGuard(Gate):
         self.min_age_days = float(self.config.get("min_age_days", DEFAULT_MIN_AGE_DAYS))
         self.internal_prefixes: list[str] = list(self.config.get("internal_prefixes", []))
         self._providers: list[EcosystemProvider] | None = None
-        self.allowlist = {
-            manifests.normalize(manifests.PYPI, n) for n in self.config.get("allow_packages", [])
-        }
+        self._allow_global: list[str] = []
+        self._allow_qualified: dict[str, list[str]] = {}
+        for entry in self.config.get("allow_packages", []):
+            eco, name = _parse_allow_entry(entry)
+            if eco is None:
+                self._allow_global.append(name)
+            else:
+                self._allow_qualified.setdefault(eco, []).append(name)
+        #: Allowlista znormalizowana per ekosystem, leniwie i z cache —
+        #: patrz `_allowlist_for()`. Nie licz tego tutaj: normalizacja ma
+        #: użyć TEJ SAMEJ funkcji, którą `_is_internal()` normalizuje nazwę
+        #: sprawdzanej zależności (`provider.normalize`, jeśli provider dla
+        #: tego ekosystemu jest zainstalowany), a providery ładują się
+        #: leniwie (`self.providers`).
+        self._allowlist_cache: dict[str, frozenset[str]] = {}
 
     @property
     def providers(self) -> list[EcosystemProvider]:
@@ -156,14 +226,32 @@ class DepGuard(Gate):
 
     def _is_internal(self, dep: manifests.Dependency) -> bool:
         provider = next((p for p in self.providers if p.ecosystem == dep.ecosystem), None)
-        name = (
-            provider.normalize(dep.name)
-            if provider
-            else manifests.normalize(dep.ecosystem, dep.name)
+        normalize: Callable[[str], str] = (
+            provider.normalize if provider else (lambda n: manifests.normalize(dep.ecosystem, n))
         )
-        if name in self.allowlist:
+        name = normalize(dep.name)
+        if name in self._allowlist_for(dep.ecosystem, normalize):
             return True
         return any(name.startswith(p.lower()) for p in self.internal_prefixes)
+
+    def _allowlist_for(self, ecosystem: str, normalize: Callable[[str], str]) -> frozenset[str]:
+        """Allowlista `allow_packages` znormalizowana dla `ecosystem`, z cache.
+
+        Wpisy gołego imienia (`self._allow_global`) obowiązują w każdym
+        ekosystemie — każdy znormalizowany tą samą funkcją, co nazwa
+        sprawdzanej zależności. Wpisy kwalifikowane (`self._allow_qualified`)
+        dokładają się tylko dla swojego ekosystemu. To naprawia P1 z REVIEW.md
+        §5: cała allowlista szła kiedyś przez normalizację PyPI, więc dla
+        npm/NuGet porównanie z `provider.normalize(dep.name)` nie mogło się
+        zgodzić (PEP 503 zjada `.` w `Microsoft.Extensions.Logging`).
+        """
+        cached = self._allowlist_cache.get(ecosystem)
+        if cached is not None:
+            return cached
+        names = list(self._allow_global) + self._allow_qualified.get(ecosystem, [])
+        cached = frozenset(normalize(n) for n in names)
+        self._allowlist_cache[ecosystem] = cached
+        return cached
 
     def _check(self, dep: manifests.Dependency, facts: dict[str, Any]) -> list[Finding]:
         registry = self.registries.get(dep.ecosystem)
