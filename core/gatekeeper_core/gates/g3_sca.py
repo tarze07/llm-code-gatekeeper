@@ -59,7 +59,16 @@ class ScaGuard(Gate):
         facts = _empty_facts()
 
         providers = _installed_ecosystems()
-        by_ecosystem = self._new_deps_by_ecosystem(change, list(providers.values()))
+        try:
+            by_ecosystem = self._new_deps_by_ecosystem(change, list(providers.values()))
+        except manifests.ManifestUnparseable as exc:
+            # Nieczytelny manifest to brak dowodu, nie „brak nowych zależności”.
+            return self.result(
+                status="error",
+                duration_s=time.monotonic() - started,
+                facts=facts,
+                message=f"nie da się odczytać manifestu: {exc}",
+            )
         total_new = sum(len(deps) for deps in by_ecosystem.values())
         if not total_new:
             return self.result(

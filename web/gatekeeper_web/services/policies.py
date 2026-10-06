@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from gatekeeper_core.core.policy import Policy, PolicyError
-from gatekeeper_core.gates import known_facts, known_gate_ids
+from gatekeeper_core.gates import gate_config_errors, known_facts, known_gate_ids
 
 from ..storage import PolicyRevision
 
@@ -150,7 +150,7 @@ def validate(revision: PolicyRevision, directory: Path) -> PolicyValidation:
     except (OSError, PolicyError) as exc:
         return PolicyValidation(ok=False, errors=[str(exc)])
 
-    errors = policy.lint(known_facts(), known_gate_ids())
+    errors = policy.lint(known_facts(), known_gate_ids()) + gate_config_errors(policy)
     today = date.today()
     return PolicyValidation(
         ok=not errors,

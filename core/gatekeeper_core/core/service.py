@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..gates import Gate, build_gates, known_facts, known_gate_ids
+from ..gates import Gate, build_gates, gate_config_errors, known_facts, known_gate_ids
 from .change import ChangeContext, GitError
 from .finding import RunResult
 from .orchestrator import run_gates
@@ -76,7 +76,7 @@ def load_policy(request: RunRequest) -> Policy:
     except (OSError, PolicyError) as exc:
         raise PreparationError(f"polityka: {exc}") from exc
 
-    errors = policy.lint(known_facts(), known_gate_ids())
+    errors = policy.lint(known_facts(), known_gate_ids()) + gate_config_errors(policy)
     if errors:
         raise PreparationError("polityka: " + "; ".join(errors))
 

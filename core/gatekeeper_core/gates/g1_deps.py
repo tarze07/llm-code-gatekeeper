@@ -140,6 +140,22 @@ class DepGuard(Gate):
         #: leniwie (`self.providers`).
         self._allowlist_cache: dict[str, frozenset[str]] = {}
 
+    @classmethod
+    def config_errors(cls, config: dict[str, Any]) -> list[str]:
+        entries = config.get("allow_packages", [])
+        if not isinstance(entries, list):
+            return ["`allow_packages` musi być listą"]
+        errors: list[str] = []
+        for entry in entries:
+            if not isinstance(entry, str):
+                errors.append(f"`allow_packages`: wpis {entry!r} nie jest napisem")
+                continue
+            try:
+                _parse_allow_entry(entry)
+            except ValueError as exc:
+                errors.append(str(exc))
+        return errors
+
     @property
     def providers(self) -> list[EcosystemProvider]:
         if self._providers is None:
@@ -173,16 +189,27 @@ class DepGuard(Gate):
             )
 
         new_deps: list[manifests.Dependency] = []
-        for changed in changed_manifests:
-            head = change.file_at(change.head_sha, changed.path) or ""
-            base = change.file_at(change.base_sha, changed.path) or ""
-            after: set[manifests.Dependency] = set()
-            before: set[manifests.Dependency] = set()
-            for provider in providers:
-                if provider.is_manifest(changed.path):
-                    after |= provider.parse_manifest(changed.path, head)
-                    before |= provider.parse_manifest(changed.path, base)
-            new_deps.extend(manifests.diff_dependencies(before, after))
+        try:
+            for changed in changed_manifests:
+                head = change.file_at(change.head_sha, changed.path) or ""
+                base = change.file_at(change.base_sha, changed.path) or ""
+                after: set[manifests.Dependency] = set()
+                before: set[manifests.Dependency] = set()
+                for provider in providers:
+                    if provider.is_manifest(changed.path):
+                        after |= provider.parse_manifest(changed.path, head)
+                        before |= provider.parse_manifest(changed.path, base)
+                new_deps.extend(manifests.diff_dependencies(before, after))
+        except manifests.ManifestUnparseable as exc:
+            # Nieczytelny manifest to brak dowodu, nie „brak nowych pakietów”.
+            facts = _empty_facts()
+            facts["deps.manifests_changed"] = len(changed_manifests)
+            return self.result(
+                status="error",
+                duration_s=time.monotonic() - started,
+                facts=facts,
+                message=f"nie da się odczytać manifestu: {exc}",
+            )
 
         new_deps = [d for d in new_deps if not self._is_internal(d)]
         findings: list[Finding] = []
@@ -332,8 +359,7 @@ class DepGuard(Gate):
                     rule_id="deps.too_young",
                     severity=Severity.HIGH,
                     title=(
-                        f"Pakiet `{dep.name}` ma {_age_str(age)} "
-                        f"(próg: {self.min_age_days:g} dni)"
+                        f"Pakiet `{dep.name}` ma {_age_str(age)} (próg: {self.min_age_days:g} dni)"
                     ),
                     failure_scenario=(
                         "Pakiet bez historii nie ma za sobą ani przeglądu społeczności, ani "

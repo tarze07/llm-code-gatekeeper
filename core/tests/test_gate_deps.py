@@ -5,8 +5,10 @@ import json
 import pytest
 
 from gatekeeper_core.core.change import ChangeContext
+from gatekeeper_core.core.policy import Policy
 from gatekeeper_core.deps.manifests import NPM, NUGET, PYPI
 from gatekeeper_core.deps.registries import RegistryUnavailable
+from gatekeeper_core.gates import gate_config_errors
 from gatekeeper_core.gates.g1_deps import DepGuard
 from tests.conftest import FakeRegistry
 
@@ -327,3 +329,51 @@ def test_allow_packages_nieznany_prefiks_ekosystemu_jest_bledem_konfiguracji():
 def test_allow_packages_puste_imie_po_prefiksie_jest_bledem_konfiguracji():
     with pytest.raises(ValueError):
         gate(allow_packages=["npm:"])
+
+
+@pytest.mark.parametrize(
+    ("filename", "before", "broken"),
+    [
+        ("package.json", package_json({"left-pad": "1.0.0"}), '{"dependencies": {"evil": '),
+        ("app.csproj", csproj("Newtonsoft.Json"), "<Project><ItemGroup>"),
+        ("pyproject.toml", manifest("requests"), '[project\ndependencies = ["evil"]'),
+    ],
+)
+def test_zepsuty_manifest_jest_bledem_a_nie_brakiem_nowych_pakietow(
+    repo, filename, before, broken
+):
+    change = build(repo, before, broken, filename=filename)
+    result = gate().run(change)
+
+    assert result.status == "error"
+    assert filename in result.message
+    assert result.facts["deps.manifests_changed"] == 1
+
+
+def test_nowy_manifest_bez_wersji_bazowej_nadal_jest_czytany(repo):
+    repo.write("README.md", "x\n")
+    repo.commit("baza")
+    repo.checkout("feature", create=True)
+    repo.write("package.json", package_json({"left-pad": "1.0.0"}))
+    repo.commit("feat: package.json")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    result = gate(npm_packages={"left-pad": {"age_days": 3000}}).run(change)
+
+    assert result.status == "pass"
+    assert result.facts["deps.new_packages"] == ["left-pad"]
+
+
+def test_lint_wylapuje_literowke_w_prefiksie_allow_packages():
+    policy = Policy.from_dict(
+        {
+            "version": 1,
+            "gates": {"G1.deps": {"allow_packages": ["acme", "npmm:@acme/cli", 7]}},
+        }
+    )
+    errors = gate_config_errors(policy)
+
+    assert len(errors) == 2
+    assert all(e.startswith("`gates.G1.deps`:") for e in errors)
+    assert any("npmm" in e for e in errors)
+    assert DepGuard.config_errors({"allow_packages": ["acme", "nuget:Acme.Tools"]}) == []

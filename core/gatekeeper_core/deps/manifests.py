@@ -22,6 +22,15 @@ _REQ_OPTION = re.compile(r"^\s*-")
 _URL_LIKE = re.compile(r"^(https?|git\+|file:|\.{1,2}/)")
 
 
+class ManifestUnparseable(ValueError):
+    """Manifest istnieje, ale nie da się go sparsować.
+
+    Nie wolno tego zamieniać na pusty zbiór: zepsuty `package.json` w PR-ze
+    dawałby wtedy „brak nowych pakietów”, czyli `pass` bez żadnego dowodu.
+    Bramki łapią ten wyjątek i kończą się `error`.
+    """
+
+
 @dataclass(frozen=True)
 class Dependency:
     ecosystem: str
@@ -80,8 +89,8 @@ def parse_manifest(path: str, content: str) -> set[Dependency]:
 def parse_pyproject(content: str, manifest: str = "pyproject.toml") -> set[Dependency]:
     try:
         data = tomllib.loads(content)
-    except tomllib.TOMLDecodeError:
-        return set()
+    except tomllib.TOMLDecodeError as exc:
+        raise ManifestUnparseable(f"{manifest}: niepoprawny TOML: {exc}") from exc
     out: set[Dependency] = set()
 
     project = data.get("project") or {}
@@ -121,10 +130,14 @@ def parse_requirements(content: str, manifest: str = "requirements.txt") -> set[
 
 
 def parse_package_json(content: str, manifest: str = "package.json") -> set[Dependency]:
+    if not content.strip():
+        return set()  # plik nowy w PR-ze albo usunięty — po tej stronie nie ma zależności
     try:
         data = json.loads(content)
-    except json.JSONDecodeError:
-        return set()
+    except json.JSONDecodeError as exc:
+        raise ManifestUnparseable(f"{manifest}: niepoprawny JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ManifestUnparseable(f"{manifest}: oczekiwano obiektu JSON")
     out: set[Dependency] = set()
     for section in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
         for name, spec in (data.get(section) or {}).items():
@@ -143,10 +156,12 @@ def parse_csproj_like(content: str, manifest: str = "app.csproj") -> set[Depende
     nie trzeba rozróżniać formatu przed parsowaniem, tylko przy odczycie
     atrybutów (camelCase w SDK-style vs. lowercase w `packages.config`).
     """
+    if not content.strip():
+        return set()  # plik nowy w PR-ze albo usunięty — po tej stronie nie ma zależności
     try:
         root = ET.fromstring(content)
-    except ET.ParseError:
-        return set()
+    except ET.ParseError as exc:
+        raise ManifestUnparseable(f"{manifest}: niepoprawny XML: {exc}") from exc
     out: set[Dependency] = set()
     for el in root.iter():
         tag = _local_tag(el.tag)
