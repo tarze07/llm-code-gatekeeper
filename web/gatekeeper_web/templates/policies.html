@@ -16,6 +16,9 @@
     Gotowy profil z polityką startową panelu, od razu w wersji aktywnej —
     najkrótsza droga do pierwszej kontroli. Progi w nim to kalibracja
     narzędzia, nie Twojego projektu: przejrzyj je i zawęź kolejnym szkicem.
+    Wariant <strong>adopcja</strong> to tydzień obserwacji — brama komentuje,
+    nie chroni. Zanim oprzesz na niej decyzje, przejdź na
+    <strong>enforcing</strong>.
   </p>
   <form method="post" action="/polityki/startowy" class="filtry">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -23,6 +26,13 @@
       <label for="starter_name">Nazwa profilu</label>
       <input id="starter_name" name="name" maxlength="200" autocomplete="off"
              value="Polityka startowa">
+    </div>
+    <div>
+      <label for="starter_variant">Wariant</label>
+      <select id="starter_variant" name="wariant">
+        <option value="adopcja" selected>adopcja — G1.static, G2.*, G3.sast/sca tylko ostrzegają</option>
+        <option value="enforcing">enforcing — wszystkie bramki blokują</option>
+      </select>
     </div>
     <button class="glowny" type="submit">Utwórz profil startowy</button>
   </form>

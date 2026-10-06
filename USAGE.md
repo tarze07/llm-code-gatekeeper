@@ -2,6 +2,8 @@
 
 Ten plik opisuje **praktyczne** użycie bramy dla każdego języka z osobna: co zainstalować, co zostanie sprawdzone, czego brakuje. Zawsze instalujesz `llm-code-gatekeeper-core` — sam z siebie sprawdza rozmiar/pochodzenie zmiany (`G0.*`), sekrety (`G3.secrets`) i nowe zależności PyPI/npm/NuGet (`G1.deps`/`G3.sca`) bez żadnego pack'a. Pack językowy dokłada wyłącznie `G1.static` (build/lint/typy) i część `G3.sast` (reguły „nigdy" specyficzne dla języka).
 
+**Polityka ma dwa profile** (w `core/policy/` i w `policy/` każdego pack'a): `gates.yaml` — adopcja, `G1.static`/`G2.*`/`G3.sast`/`G3.sca` są w `warn_only` i tylko ostrzegają; `gates.enforcing.yaml` — produkcja, pusty `warn_only`. Reszta treści jest identyczna. Po tygodniu obserwacji skopiuj `gates.enforcing.yaml` jako `policy/gates.yaml` (albo `gatekeeper run --policy policy/gates.enforcing.yaml`) — **zanim** Check Run stanie się required. Z profilem adopcji brama komentuje, nie chroni.
+
 Pełny opis mechanizmu (entry points, dwa poziomy dispatchu) — [`core/README.md`](core/README.md). Pełna instrukcja krok po kroku, wspólna dla wszystkich języków (polityka, interpretacja raportu, integracja z CI, FAQ) — [`python/USAGE.md`](python/USAGE.md).
 
 ---

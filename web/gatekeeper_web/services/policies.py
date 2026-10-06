@@ -37,6 +37,16 @@ class PolicyInputError(ValueError):
 #: a profil w panelu ma oceniać tym samym, czym oceniał wczoraj.
 STARTER_PACKAGE = "gatekeeper_web.polityka_startowa"
 
+#: Dwa warianty polityki startowej — te same reguły i progi, różnią się
+#: wyłącznie listą `warn_only` (kopie `core/policy/gates*.yaml`). Klucz to
+#: wartość pola formularza; plik wybiera panel, nie operator, więc ścieżka
+#: z formularza nigdy nie trafia do `resources`.
+STARTER_PROFILES: dict[str, str] = {
+    "adopcja": "gates.yaml",
+    "enforcing": "gates.enforcing.yaml",
+}
+DEFAULT_STARTER_PROFILE = "adopcja"
+
 
 @dataclass(frozen=True)
 class StarterPolicy:
@@ -47,20 +57,25 @@ class StarterPolicy:
     scope_map_yaml: str
 
 
-def starter_policy() -> StarterPolicy:
+def starter_policy(profile: str = DEFAULT_STARTER_PROFILE) -> StarterPolicy:
     """Polityka startowa z danych pakietu.
 
     Nowy profil dostaje ją zamiast `version: 1`. Pusty szkic przechodził
     walidację i dawał profil bez jednej reguły blokującej — formalnie poprawny,
     w praktyce brama, która nie bramkuje. Operator, który chciał czegokolwiek
     innego, musiał znaleźć `gates.yaml` na dysku i wkleić go ręcznie.
+
+    `profile` wybiera wariant: `adopcja` (świeże bramki tylko ostrzegają)
+    albo `enforcing` (pusty `warn_only`, wszystko blokuje).
     """
+    if profile not in STARTER_PROFILES:
+        raise PolicyInputError(f"nieznany wariant polityki startowej: {profile!r}")
 
     def read(name: str) -> str:
         return resources.files(STARTER_PACKAGE).joinpath(name).read_text(encoding="utf-8")
 
     return StarterPolicy(
-        policy_yaml=read(POLICY_FILENAME),
+        policy_yaml=read(STARTER_PROFILES[profile]),
         exceptions_yaml=read(EXCEPTIONS_FILENAME),
         scope_map_yaml=read(SCOPE_MAP_FILENAME),
     )

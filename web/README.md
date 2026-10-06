@@ -74,7 +74,10 @@ gatekeeper-web backup --state-dir ~/.local/state/gatekeeper-web -o panel-kopia.d
 1. **Polityki** → **Utwórz profil startowy**. Panel zakłada profil wypełniony
    polityką startową i od razu ją aktywuje — bez szukania `gates.yaml` na dysku.
    Progi w niej to kalibracja narzędzia, nie Twojego projektu: przejrzyj je
-   i zawęź kolejnym szkicem. Wolisz prowadzić to ręcznie? „Nowy profil" daje
+   i zawęź kolejnym szkicem. Pole **Wariant** wybiera profil: `adopcja`
+   (domyślny — `G1.static`, `G2.*`, `G3.sast`, `G3.sca` tylko ostrzegają,
+   na tydzień obserwacji) albo `enforcing` (pusty `warn_only`, blokuje
+   wszystko). Oba to kopie `core/policy/gates*.yaml`. Wolisz prowadzić to ręcznie? „Nowy profil" daje
    pusty profil, a jego pierwszy szkic i tak startuje z polityki startowej —
    aktywacja pozostaje osobnym, świadomym kliknięciem.
 2. **Projekty** → dodaj projekt, podając od razu **ścieżkę lokalnego

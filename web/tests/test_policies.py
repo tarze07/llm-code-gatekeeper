@@ -148,7 +148,8 @@ def test_wygasly_wyjatek_jest_bledem_walidacji(store: PolicyStore, tmp_path: Pat
     assert result.expired
 
 
-def test_polityka_startowa_przechodzi_walidacje(tmp_path: Path) -> None:
+@pytest.mark.parametrize("wariant", sorted(service.STARTER_PROFILES))
+def test_polityka_startowa_przechodzi_walidacje(tmp_path: Path, wariant: str) -> None:
     """Profil startowy aktywuje się jednym kliknięciem — więc musi być poprawny.
 
     Ten test jest po to, żeby zmiana w core (nowa nazwa faktu, usunięta bramka)
@@ -156,7 +157,7 @@ def test_polityka_startowa_przechodzi_walidacje(tmp_path: Path) -> None:
     """
     store = PolicyStore(Database(tmp_path / "panel.db"))
     profile = store.create_profile("Startowa")
-    startowa = service.starter_policy()
+    startowa = service.starter_policy(wariant)
     revision = store.create_revision(
         profile.id,
         startowa.policy_yaml,
@@ -171,13 +172,37 @@ def test_polityka_startowa_przechodzi_walidacje(tmp_path: Path) -> None:
     assert wynik.expired == []
 
 
-def test_polityka_startowa_faktycznie_bramkuje(tmp_path: Path) -> None:
+@pytest.mark.parametrize("wariant", sorted(service.STARTER_PROFILES))
+def test_polityka_startowa_faktycznie_bramkuje(tmp_path: Path, wariant: str) -> None:
     """Pusty `version: 1` też przechodził walidację — i nie blokował niczego."""
     store = PolicyStore(Database(tmp_path / "panel.db"))
     profile = store.create_profile("Startowa")
-    startowa = service.starter_policy()
+    startowa = service.starter_policy(wariant)
     revision = store.create_revision(profile.id, startowa.policy_yaml, None, None)
 
     podsumowanie = service.validate(revision, tmp_path / "snapshot").summary
     assert "secrets.found_in_diff" in podsumowanie["blocking"]
     assert podsumowanie["thresholds"]
+
+
+def test_warianty_startowe_roznia_sie_tylko_warn_only(tmp_path: Path) -> None:
+    """Enforcing to ta sama polityka bez wyciszeń — nie druga, osobna polityka."""
+    store = PolicyStore(Database(tmp_path / "panel.db"))
+    profile = store.create_profile("Startowa")
+    podsumowania = {}
+    for wariant in ("adopcja", "enforcing"):
+        startowa = service.starter_policy(wariant)
+        revision = store.create_revision(profile.id, startowa.policy_yaml, None, None)
+        podsumowania[wariant] = service.validate(revision, tmp_path / wariant).summary
+
+    assert podsumowania["enforcing"]["warn_only"] == []
+    assert "G1.static" in podsumowania["adopcja"]["warn_only"]
+    # Przejście adopcja → enforcing samo niczego nie rozluźnia.
+    zmiany = service.compare(podsumowania["adopcja"], podsumowania["enforcing"])
+    assert zmiany and not any(z.loosens for z in zmiany)
+    assert {z.kind for z in zmiany} == {"warn_only"}
+
+
+def test_nieznany_wariant_startowy_jest_odrzucany() -> None:
+    with pytest.raises(service.PolicyInputError):
+        service.starter_policy("../../etc/passwd")

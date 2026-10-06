@@ -1,16 +1,13 @@
-# Polityka bramy jakości — profil ADOPCJI (`warn-only`), pack TS/JS.
+# Polityka bramy jakości — profil ENFORCING (produkcja).
 #
-# Dwa profile, ta sama treść poza listą `warn_only`:
-#   * `gates.yaml`           — adopcja: G1.static, G2.*, G3.sast i G3.sca tylko
-#                              ostrzegają. Na pierwszy tydzień obserwacji.
-#   * `gates.enforcing.yaml` — produkcja: pusta `warn_only`, każda reguła
-#                              blokuje. Przejdź na niego, ZANIM Check Run
-#                              stanie się required.
+# Ta sama treść co `gates.yaml` (profil adopcji), poza listą `warn_only`,
+# która tu jest pusta: G1.static, G2.*, G3.sast i G3.sca blokują. Kopiujesz
+# ten plik do ocenianego repo jako `policy/gates.yaml` (albo wskazujesz go
+# przez `--policy`), ZANIM Check Run stanie się required. `exceptions.yaml`
+# loader szuka obok pliku polityki, więc oba profile dzielą wyjątki.
 #
-# Kopia wzorca `core/policy/gates.yaml`. Wspólne klucze (`blocking`,
-# `thresholds`, `warn_only`, …) muszą być identyczne jak we wzorcu — pilnuje
-# tego `core/tests/test_policy_templates.py`. Pack może jedynie DOŁOŻYĆ
-# sekcje `gates:` dla knobs swoich checkerów.
+# Ten plik jest wzorcem dla kopii w pack'ach (`python/`, `ts/`, `csharp/`)
+# i w polityce startowej panelu (`web/`) — patrz nagłówek `gates.yaml`.
 #
 # Zasady:
 #   * plik jest wersjonowany w repo i chroniony przez CODEOWNERS,
@@ -26,8 +23,6 @@ blocking:
   - deps.unknown_package
   - deps.typosquat_suspect
   # Test, który przechodzi na kodzie sprzed zmiany, nie dowodzi niczego nowego.
-  # Uwaga: fakt pochodzi z G2.cross_verify — dopóki ta bramka jest w
-  # `warn_only`, reguła tylko ostrzega.
   - tests.pass_on_pre_change_code
 
 thresholds:
@@ -51,8 +46,8 @@ thresholds:
     on_violation: review
     message: "Zmiana dotyka plików spoza zadeklarowanego zakresu ticketu."
 
-  # Progi świeżych bramek zapisane od razu; w profilu adopcji egzekwowanie
-  # wstrzymuje `warn_only` niżej, w profilu enforcing blokują.
+  # Progi świeżych bramek — w tym profilu blokują (w profilu adopcji
+  # wstrzymuje je `warn_only`).
   static.high_severity_count:
     max: 0
     message: "Static checker zgłasza defekt w zmienionych liniach (nie styl — realny błąd)."
@@ -100,16 +95,11 @@ on_gate_error: review
 # Limit znalezisk w komentarzu do PR. Powyżej tej liczby zespół przestaje czytać.
 max_findings_reported: 10
 
-# Profil adopcji: te bramki liczą i raportują, ale nie blokują — także reguł
-# z `blocking:`/`thresholds:`, których fakty produkują. Po tygodniu obserwacji
-# i przeglądzie fałszywych alarmów przejdź na `gates.enforcing.yaml`.
-warn_only:
-  - G2.cross_verify
-  - G2.test_sanity
-  - G2.diff_coverage
-  - G1.static
-  - G3.sast
-  - G3.sca
+# Profil enforcing: żadna bramka nie jest wyciszona — `warn_only` zostaje
+# jawnie pusta, żeby różnica względem `gates.yaml` była widoczna w diffie.
+# Nową bramkę wprowadzasz tu przez dopisanie jej na tydzień, nie przez powrót
+# do profilu adopcji.
+warn_only: []
 
 # Konfiguracja per bramka.
 gates:

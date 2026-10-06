@@ -20,7 +20,7 @@ def test_arkusz_i_skrypt_sa_w_pakiecie() -> None:
 def test_polityka_startowa_jest_w_pakiecie() -> None:
     """Bez niej nowy profil to puste pole `gates.yaml` — panel bez drzewa źródeł."""
     startowa = files("gatekeeper_web") / "polityka_startowa"
-    for nazwa in ("gates.yaml", "exceptions.yaml", "scope_map.yaml"):
+    for nazwa in ("gates.yaml", "gates.enforcing.yaml", "exceptions.yaml", "scope_map.yaml"):
         assert startowa.joinpath(nazwa).is_file(), nazwa
 
 

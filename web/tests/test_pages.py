@@ -213,6 +213,29 @@ def test_nowy_projekt_przyjmuje_sciezke_i_profil_od_razu(
     assert "Taskboard" in panel.get("/nowa-kontrola").text
 
 
+def test_profil_startowy_w_wariancie_enforcing_niczego_nie_wycisza(panel: Panel) -> None:
+    """Operator wybiera wariant przy zakładaniu — domyślny to adopcja."""
+    assert 'name="wariant"' in panel.get("/polityki").text
+
+    adopcja = panel.post("/polityki/startowy", data={"name": "A"}, follow_redirects=False)
+    enforcing = panel.post(
+        "/polityki/startowy", data={"name": "E", "wariant": "enforcing"}, follow_redirects=False
+    )
+    assert adopcja.status_code == enforcing.status_code == 303
+
+    assert "Bramki tylko ostrzegające (6)" in panel.get(adopcja.headers["location"]).text
+    assert "Bramki tylko ostrzegające (0)" in panel.get(enforcing.headers["location"]).text
+
+
+def test_nieznany_wariant_profilu_startowego_nie_tworzy_profilu(panel: Panel) -> None:
+    response = panel.post(
+        "/polityki/startowy", data={"name": "Zly", "wariant": "luzny"}, follow_redirects=False
+    )
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/polityki?blad=")
+    assert "Zly" not in panel.get("/polityki").text
+
+
 def test_nowy_projekt_bez_sciezki_nadal_dziala(panel: Panel) -> None:
     """Projekt na same importowane raporty zakłada się samą nazwą."""
     response = panel.post("/projekty", data={"name": "Tylko raporty"}, follow_redirects=False)

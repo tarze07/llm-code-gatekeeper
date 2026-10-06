@@ -39,9 +39,12 @@ Każdy instaluje ten pakiet jako zależność i rejestruje swojego `StaticChecke
 
 ```bash
 pip install -e ".[dev,gates]"
-gatekeeper policy lint --policy policy/gates.yaml
+gatekeeper policy lint --policy policy/gates.yaml             # profil adopcji (warn_only)
+gatekeeper policy lint --policy policy/gates.enforcing.yaml   # profil produkcyjny
 gatekeeper calibrate   # 5 przypadków core-only, w tym PyPI i npm (patrz kalibracja/cases.yaml)
 ```
+
+`policy/` ma dwa profile o tej samej treści poza `warn_only`: `gates.yaml` (adopcja — świeże bramki tylko ostrzegają) i `gates.enforcing.yaml` (produkcja — nic nie jest wyciszone). Bez `extends` ani logiki w loaderze: polityka zostaje danymi, a zgodność profili i kopii w pack'ach/panelu sprawdza `tests/test_policy_templates.py`. `gatekeeper calibrate` biegnie na profilu adopcji — oczekiwane werdykty w `calibration/cases.yaml` są pod niego.
 
 Pełny zestaw kalibracyjny (typosquat/SCA/SAST/G2 per język) żyje w `calibration/` każdego pack'a — tam, gdzie odpowiedni dostawca faktycznie jest zainstalowany.
 

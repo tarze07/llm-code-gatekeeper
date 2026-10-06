@@ -821,6 +821,7 @@ def create_profile_form(
 @router.post("/polityki/startowy", dependencies=[Depends(verify_csrf)])
 def create_starter_profile_form(
     name: str = Form("Polityka startowa", max_length=200),
+    wariant: str = Form(policy_service.DEFAULT_STARTER_PROFILE, max_length=20),
     policies: PolicyStore = Depends(get_policies),
 ) -> Response:
     """Profil gotowy do użycia: szkic z polityki startowej i od razu aktywny.
@@ -830,8 +831,14 @@ def create_starter_profile_form(
     uruchomić — a pierwszy z nich stawiał operatora przed pustym polem
     `gates.yaml`. Aktywacja jest tu świadomym kliknięciem operatora, nie
     domyślnym stanem panelu: bez niej `/nowa-kontrola` nadal by odmawiała.
+
+    `wariant` wybiera profil adopcji (`warn_only` na świeżych bramkach) albo
+    enforcing (wszystko blokuje) — REVIEW.md §5 P0.
     """
-    starter = policy_service.starter_policy()
+    try:
+        starter = policy_service.starter_policy(wariant)
+    except policy_service.PolicyInputError as exc:
+        return RedirectResponse("/polityki?blad=" + quote(str(exc)), status_code=303)
     profile = policies.create_profile(name.strip() or "Polityka startowa")
     revision = policies.create_revision(
         profile.id,
@@ -839,7 +846,7 @@ def create_starter_profile_form(
         starter.exceptions_yaml,
         starter.scope_map_yaml,
         author=None,
-        note="polityka startowa panelu",
+        note=f"polityka startowa panelu ({wariant})",
     )
     with TemporaryDirectory(prefix="gk-policy-") as tmp:
         result = policy_service.validate(revision, Path(tmp))
@@ -853,7 +860,7 @@ def create_starter_profile_form(
             ),
             status_code=303,
         )
-    policies.activate(revision.id, author=None, note="polityka startowa panelu")
+    policies.activate(revision.id, author=None, note=f"polityka startowa panelu ({wariant})")
     return RedirectResponse(f"/polityki/{profile.id}", status_code=303)
 
 
