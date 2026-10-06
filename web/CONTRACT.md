@@ -7,7 +7,7 @@ Etapy 2–6 mają się o niego opierać zamiast ustalać te rzeczy po raz drugi.
 ## 1. Commit bazowy
 
 Prace nad panelem startują z `08409d5` (`docs+ci: G2.* istnieje dla wszystkich
-trzech jezykow`). Panel zależy od `llm-code-gatekeeper-core>=0.1.0` i **nie**
+trzech jezykow`). Panel zależy od `llm-code-gatekeeper-core>=0.1.0,<0.2` i **nie**
 zależy od żadnego pack'a językowego: raport jest danymi, a nie kodem, więc do
 jego wyświetlenia nie trzeba mieć zainstalowanego TypeScriptu ani .NET-a.
 
