@@ -7,7 +7,9 @@ błąd bramki, nigdy ciche „przeszło"**. `RegistryUnavailable` propaguje się
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -68,8 +70,14 @@ class DiskCache:
         self.directory = Path(directory or DEFAULT_CACHE_DIR)
 
     def _path(self, ecosystem: str, name: str) -> Path:
-        safe = name.replace("/", "__").replace("@", "_at_")
-        return self.directory / ecosystem / f"{safe}.json"
+        # Nazwa pakietu pochodzi z manifestu (npm/NuGet nie są walidowane), więc
+        # nie może trafić do nazwy pliku wprost: `..\\`, `:` czy `/` wyprowadziłyby
+        # zapis poza katalog cache (zwłaszcza na Windows). Nazwa pliku to hash;
+        # czytelny prefiks jest tylko ze znaków bezpiecznych.
+        digest = hashlib.sha256(f"{ecosystem}\0{name}".encode()).hexdigest()
+        readable = re.sub(r"[^A-Za-z0-9._-]", "_", name).lstrip(".")[:40]
+        safe_eco = re.sub(r"[^A-Za-z0-9._-]", "_", ecosystem) or "_"
+        return self.directory / safe_eco / f"{readable}-{digest[:32]}.json"
 
     def get(self, ecosystem: str, name: str) -> PackageInfo | None:
         path = self._path(ecosystem, name)

@@ -12,7 +12,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from gatekeeper_core.adapters.base import ToolFailed, ToolMissing, parse_sarif, run_tool
+from gatekeeper_core.adapters.base import (
+    ToolFailed,
+    ToolMissing,
+    parse_sarif,
+    relative_to_repo,
+    run_tool,
+)
 from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.core.finding import Finding, Severity
 from gatekeeper_core.core.plugins import StaticCheckOutcome
@@ -102,7 +108,7 @@ def parse_mypy(payload: str, repo: Path, gate: str) -> list[Finding]:
                     "przyjmuje inne argumenty — czyli awarię przy pierwszym uruchomieniu "
                     "tej ścieżki, nie przy budowaniu."
                 ),
-                file=str(item.get("file") or "") or None,
+                file=relative_to_repo(str(item.get("file") or ""), repo) or None,
                 line=item.get("line"),
                 evidence={"snippet": f"{code}:{message}", "severity": severity},
             )
