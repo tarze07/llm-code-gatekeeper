@@ -19,7 +19,7 @@ on:
 
 jobs:
   core:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: core
@@ -52,7 +52,7 @@ jobs:
         run: gatekeeper calibrate
 
   python:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: python
@@ -96,7 +96,7 @@ jobs:
         run: gatekeeper calibrate
 
   ts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ts
@@ -138,7 +138,7 @@ jobs:
         run: gatekeeper calibrate
 
   csharp:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: csharp
@@ -171,7 +171,7 @@ jobs:
   # pack'a jezykowego ani bubblewrapa — raport jest danymi, a panel go tylko
   # czyta. Testy chodza po probkach z `web/samples/`, nie po lokalnej sciezce.
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web

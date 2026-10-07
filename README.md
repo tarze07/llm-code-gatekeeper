@@ -130,4 +130,9 @@ te commity **są** już na zdalnym. Trwałe odblokowanie drogi po HTTPS:
 `gh auth refresh -h github.com -s workflow` albo przestawienie remote'u na SSH
 (`git remote set-url origin git@github.com:tarze07/llm-code-gatekeeper.git`).
 
-Znany dług: `@wlasciciel-bramy` w `.github/CODEOWNERS` to nadal placeholder, nie istniejący handle (REVIEW.md §5, P0).
+To repozytorium celowo nie ma `CODEOWNERS`. Przy jednym właścicielu plik
+niczego by nie egzekwował (GitHub nie pozwala zatwierdzić własnego PR-a),
+a placeholder udawał ochronę, której nie było (REVIEW.md §5, P0). Wróci
+razem z wymogiem „Require review from Code Owners”, gdy agenci zaczną
+otwierać PR-y z osobnego konta. W **ocenianym** repo ochrona `policy/`
+przez CODEOWNERS nadal jest zalecana — patrz [`python/USAGE.md`](python/USAGE.md).
