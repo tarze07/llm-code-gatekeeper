@@ -49,7 +49,13 @@ def test_wzgledna_z_backslashem():
 
 def test_file_uri_posix(tmp_path):
     target = tmp_path / "x.py"
-    assert relative_to_repo(f"file://{target}", tmp_path) == "x.py"
+    assert relative_to_repo(target.as_uri(), tmp_path) == "x.py"
+
+
+def test_file_uri_z_dyskiem_w_miejscu_hosta():
+    # Niektóre narzędzia na Windows piszą `file://C:/…` (dwa ukośniki).
+    repo = Path("C:/Users/u/repo")
+    assert relative_to_repo("file://C:/Users/u/repo/src/a.py", repo) == "src/a.py"
 
 
 def test_alias_kontenera_work():

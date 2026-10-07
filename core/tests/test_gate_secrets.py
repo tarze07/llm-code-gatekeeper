@@ -8,6 +8,7 @@ import pytest
 from gatekeeper_core.adapters import gitleaks
 from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.core.finding import Decision, RunResult, Verdict
+from gatekeeper_core.core.paths import is_absolute_path
 from gatekeeper_core.core.report import render_markdown
 from gatekeeper_core.gates.g3_secrets import SecretsGate
 
@@ -104,7 +105,7 @@ def test_sciezki_bezwzgledne_sa_sprowadzane_do_sciezek_repozytorium(tmp_path):
 
     # bez podanego korzenia ścieżka zostaje bezwzględna — i tak ma być,
     # zgadywanie prefiksu byłoby gorsze niż jawny brak dopasowania
-    assert gitleaks.parse_report(payload)[0].file.startswith("/")
+    assert is_absolute_path(gitleaks.parse_report(payload)[0].file)
 
 
 def test_sekret_z_tego_pr_blokuje_przy_prawdziwym_gitleaksie(repo):

@@ -36,6 +36,8 @@ def _file_uri_to_path(uri: str) -> str:
     raw = unquote(parsed.path)
     if _URI_DRIVE_RE.match(raw):  # file:///C:/x → C:/x
         return raw[1:]
+    if is_windows_absolute(f"{parsed.netloc}/"):  # file://C:/x — dysk w miejscu hosta
+        return f"{parsed.netloc}{raw}"
     if parsed.netloc and parsed.netloc != "localhost":  # file://host/share/x → UNC
         return f"//{parsed.netloc}{raw}"
     return raw

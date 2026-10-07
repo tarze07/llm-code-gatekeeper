@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -80,3 +81,17 @@ class FakeRegistry:
             latest_release=datetime.now(UTC),
             repo_url=spec.get("repo_url", "https://github.com/example/example"),
         )
+
+
+def symlink_or_skip(link: Path, target: Path, target_is_directory: bool = False) -> None:
+    """Dowiązanie dla testów izolacji; na Windows bez Developer Mode — pominięcie.
+
+    Brak uprawnienia do symlinków (WinError 1314) to cecha maszyny, nie błąd
+    bramy: test nie ma czego sprawdzić, więc nie może też zawieść.
+    """
+    try:
+        link.symlink_to(target, target_is_directory)
+    except OSError as exc:
+        if sys.platform == "win32":
+            pytest.skip(f"brak uprawnienia do dowiązań symbolicznych: {exc}")
+        raise

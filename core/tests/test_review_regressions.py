@@ -12,6 +12,7 @@ from gatekeeper_core.core.orchestrator import run_gates
 from gatekeeper_core.core.policy import Exemption, Policy
 from gatekeeper_core.gates import Gate, build_gates
 from gatekeeper_core.gates.g2_crossverify import CrossVerify
+from tests.conftest import symlink_or_skip
 
 
 def test_wyjatek_nie_wycisza_innego_znaleziska_tej_samej_reguly():
@@ -160,7 +161,7 @@ def test_nakladanie_testow_nie_podaza_za_dowiazaniem(tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "test.py").write_text("original")
-    (work / "tests").symlink_to(outside, True)
+    symlink_or_skip(work / "tests", outside, True)
     with pytest.raises(GitError, match="dowiązanie"):
         write_worktree_file(work, "tests/test.py", "replacement")
     assert (outside / "test.py").read_text() == "original"

@@ -18,6 +18,7 @@ from gatekeeper_core.core import fsutil, runner
 from gatekeeper_core.core.change import ChangeContext, GitError, _git, write_worktree_file
 from gatekeeper_core.core.fsutil import is_link, remove_tree
 from gatekeeper_core.core.runner import Sandbox, SandboxUnavailable, dependency_paths
+from tests.conftest import symlink_or_skip
 
 
 def _change(repo) -> ChangeContext:
@@ -125,7 +126,7 @@ def test_remove_tree_nie_podaza_za_dowiazaniem(tmp_path):
     outside.mkdir()
     (outside / "cenny.txt").write_text("x", encoding="utf-8")
     link = tmp_path / "link"
-    link.symlink_to(outside, True)
+    symlink_or_skip(link, outside, True)
     assert remove_tree(link) is True
     assert not link.exists() and not link.is_symlink()
     assert (outside / "cenny.txt").is_file()
@@ -154,7 +155,7 @@ def test_is_link_rozpoznaje_symlink(tmp_path):
     target = tmp_path / "cel"
     target.mkdir()
     (tmp_path / "plik").write_text("x", encoding="utf-8")
-    (tmp_path / "link").symlink_to(target, True)
+    symlink_or_skip(tmp_path / "link", target, True)
     assert is_link(tmp_path / "link")
     assert not is_link(target)
     assert not is_link(tmp_path / "plik")
