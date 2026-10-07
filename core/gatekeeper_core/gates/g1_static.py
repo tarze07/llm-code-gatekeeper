@@ -32,6 +32,7 @@ from ..adapters.base import only_changed_lines
 from ..core.change import ChangeContext
 from ..core.finding import Finding, GateResult, Severity
 from ..core.plugins import StaticChecker
+from ..deps.typosquat import damerau_levenshtein
 from . import Gate, register
 
 STATIC_CHECKER_GROUP = "gatekeeper.static_checkers"
@@ -53,6 +54,30 @@ class StaticGuard(Gate):
         for checker in _installed_checkers():
             facts.update(checker.empty_facts())
         return tuple(sorted(facts))
+
+    @classmethod
+    def config_errors(cls, config: dict[str, Any]) -> list[str]:
+        """`require_*` musi być bool, a klucz łudząco podobny do znanego to literówka.
+
+        Zestaw kluczy deklarują zainstalowane checkery (`config_keys`). Klucz,
+        którego żaden nie zna, NIE jest błędem sam w sobie: polityka bywa
+        lintowana bez pack'a, który go czyta. Błędem jest dopiero klucz
+        w odległości ≤2 od znanego (`require_tcs` vs `require_tsc`) — taki
+        po cichu nic by nie włączył.
+        """
+        errors: list[str] = []
+        known: set[str] = set()
+        for checker in _installed_checkers():
+            known.update(getattr(checker, "config_keys", ()))
+        for key, value in config.items():
+            if key.startswith("require_") and not isinstance(value, bool):
+                errors.append(f"`{key}` musi być true/false, jest {value!r}")
+            if key in known:
+                continue
+            close = sorted(k for k in known if damerau_levenshtein(key, k, 2) <= 2)
+            if close:
+                errors.append(f"nieznany klucz `{key}` — czy chodziło o `{close[0]}`?")
+        return errors
 
     def run(self, change: ChangeContext) -> GateResult:
         started = time.monotonic()

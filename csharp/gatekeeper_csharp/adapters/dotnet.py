@@ -113,6 +113,7 @@ class CsharpStaticChecker:
 
     checker_id = "csharp"
     languages = ("csharp",)
+    config_keys = ("require_dotnet_build", "dotnet_args", "keep_env")
 
     def empty_facts(self) -> dict[str, Any]:
         return {

@@ -211,6 +211,14 @@ class TsJsStaticChecker:
 
     checker_id = "ts_js"
     languages = ("typescript", "javascript")
+    config_keys = (
+        "require_tsc",
+        "require_eslint",
+        "tsconfig_path",
+        "tsc_args",
+        "eslint_args",
+        "keep_env",
+    )
 
     def empty_facts(self) -> dict[str, Any]:
         return {

@@ -107,3 +107,32 @@ def test_bez_bledow_bez_zmian(monkeypatch, change):
     result = _run(monkeypatch, change, py)
     assert result.status == "pass"
     assert result.facts["static.finding_count"] == 1
+
+
+class _KeyedChecker:
+    checker_id = "fake"
+    languages = ("python",)
+    config_keys = ("require_tsc", "tsc_args")
+
+
+def test_literowka_w_kluczu_g1_static_jest_bledem_lint(monkeypatch):
+    monkeypatch.setattr(g1_static, "_installed_checkers", lambda: [_KeyedChecker()])
+
+    errors = StaticGuard.config_errors({"require_tcs": True, "tsc_args": []})
+
+    assert errors == ["nieznany klucz `require_tcs` — czy chodziło o `require_tsc`?"]
+
+
+def test_require_musi_byc_bool(monkeypatch):
+    monkeypatch.setattr(g1_static, "_installed_checkers", lambda: [_KeyedChecker()])
+
+    errors = StaticGuard.config_errors({"require_tsc": "yes"})
+
+    assert errors == ["`require_tsc` musi być true/false, jest 'yes'"]
+
+
+def test_klucz_nieznanego_packa_nie_jest_bledem(monkeypatch):
+    # Polityka bywa lintowana bez pack'a, który dany klucz czyta.
+    monkeypatch.setattr(g1_static, "_installed_checkers", lambda: [_KeyedChecker()])
+
+    assert StaticGuard.config_errors({"require_dotnet_build": True, "dotnet_args": []}) == []
