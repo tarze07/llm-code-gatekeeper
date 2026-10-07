@@ -1,0 +1,14 @@
+# Zawsze LF w repozytorium i w katalogu roboczym (także na Windows) —
+# raporty, hashe ciał testów i skompilowany web/gatekeeper_web/static/app.js
+# muszą być bajt w bajt takie same na każdym systemie.
+* text=auto eol=lf
+
+# Pliki binarne (obecnie w repo brak; wzorce na przyszłość).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
