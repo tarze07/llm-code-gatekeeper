@@ -61,13 +61,21 @@ class StaticGuard(Gate):
         for checker in checkers:
             facts.update(checker.empty_facts())
         findings: list[Finding] = []
+        errors: list[str] = []
 
+        # Awaria jednego checkera NIE zatrzymuje pozostałych: w mieszanym PR-ze
+        # (Python + TS + C#) padnięty ruff/mypy nie może ukryć wyników tsc czy
+        # `dotnet build` — inaczej autor naprawia po kolei, runda po rundzie,
+        # a raport o błędzie nic nie mówi o reszcie diffu.
         for checker in checkers:
             outcome = checker.check(change, self.config, self.id, self.budget_s)
             findings.extend(outcome.findings)
             facts.update(outcome.facts)
             if outcome.error is not None:
-                return self._error(change, started, facts, findings, outcome.error)
+                errors.append(f"{checker.checker_id}: {outcome.error}")
+
+        if errors:
+            return self._error(change, started, facts, findings, "; ".join(errors))
 
         findings = only_changed_lines(findings, change)
         high = [f for f in findings if f.severity >= Severity.HIGH]
@@ -90,14 +98,21 @@ class StaticGuard(Gate):
         findings: list[Finding],
         message: str,
     ) -> GateResult:
-        # `findings` zebrane przed awarią zostają w raporcie (np. ruff zdążył
-        # przejść, zanim wymagany mypy padł) — status `error` już mówi, że
-        # dowód jest niekompletny, więc nie ma powodu chować tego, co
-        # faktycznie zweryfikowano.
+        # `findings` pozostałych checkerów zostają w raporcie (np. tsc przeszedł,
+        # choć mypy padł) — status `error` już mówi, że dowód jest niekompletny,
+        # więc nie ma powodu chować tego, co faktycznie zweryfikowano. Filtr
+        # `only_changed_lines` jak na ścieżce sukcesu: dług starego kodu nie
+        # trafia do raportu tylko dlatego, że inny checker padł. Liczniki
+        # faktów odzwierciedlają to, co jest w raporcie.
+        findings = only_changed_lines(findings, change)
+        facts["static.finding_count"] = len(findings)
+        facts["static.high_severity_count"] = sum(
+            1 for f in findings if f.severity >= Severity.HIGH
+        )
         return self.result(
             status="error",
             duration_s=time.monotonic() - started,
             facts=facts,
-            findings=only_changed_lines(findings, change),
+            findings=findings,
             message=message,
         )
