@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import multiprocessing as mp
 import os
 import signal
@@ -20,11 +21,36 @@ from .policy import Policy
 from .progress import RunCancelled, RunControl
 from .runner import dependency_access, dependency_paths
 
+#: Ile nadzorca czeka, aż zabite procesy bramki naprawdę znikną, zanim usunie
+#: jej kopię kodu. SIGKILL nie da się zignorować, więc w praktyce to milisekundy;
+#: dłużej trwa tylko proces zawieszony w jądrze (stan D).
+REAP_GRACE_S = 5.0
+
+_PR_SET_PDEATHSIG = 1
+
+
+def _die_with_supervisor() -> None:
+    """Worker ginie razem z procesem nadzorującym.
+
+    Workery robią `setsid()`, więc SIGKILL grupy procesu przebiegu (eskalacja
+    anulowania w panelu) by ich nie dosięgnął — dobiegałyby w tle z otwartą
+    kopią kodu. Sandbox ma `--die-with-parent`, więc śmierć workera zabija też
+    narzędzia. Brak tej gwarancji to awaria bramki, nie ciche „i tak policzymy".
+    """
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(_PR_SET_PDEATHSIG, signal.SIGKILL, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), "prctl(PR_SET_PDEATHSIG) nie powiódł się")
+    parent = mp.parent_process()
+    if parent is not None and os.getppid() != parent.pid:
+        # Nadzorca zmarł, zanim sygnał został ustawiony.
+        os._exit(1)
+
 
 def _worker(
     gate: Gate, change: ChangeContext, output: Connection, dependencies: tuple[Path, ...]
 ) -> None:
     os.setsid()
+    _die_with_supervisor()
     started = time.monotonic()
     try:
         with dependency_access(dependencies):
@@ -41,6 +67,62 @@ def _worker(
         output.close()
 
 
+@dataclass(frozen=True)
+class _ProcStat:
+    state: str
+    ppid: int
+    pgrp: int
+    #: Czas startu w taktach zegara — odróżnia proces od późniejszego
+    #: właściciela tego samego PID.
+    start: int
+
+
+def _proc_stat(pid: int) -> _ProcStat | None:
+    try:
+        raw = Path(f"/proc/{pid}/stat").read_text()
+    except OSError:
+        return None
+    # Nazwa programu w nawiasach może zawierać spacje i nawiasy.
+    fields = raw.rsplit(")", 1)[1].split()
+    return _ProcStat(fields[0], int(fields[1]), int(fields[2]), int(fields[19]))
+
+
+def _descendants(root: int) -> dict[int, _ProcStat]:
+    """Wszystkie procesy potomne `root` wg /proc — także te w innej sesji.
+
+    Grupa procesów workera nie wystarcza: narzędzia z `start_new_session`
+    (Sandbox, ale też plugin, który sam robi `setsid`) są poza nią.
+    Działa, dopóki worker żyje: w chwili jego śmierci (już nie przy
+    pogrzebaniu zombie) potomkowie są przepinani do init albo subreapera
+    i znikają z tego drzewa. Dlatego `close()` najpierw zamraża workera.
+    """
+    children: dict[int, list[int]] = {}
+    stats: dict[int, _ProcStat] = {}
+    for entry in os.scandir("/proc"):
+        if not entry.name.isdigit():
+            continue
+        stat = _proc_stat(int(entry.name))
+        if stat is None:
+            continue
+        stats[int(entry.name)] = stat
+        children.setdefault(stat.ppid, []).append(int(entry.name))
+    found: dict[int, _ProcStat] = {}
+    queue = list(children.get(root, ()))
+    while queue:
+        pid = queue.pop()
+        if pid in found or pid == root:
+            continue
+        found[pid] = stats[pid]
+        queue.extend(children.get(pid, ()))
+    return found
+
+
+def _still_running(pid: int, seen: _ProcStat) -> bool:
+    stat = _proc_stat(pid)
+    # Zombie nie trzyma już plików ani katalogu roboczego.
+    return stat is not None and stat.start == seen.start and stat.state not in ("Z", "X")
+
+
 @dataclass
 class Running:
     gate: Gate
@@ -50,16 +132,44 @@ class Running:
     resources: ExitStack
 
     def close(self) -> None:
-        # Zabij także bezpośrednie narzędzia pozostawione przez plugin.
-        # Sandbox używa własnego PID namespace i --die-with-parent.
-        if self.process.pid is not None:
-            with suppress(ProcessLookupError):
-                os.killpg(self.process.pid, signal.SIGKILL)
+        """Zabija bramkę i *wszystkich* jej potomków, potem sprząta kopię.
+
+        Ta sama ścieżka obsługuje wynik, przekroczony budżet i anulowanie.
+        Kolejność ma znaczenie: kopia kodu znika dopiero, gdy nic z niej już
+        nie korzysta — inaczej narzędzie po timeoucie dalej pisałoby
+        (lub trzymało otwarte pliki) w katalogu, którego już nie ma.
+        """
+        tree: dict[int, _ProcStat] = {}
+        pid = self.process.pid
+        if pid is not None:
+            # Zamrożenie grupy workera: plugin nie zdąży uruchomić niczego
+            # nowego między spisem potomków a ich zabiciem.
+            with suppress(ProcessLookupError, PermissionError):
+                os.killpg(pid, signal.SIGSTOP)
+            tree = _descendants(pid)
+            for child, stat in tree.items():
+                if not _still_running(child, stat):
+                    continue  # PID mógł już przejść na inny proces
+                with suppress(ProcessLookupError, PermissionError):
+                    # Grupa założona przez potomka obejmuje też to, co zdążył
+                    # uruchomić po spisie.
+                    if stat.pgrp == child:
+                        os.killpg(child, signal.SIGKILL)
+                    os.kill(child, signal.SIGKILL)
+            with suppress(ProcessLookupError, PermissionError):
+                os.killpg(pid, signal.SIGKILL)
         if self.process.is_alive():
             self.process.kill()
         self.process.join()
         self.process.close()
         self.output.close()
+        deadline = time.monotonic() + REAP_GRACE_S
+        while time.monotonic() < deadline and any(
+            _still_running(child, stat) for child, stat in tree.items()
+        ):
+            time.sleep(0.02)
+        # Po karencji sprzątamy mimo wszystko: proces po SIGKILL nie wykona już
+        # żadnego kodu, a pozostawiona kopia byłaby trwałym wyciekiem dysku.
         self.resources.close()
 
 

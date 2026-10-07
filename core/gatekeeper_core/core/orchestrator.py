@@ -13,8 +13,10 @@ Zastępuje sekwencyjną pętlę z kamienia 1. Trzy zasady, wszystkie z PLAN.md �
    limitu dostaje status `error` — czyli „brak dowodu", nie „przeszło".
 
 Każda bramka działa w osobnym procesie i na własnej kopii wskazanego
-commita. Proces nadzorujący egzekwuje budżet i sprząta kopię po zakończeniu
-lub zabiciu bramki.
+commita. Proces nadzorujący egzekwuje budżet: po jego przekroczeniu zabija
+proces bramki wraz z wszystkimi potomkami (także narzędziami w osobnej sesji)
+i usuwa kopię dopiero, gdy żaden z nich już nie działa
+(`execution.Running.close`, ograniczenia w SECURITY.md).
 """
 
 from __future__ import annotations
