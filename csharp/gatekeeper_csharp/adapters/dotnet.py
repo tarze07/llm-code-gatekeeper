@@ -37,7 +37,7 @@ from gatekeeper_core.adapters.base import (
     parse_compiler_diagnostics,
     run_tool,
 )
-from gatekeeper_core.adapters.dotnet_projects import DOTNET, projects_for
+from gatekeeper_core.adapters.dotnet_projects import DOTNET, find_project_for, projects_for
 from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.core.finding import Finding, Severity
 from gatekeeper_core.core.plugins import StaticCheckOutcome
@@ -133,12 +133,29 @@ class CsharpStaticChecker:
         if not cs_files:
             return StaticCheckOutcome(findings=findings, facts=facts)
 
+        require_dotnet = bool(config.get("require_dotnet_build", False))
         projects = projects_for(change.repo, cs_files)
         facts["static.csproj_found"] = bool(projects)
+        if require_dotnet:
+            # Plik `.cs` bez projektu nie przechodzi przez kompilator — agent,
+            # który nie chce `dotnet build`, po prostu nie dokłada `.csproj`.
+            # Z `require_dotnet_build: true` to brak dowodu, nie `pass`
+            # (REVIEW.md §5 P1). Dotyczy też pojedynczych sierot obok
+            # zbudowanych projektów: zbudowanie sąsiada ich nie sprawdza.
+            orphans = [path for path in cs_files if find_project_for(change.repo, path) is None]
+            if orphans:
+                return StaticCheckOutcome(
+                    findings=findings,
+                    facts=facts,
+                    error=(
+                        f"{len(orphans)} zmienionych plików C# nie należy do żadnego "
+                        f"`.csproj` (np. `{orphans[0]}`) — dotnet build ich nie sprawdził "
+                        "(require_dotnet_build: true)"
+                    ),
+                )
         if not projects:
             return StaticCheckOutcome(findings=findings, facts=facts)
 
-        require_dotnet = bool(config.get("require_dotnet_build", False))
         # CoreCLR rezerwuje kilka GB przestrzeni adresowej na starcie
         # niezależnie od realnego zużycia — jak silnik OCaml semgrepa
         # (gates/g3_sast.py). Twardy RLIMIT_AS zabija `dotnet` kodem 137

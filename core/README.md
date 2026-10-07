@@ -44,7 +44,7 @@ gatekeeper policy lint --policy policy/gates.enforcing.yaml   # profil produkcyj
 gatekeeper calibrate   # 5 przypadków core-only, w tym PyPI i npm (patrz kalibracja/cases.yaml)
 ```
 
-`policy/` ma dwa profile o tej samej treści poza `warn_only`: `gates.yaml` (adopcja — świeże bramki tylko ostrzegają) i `gates.enforcing.yaml` (produkcja — nic nie jest wyciszone). Bez `extends` ani logiki w loaderze: polityka zostaje danymi, a zgodność profili i kopii w pack'ach/panelu sprawdza `tests/test_policy_templates.py`. `gatekeeper calibrate` biegnie na profilu adopcji — oczekiwane werdykty w `calibration/cases.yaml` są pod niego.
+`policy/` ma dwa profile o tej samej treści poza `warn_only` i flagami `gates.G1.static.require_*`: `gates.yaml` (adopcja — świeże bramki tylko ostrzegają) i `gates.enforcing.yaml` (produkcja — nic nie jest wyciszone, a `require_ruff/mypy/tsc/eslint/dotnet_build` sprawiają, że brak narzędzia albo configu — tsconfig, config eslinta, `.csproj` obejmujący zmieniony `.cs` — przy plikach danego języka w diffie daje `error`, nie `pass`; bez plików danego języka flaga nic nie robi). Bez `extends` ani logiki w loaderze: polityka zostaje danymi, a zgodność profili i kopii w pack'ach/panelu sprawdza `tests/test_policy_templates.py`. `gatekeeper calibrate` biegnie na profilu adopcji — oczekiwane werdykty w `calibration/cases.yaml` są pod niego.
 
 Pełny zestaw kalibracyjny (typosquat/SCA/SAST/G2 per język) żyje w `calibration/` każdego pack'a — tam, gdzie odpowiedni dostawca faktycznie jest zainstalowany.
 

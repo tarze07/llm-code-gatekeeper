@@ -11,7 +11,13 @@ Co musi być identyczne: wszystko, co decyduje o werdykcie (`blocking`,
 `thresholds` razem z komunikatami, `human_review_required_when`, `warn_only`,
 `on_gate_error`, …) i konfiguracja każdej bramki skonfigurowanej we wzorcu.
 Co wolno kopii: komentarze oraz DODATKOWE sekcje `gates:` dla knobs
-checkerów danego pack'a (np. `G1.static.require_ruff` w Pythonie).
+checkerów danego pack'a, a w `G1.static` (sekcja z natury pack'owa) —
+dodatkowe klucze obok tych ze wzorca (np. `mypy_args` w Pythonie).
+
+Profile różnią się tylko `warn_only` i flagami `gates.G1.static.require_*`:
+enforcing włącza wszystkie, żeby brak narzędzia albo configu (tsconfig,
+eslint, `.csproj`) przy plikach danego języka był `error`, nie `pass`
+(REVIEW.md §5 P1).
 """
 
 from __future__ import annotations
@@ -53,6 +59,22 @@ COPY_DIRS = (
 )
 COPIES = [d for d in COPY_DIRS if (MONOREPO / d).is_dir()]
 
+STATIC = "G1.static"
+
+#: Flagi G1.static, które profil enforcing włącza (REVIEW.md §5 P1). Każdą
+#: czyta checker któregoś pack'a — przy plikach jego języka w diffie brak
+#: narzędzia/configu kończy bramkę `error`.
+ENFORCING_STATIC_FLAGS = {
+    "require_ruff",
+    "require_mypy",
+    "require_tsc",
+    "require_eslint",
+    "require_dotnet_build",
+}
+
+#: Bramki, w których kopia może dołożyć własne klucze obok kluczy wzorca.
+PACK_EXTENSIBLE_GATES = {STATIC}
+
 needs_copies = pytest.mark.skipif(
     not COPIES, reason="core poza monorepo — brak kopii polityki do porównania"
 )
@@ -66,6 +88,24 @@ def load(path: Path) -> dict[str, Any]:
 
 def without(data: dict[str, Any], *keys: str) -> dict[str, Any]:
     return {k: v for k, v in data.items() if k not in keys}
+
+
+def without_profile_knobs(data: dict[str, Any]) -> dict[str, Any]:
+    """Profil bez tego, czym profile wolno się różnić: `warn_only`
+    i `gates.G1.static.require_*`. Sekcja `G1.static`, która po odjęciu
+    flag jest pusta, znika — wzorzec adopcji jej w ogóle nie ma."""
+    result = without(data, "warn_only")
+    gates = dict(result.get("gates") or {})
+    if STATIC in gates:
+        static = {
+            k: v for k, v in (gates[STATIC] or {}).items() if not k.startswith("require_")
+        }
+        if static:
+            gates[STATIC] = static
+        else:
+            del gates[STATIC]
+    result["gates"] = gates
+    return result
 
 
 # ------------------------------------------------------------ profile we wzorcu
@@ -92,11 +132,26 @@ def test_profil_enforcing_niczego_nie_wycisza() -> None:
 
 
 @pytest.mark.parametrize("directory", [str(CORE_POLICY.relative_to(MONOREPO)), *COPIES])
-def test_profile_roznia_sie_wylacznie_warn_only(directory: str) -> None:
+def test_profile_roznia_sie_wylacznie_warn_only_i_require(directory: str) -> None:
     """Drugi profil to nie druga polityka — progi i reguły są wspólne."""
     base = MONOREPO / directory
     adoption, enforcing = load(base / ADOPTION), load(base / ENFORCING)
-    assert without(adoption, "warn_only") == without(enforcing, "warn_only")
+    assert without_profile_knobs(adoption) == without_profile_knobs(enforcing)
+
+
+@pytest.mark.parametrize("directory", [str(CORE_POLICY.relative_to(MONOREPO)), *COPIES])
+def test_profil_enforcing_wymaga_narzedzi_g1_static(directory: str) -> None:
+    """Brak tsconfiga/configu eslinta/`.csproj`/mypy to w produkcji `error`."""
+    static = (load(MONOREPO / directory / ENFORCING).get("gates") or {}).get(STATIC) or {}
+    assert {k for k, v in static.items() if k.startswith("require_") and v is True} == (
+        ENFORCING_STATIC_FLAGS
+    )
+
+
+def test_profil_adopcji_we_wzorcu_nie_wlacza_require() -> None:
+    """Adopcja zostaje bez zmian: wzorzec nie ma sekcji `G1.static`, więc
+    checkery biorą swoje domyślne (`require_ruff` tak, reszta nie)."""
+    assert STATIC not in (load(CORE_POLICY / ADOPTION).get("gates") or {})
 
 
 # ------------------------------------------------------------ kopie w pack'ach
@@ -122,7 +177,12 @@ def test_kopia_nie_zmienia_konfiguracji_bramek_wzorca(directory: str, profile: s
     copy_gates = load(MONOREPO / directory / profile).get("gates") or {}
 
     for gate_id, config in template_gates.items():
-        assert copy_gates.get(gate_id) == config, gate_id
+        if gate_id in PACK_EXTENSIBLE_GATES:
+            # Pack dokłada własne knobs obok kluczy wzorca, ale ich nie przestawia.
+            copy_config = copy_gates.get(gate_id) or {}
+            assert {k: copy_config.get(k) for k in config} == config, gate_id
+        else:
+            assert copy_gates.get(gate_id) == config, gate_id
 
 
 @needs_copies

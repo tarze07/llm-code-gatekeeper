@@ -18,6 +18,8 @@ from gatekeeper_core.core.orchestrator import run_gates
 from gatekeeper_core.core.policy import Policy
 from gatekeeper_core.gates.g1_static import StaticGuard
 
+from gatekeeper_csharp.adapters.dotnet import CsharpStaticChecker
+
 requires_dotnet = pytest.mark.skipif(
     shutil.which("dotnet") is None, reason="dotnet niedostępny (.NET SDK)"
 )
@@ -104,3 +106,71 @@ def test_orkiestrator_sprawdza_csharp_w_swiezej_kopii(repo, case, status):
     # Restore i build dotyczą prywatnej kopii, a nie repozytorium operatora.
     assert not (repo.path / "obj").exists()
     assert repo.git("status", "--porcelain") == ""
+
+
+# ------------------------------------------------- brak projektu = brak dowodu
+# (REVIEW.md §5 P1). Bez `dotnet`: przy brakującym `.csproj` checker nie woła
+# narzędzia, więc wynik zależy wyłącznie od polityki.
+
+REQUIRE = {"require_dotnet_build": True}
+
+
+def _check(repo, config):
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+    return CsharpStaticChecker().check(change, config, "G1.static", 60.0)
+
+
+def test_require_dotnet_build_bez_csproj_to_error_nie_pass(repo):
+    repo.checkout("feature", create=True)
+    repo.write("Loose.cs", "namespace X;\npublic class Loose {}\n")
+    repo.commit("feat: cs bez projektu")
+
+    outcome = _check(repo, REQUIRE)
+
+    assert outcome.error is not None
+    assert "Loose.cs" in outcome.error
+    assert outcome.facts["static.csproj_found"] is False
+
+
+def test_bez_require_brak_csproj_nie_jest_bledem(repo):
+    """Profil adopcji: zachowanie sprzed zmiany — brak projektu to nie `error`."""
+    repo.checkout("feature", create=True)
+    repo.write("Loose.cs", "namespace X;\npublic class Loose {}\n")
+    repo.commit("feat: cs bez projektu")
+
+    outcome = _check(repo, {})
+
+    assert outcome.error is None
+    assert outcome.facts["static.csproj_found"] is False
+
+
+def test_require_dotnet_build_lapie_sierote_obok_projektu(repo):
+    """Zbudowanie sąsiedniego projektu nie sprawdza pliku spoza niego."""
+    repo.write("lib/Lib.csproj", '<Project Sdk="Microsoft.NET.Sdk" />\n')
+    repo.commit("base: projekt")
+    repo.checkout("feature", create=True)
+    repo.write("lib/Ok.cs", "public class Ok {}\n")
+    repo.write("scripts/Orphan.cs", "public class Orphan {}\n")
+    repo.commit("feat: plik w projekcie i sierota")
+
+    outcome = _check(repo, REQUIRE)
+
+    assert outcome.error is not None
+    assert "scripts/Orphan.cs" in outcome.error
+    assert outcome.facts["static.csproj_found"] is True
+
+
+@pytest.mark.parametrize(
+    ("path", "content"),
+    [("app.py", "x = 1\n"), ("app.ts", "export const x = 1;\n"), ("docs/a.md", "t\n")],
+)
+def test_zmiana_bez_csharp_nie_wymaga_projektu(repo, path, content):
+    """Repo bez C# w diffie nie może dostać `error` za brak `.csproj`."""
+    repo.checkout("feature", create=True)
+    repo.write(path, content)
+    repo.commit("feat: nie-C#")
+
+    outcome = _check(repo, REQUIRE)
+
+    assert outcome.error is None, outcome.error
+    assert outcome.facts["static.csharp_files_checked"] == 0

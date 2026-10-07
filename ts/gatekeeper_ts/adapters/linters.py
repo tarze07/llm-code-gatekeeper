@@ -172,6 +172,7 @@ def run_eslint(
 
 
 _ESLINT_CONFIG_NAMES = (
+    ".eslintrc",
     ".eslintrc.js",
     ".eslintrc.cjs",
     ".eslintrc.json",
@@ -181,7 +182,28 @@ _ESLINT_CONFIG_NAMES = (
     "eslint.config.mjs",
     "eslint.config.cjs",
     "eslint.config.ts",
+    "eslint.config.mts",
+    "eslint.config.cts",
 )
+
+
+def has_eslint_config(repo: Path) -> bool:
+    """Plik configu eslinta w korzeniu repo albo klucz `eslintConfig`
+    w `package.json` (legacy config, nadal honorowany przez eslint 8).
+
+    Zepsuty `package.json` to nie „jest config" — eslint i tak by na nim
+    padł; tu po prostu nie liczy się jako config.
+    """
+    if any((repo / name).is_file() for name in _ESLINT_CONFIG_NAMES):
+        return True
+    package_json = repo / "package.json"
+    if not package_json.is_file():
+        return False
+    try:
+        data = json.loads(package_json.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return isinstance(data, dict) and "eslintConfig" in data
 
 
 class TsJsStaticChecker:
@@ -223,8 +245,22 @@ class TsJsStaticChecker:
         )
 
         if ts_files:
-            tsconfig = change.repo / str(config.get("tsconfig_path", "tsconfig.json"))
+            tsconfig_path = str(config.get("tsconfig_path", "tsconfig.json"))
+            tsconfig = change.repo / tsconfig_path
             facts["static.tsconfig_found"] = tsconfig.is_file()
+            if not facts["static.tsconfig_found"] and require_tsc:
+                # Bez configu tsc się nie uruchamia — a agent, który chce ominąć
+                # kontrolę typów, po prostu nie dokłada tsconfiga. Z
+                # `require_tsc: true` to brak dowodu, nie `pass` (REVIEW.md §5 P1).
+                return StaticCheckOutcome(
+                    findings=findings,
+                    facts=facts,
+                    error=(
+                        f"zmiana zawiera pliki TypeScript ({len(ts_files)}), a w repo nie ma "
+                        f"`{tsconfig_path}` — tsc nie sprawdził "
+                        "typów (require_tsc: true)"
+                    ),
+                )
             if facts["static.tsconfig_found"]:
                 try:
                     findings.extend(
@@ -246,8 +282,19 @@ class TsJsStaticChecker:
                     facts["static.tsc_available"] = False
 
         if ts_files or js_files:
-            has_config = any((change.repo / name).is_file() for name in _ESLINT_CONFIG_NAMES)
+            has_config = has_eslint_config(change.repo)
             facts["static.eslint_config_found"] = has_config
+            if not has_config and require_eslint:
+                return StaticCheckOutcome(
+                    findings=findings,
+                    facts=facts,
+                    error=(
+                        f"zmiana zawiera pliki TS/JS ({len(ts_files) + len(js_files)}), a w repo "
+                        "nie ma configu eslinta (eslint.config.*, .eslintrc*, "
+                        "`eslintConfig` w package.json) — eslint nie sprawdził kodu "
+                        "(require_eslint: true)"
+                    ),
+                )
             if has_config:
                 try:
                     findings.extend(
