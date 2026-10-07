@@ -62,18 +62,35 @@ class Gate:
 REGISTRY: dict[str, type[Gate]] = {}
 
 
+def _same_class(a: type[Gate], b: type[Gate]) -> bool:
+    # Porównanie po nazwie, nie tylko po tożsamości: przeładowany moduł
+    # (np. `importlib.reload` w testach) daje nowy obiekt tej samej klasy.
+    return a is b or (a.__module__, a.__qualname__) == (b.__module__, b.__qualname__)
+
+
 def register(cls: type[Gate]) -> type[Gate]:
+    """Rejestruje bramkę pod jej `id`.
+
+    Ta sama klasa może przyjść dwa razy (dekorator i entry point) — to nie
+    błąd. Inna klasa pod zajętym `id` już tak: pack, który omyłkowo zgłosi
+    np. `G1.static`, byłby inaczej po cichu zignorowany albo po cichu
+    podmieniłby bramkę core (REVIEW.md §5, P2)."""
     if not cls.id:
         raise ValueError(f"{cls.__name__} nie ma identyfikatora")
+    existing = REGISTRY.get(cls.id)
+    if existing is not None and not _same_class(existing, cls):
+        raise ValueError(
+            f"bramka {cls.id!r} jest już zarejestrowana przez "
+            f"{existing.__module__}.{existing.__qualname__}; "
+            f"{cls.__module__}.{cls.__qualname__} nie może jej zastąpić"
+        )
     REGISTRY[cls.id] = cls
     return cls
 
 
 def all_gates() -> list[type[Gate]]:
     for ep in entry_points(group=GATE_GROUP):
-        cls = ep.load()
-        if cls.id not in REGISTRY:
-            register(cls)
+        register(ep.load())
     return [REGISTRY[k] for k in sorted(REGISTRY)]
 
 
