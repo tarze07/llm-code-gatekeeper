@@ -223,7 +223,13 @@ def _tool_status(name: str, args: tuple[str, ...], purpose: str) -> ToolStatus:
 def _version_of(path: str, args: tuple[str, ...]) -> str | None:
     try:
         proc = subprocess.run(
-            [path, *args], capture_output=True, text=True, timeout=VERSION_TIMEOUT_S, check=False
+            [path, *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=VERSION_TIMEOUT_S,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):  # pragma: no cover
         return None

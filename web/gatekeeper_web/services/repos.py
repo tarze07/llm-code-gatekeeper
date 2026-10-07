@@ -407,6 +407,8 @@ def _git(repo: Path, *args: str) -> str:
             ["git", "-C", str(repo), *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=GIT_TIMEOUT_S,
             check=False,
         )

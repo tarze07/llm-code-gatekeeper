@@ -13,7 +13,6 @@ nadzorcy (PLAN-WEB-UI.md §5).
 from __future__ import annotations
 
 import argparse
-import shutil
 import signal
 import sys
 import tempfile
@@ -22,6 +21,7 @@ from pathlib import Path
 from types import FrameType
 from typing import Any
 
+from gatekeeper_core.core.fsutil import remove_tree
 from gatekeeper_core.core.progress import ProgressEvent, RunCancelled, RunControl
 from gatekeeper_core.core.report import render_json
 from gatekeeper_core.core.service import PreparationError, RunRequest, execute, prepare
@@ -70,7 +70,7 @@ def run_job(settings: Settings, job_id: int) -> int:
     try:
         return _execute(settings, queue, repository, job, workspace)
     finally:
-        shutil.rmtree(workspace, ignore_errors=True)
+        remove_tree(workspace)
 
 
 def _execute(

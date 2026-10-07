@@ -175,6 +175,8 @@ def _build_case_repo(fixture_dir: Path) -> Iterator[tuple[Path, str, str]]:
         _git(repo_path, "config", "user.email", "calibration@example.com")
         _git(repo_path, "config", "user.name", "Kalibracja")
         _git(repo_path, "config", "commit.gpgsign", "false")
+        # Fixture ma trafić do commita bajt w bajt, niezależnie od globalnego configu.
+        _git(repo_path, "config", "core.autocrlf", "false")
 
         _sync_tree(repo_path, fixture_dir / "base")
         base_sha = _commit(repo_path, "kalibracja: stan bazowy")
@@ -215,6 +217,11 @@ def _commit(repo_path: Path, message: str) -> str:
 
 def _git(repo_path: Path, *args: str) -> str:
     proc = subprocess.run(
-        ["git", "-C", str(repo_path), *args], capture_output=True, text=True, check=True
+        ["git", "-C", str(repo_path), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
     )
     return proc.stdout

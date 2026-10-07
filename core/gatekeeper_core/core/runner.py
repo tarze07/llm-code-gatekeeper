@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import functools
 import os
-import resource
 import shutil
 import signal
 import subprocess
@@ -21,6 +20,13 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+
+from .fsutil import is_link
+
+if sys.platform != "win32":
+    import resource
+else:  # pragma: no cover - Windows: Sandbox.run i tak odmawia wykonania
+    resource = None
 
 #: Fragmenty nazw zmiennych środowiskowych, które nie mają prawa trafić do
 #: uruchamianego procesu.
@@ -65,7 +71,7 @@ def dependency_paths(root: Path) -> tuple[Path, ...]:
     if not modules.is_dir():
         return ()
     resolved = modules.resolve()
-    if modules.is_symlink() and resolved not in _DEPENDENCIES.get():
+    if is_link(modules) and resolved not in _DEPENDENCIES.get():
         raise SandboxUnavailable("node_modules jest niezaufanym dowiązaniem poza kopię kodu")
     return (resolved,)
 
@@ -161,6 +167,8 @@ class Sandbox:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 start_new_session=True,  # własna grupa procesów — da się ubić w całości
                 preexec_fn=self._limits(),  # noqa: PLW1509
             )
@@ -191,6 +199,8 @@ class Sandbox:
         max_processes = self.policy.max_processes
 
         def apply() -> None:  # pragma: no cover - wykonuje się w procesie potomnym
+            if resource is None:
+                raise SandboxUnavailable("limity zasobów wymagają systemu POSIX")
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
             if memory_mb:
                 limit = memory_mb * 1024 * 1024
@@ -261,7 +271,7 @@ def _wrap_filesystem(
     command.extend(("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"))
     declared = {p.resolve() for p in policy.read_only_paths} | set(_DEPENDENCIES.get())
     modules = cwd / "node_modules"
-    if modules.is_symlink() and modules.resolve() not in declared:
+    if is_link(modules) and modules.resolve() not in declared:
         raise SandboxUnavailable("node_modules jest niezaufanym dowiązaniem poza kopię kodu")
     readable = _runtime_paths(argv[0]) | declared
     if modules.is_dir():
@@ -289,7 +299,7 @@ def _wrap_filesystem(
     # Kod może pisać artefakty budowania, ale nie zmieniać bazy Git ani
     # współdzielonych pakietów. Dowiązania poza whitelistę pozostają niewidoczne.
     for protected in (cwd / ".git", modules):
-        if protected.exists() and not protected.is_symlink():
+        if protected.exists() and not is_link(protected):
             command.extend(("--ro-bind", str(protected.resolve()), str(protected)))
     command.extend(("--dir", "/tmp/gatekeeper-home", "--chdir", str(cwd)))
     environment.update(HOME="/tmp/gatekeeper-home", TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp")
