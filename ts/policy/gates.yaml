@@ -1,6 +1,8 @@
 # Polityka bramy jakości — profil ADOPCJI (`warn-only`), pack TS/JS.
 #
-# Dwa profile, ta sama treść poza listą `warn_only`:
+# Dwa profile, ta sama treść poza listą `warn_only` i flagami
+# `gates.G1.static.require_*` (enforcing: brak tsc/eslinta/mypy/`dotnet build`
+# albo ich configu przy plikach danego języka w diffie to `error`):
 #   * `gates.yaml`           — adopcja: G1.static, G2.*, G3.sast i G3.sca tylko
 #                              ostrzegają. Na pierwszy tydzień obserwacji.
 #   * `gates.enforcing.yaml` — produkcja: pusta `warn_only`, każda reguła

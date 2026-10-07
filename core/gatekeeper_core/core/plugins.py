@@ -49,6 +49,9 @@ class StaticChecker(Protocol):
     checker_id: str
     #: Wartości `ChangedFile.language`, które ten checker obsługuje.
     languages: tuple[str, ...]
+    #: Klucze `gates.G1.static`, które ten checker czyta. Opcjonalne (stare
+    #: pluginy go nie mają); służy tylko do wyłapywania literówek w `policy lint`.
+    #: config_keys: tuple[str, ...]
 
     def empty_facts(self) -> dict[str, Any]: ...
 

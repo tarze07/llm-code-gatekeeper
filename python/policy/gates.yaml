@@ -1,6 +1,8 @@
 # Polityka bramy jakości — profil ADOPCJI (`warn-only`), pack Python.
 #
-# Dwa profile, ta sama treść poza listą `warn_only`:
+# Dwa profile, ta sama treść poza listą `warn_only` i flagami
+# `gates.G1.static.require_*` (enforcing: brak tsc/eslinta/mypy/`dotnet build`
+# albo ich configu przy plikach danego języka w diffie to `error`):
 #   * `gates.yaml`           — adopcja: G1.static, G2.*, G3.sast i G3.sca tylko
 #                              ostrzegają. Na pierwszy tydzień obserwacji.
 #   * `gates.enforcing.yaml` — produkcja: pusta `warn_only`, każda reguła
@@ -147,7 +149,9 @@ gates:
     require_mypy: false # wiele repo nie ma mypy skonfigurowanego — brak to nie błąd
     mypy_args: []
     # TS/JS: tsc/eslint uruchamiają się tylko, gdy w repo jest odpowiedni config
-    # (tsconfig.json / .eslintrc*) — bez configu bramka daje `pass`, nie `error`.
+    # (tsconfig.json / config eslinta) — w tym profilu brak configu daje `pass`;
+    # profil enforcing włącza `require_*`, więc tam to `error` (tak samo
+    # brak `.csproj` dla zmienionego `.cs`).
     require_tsc: false
     require_eslint: false
     tsconfig_path: tsconfig.json

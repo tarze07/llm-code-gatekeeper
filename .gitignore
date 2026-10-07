@@ -1,3 +1,6 @@
 # Kazdy pack ma wlasny .gitignore (core/, python/, ts/, csharp/); ten plik
 # obejmuje korzen workspace'u.
 *.pdf
+
+# worktree agentow Claude Code i lokalne ustawienia sesji
+.claude/

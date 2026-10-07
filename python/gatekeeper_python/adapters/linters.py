@@ -131,6 +131,7 @@ class PythonStaticChecker:
 
     checker_id = "python"
     languages = ("python",)
+    config_keys = ("require_ruff", "require_mypy", "mypy_args", "keep_env")
 
     def empty_facts(self) -> dict[str, Any]:
         return {

@@ -15,6 +15,21 @@ miejsce i czas kopiowania historii dla każdej bramki.
 Nadzorca uruchamia bramki w osobnych procesach i mierzy czas ich wykonania
 niezależnie od wartości zwracanej przez plugin. Po przekroczeniu budżetu
 zabija proces i zwraca `error`. Przygotowanie kopii Git poprzedza ten budżet.
+Zabijany jest cały spis potomków procesu bramki (wg `/proc`), także narzędzia
+w osobnej sesji — Sandbox i każdy `start_new_session` pluginu. Kopia kodu
+jest usuwana dopiero, gdy żaden z nich już nie działa (najwyżej po
+`REAP_GRACE_S`; proces po SIGKILL nie wykonuje już kodu). Ta sama ścieżka
+obsługuje anulowanie z panelu. Worker bramki ginie też razem z procesem
+nadzorującym (`PR_SET_PDEATHSIG`), a Sandbox razem z workerem
+(`--die-with-parent`).
+
+Ograniczenia: proces, który zdążył się odłączyć od drzewa (podwójny `fork`
+i przepięcie do init), nie jest już widoczny jako potomek i nie zostanie
+zabity. Gdy zginie sam proces nadzorujący (SIGKILL), zabijane są worker
+i Sandbox, ale nie bezpośrednie narzędzia zaufanego pluginu spoza Sandboxa,
+a kopia kodu może zostać w katalogu tymczasowym. Kod ocenianego PR-a uruchamia
+się wyłącznie w Sandboxie, więc tych luk nie może wykorzystać.
+
 Pluginy są zaufanym kodem bramy; nie należy ładować pluginów dostarczonych
 przez oceniany PR.
 

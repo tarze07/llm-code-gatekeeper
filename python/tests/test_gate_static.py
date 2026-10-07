@@ -15,6 +15,8 @@ import pytest
 from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.gates.g1_static import StaticGuard
 
+from gatekeeper_python.adapters.linters import PythonStaticChecker
+
 requires_ruff = pytest.mark.skipif(
     shutil.which("ruff") is None, reason="ruff niedostępny — zainstaluj `.[gates]`"
 )
@@ -117,3 +119,52 @@ def test_brak_ruffa_jest_bledem_bramki(repo, monkeypatch):
 
     assert result.status == "error"
     assert result.facts["static.ruff_available"] is False
+
+
+# ---------------------------------------- `require_*` profilu enforcing
+# (REVIEW.md §5 P1). Python nie ma odpowiednika „brakującego tsconfiga":
+# ruff i mypy działają bez pliku konfiguracyjnego, więc jedyną dziurą jest
+# brak narzędzia — a ten z `require_mypy: true` kończy się `error`.
+
+
+@requires_ruff
+def test_require_mypy_brak_mypy_jest_bledem(repo, monkeypatch):
+    repo.checkout("feature", create=True)
+    repo.write("src/app.py", "x = 1\n")
+    repo.commit("zmiana")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    real_which = shutil.which
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda name, **kw: None if name == "mypy" else real_which(name, **kw),
+    )
+    result = PythonStaticChecker().check(change, {"require_mypy": True}, "G1.static", 60.0)
+
+    assert result.error is not None
+    assert result.facts["static.mypy_available"] is False
+
+
+@pytest.mark.parametrize(
+    ("path", "content"),
+    [
+        ("app.ts", "export const x = 1;\n"),
+        ("Program.cs", "class P {}\n"),
+        ("docs/notatka.md", "tekst\n"),
+    ],
+)
+def test_zmiana_bez_pythona_nie_wymaga_narzedzi(repo, monkeypatch, path, content):
+    """Repo bez Pythona w diffie nie może dostać `error` za brak ruffa/mypy."""
+    repo.checkout("feature", create=True)
+    repo.write(path, content)
+    repo.commit("feat: nie-Python")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    monkeypatch.setattr(shutil, "which", lambda name, **kwargs: None)
+    outcome = PythonStaticChecker().check(
+        change, {"require_ruff": True, "require_mypy": True}, "G1.static", 60.0
+    )
+
+    assert outcome.error is None, outcome.error
+    assert outcome.facts["static.python_files_checked"] == 0

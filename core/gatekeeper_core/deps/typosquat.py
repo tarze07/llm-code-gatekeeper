@@ -8,7 +8,9 @@ Trzy decyzje, które decydują o użyteczności tego modułu:
 2. **Maksymalny dystans zależy od długości nazwy.** Dystans 2 na czteroliterowej
    nazwie oznacza „prawie wszystko" — same fałszywe alarmy.
 3. **Zwijanie homoglifów przed liczeniem dystansu**: `rn`→`m`, `l`/`1`→`1`,
-   cyrylickie `а`/`е`/`о` → łacińskie. `paramiko` vs `paramlko` to dystans 1,
+   cyrylickie i greckie lustra liter łacińskich (`а`, `ο`, `ӏ`…) → łacińskie,
+   a wcześniej NFKC zwija formy pełnej szerokości i ligatury (`ｒｅｑｕｅｓｔｓ`).
+   `paramiko` vs `paramlko` to dystans 1,
    ale `rnatplotlib` vs `matplotlib` to bez zwijania dystans 2 przy jednym
    znaku różnicy dla oka.
 """
@@ -16,6 +18,7 @@ Trzy decyzje, które decydują o użyteczności tego modułu:
 from __future__ import annotations
 
 import functools
+import unicodedata
 from dataclasses import dataclass
 from importlib.resources import files
 
@@ -30,6 +33,25 @@ _HOMOGLYPHS = {
     "х": "x",
     "ѕ": "s",
     "і": "i",
+    "ӏ": "l",
+    "ј": "j",
+    "һ": "h",
+    "ԁ": "d",
+    "ԛ": "q",
+    "ԝ": "w",
+    "ѡ": "w",
+    "у": "y",
+    "κ": "k",  # grecka
+    "ο": "o",
+    "α": "a",
+    "ι": "i",
+    "ν": "v",
+    "υ": "u",
+    "ρ": "p",
+    "ɡ": "g",  # łacina rozszerzona (IPA i bez kropki)
+    "ɑ": "a",
+    "ɩ": "i",
+    "ı": "i",
     "0": "o",
     "1": "l",
     "5": "s",
@@ -45,7 +67,7 @@ class Neighbour:
 
 
 def canonical(ecosystem: str, name: str) -> str:
-    name = normalize(ecosystem, name)
+    name = normalize(ecosystem, unicodedata.normalize("NFKC", name))
     name = "".join(_HOMOGLYPHS.get(ch, ch) for ch in name)
     name = name.replace("rn", "m").replace("vv", "w")
     return name

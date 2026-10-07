@@ -79,7 +79,7 @@ cd ~/moj-projekt && npm i -D typescript eslint
 dotnet --version
 ```
 
-**Brakującego narzędzia brama nie udaje, że nie ma.** Bramka, której narzędzia zabrakło, zgłosi `error`, a decyzja poleci do `PASS-WITH-REVIEW` z jawnym powodem — brak dowodu to nie jest to samo co dowód braku problemu. Wyjątek: `G1.static`/mypy, tsc, eslint i `dotnet build` są domyślnie opcjonalne (`require_mypy`/`require_tsc`/`require_eslint`/`require_dotnet_build: false` w `gates.yaml`) — wiele repo nie ma ich skonfigurowanych i to nie jest defekt; brama wtedy po prostu pomija ten język bez wołania narzędzia (`tsconfig.json`/config eslinta/`.csproj` musi w ogóle istnieć, inaczej i tak nie ma czego sprawdzać).
+**Brakującego narzędzia brama nie udaje, że nie ma.** Bramka, której narzędzia zabrakło, zgłosi `error`, a decyzja poleci do `PASS-WITH-REVIEW` z jawnym powodem — brak dowodu to nie jest to samo co dowód braku problemu. Wyjątek: `G1.static`/mypy, tsc, eslint i `dotnet build` są w profilu adopcji opcjonalne (`require_mypy`/`require_tsc`/`require_eslint`/`require_dotnet_build: false` w `gates.yaml`) — wiele repo nie ma ich skonfigurowanych; brama wtedy pomija ten język bez wołania narzędzia, gdy brakuje `tsconfig.json`/configu eslinta/`.csproj`. Profil `gates.enforcing.yaml` włącza wszystkie `require_*`: jeśli diff zawiera pliki danego języka, a narzędzia albo configu nie ma, `G1.static` kończy się `error` — inaczej agent omija kontrolę typów, po prostu nie dokładając tsconfiga. Bez plików danego języka w diffie flaga nic nie robi.
 
 Nie musisz mieć wszystkiego naraz — `gatekeeper run --gate G1.deps` uruchamia tylko wskazane bramki.
 
@@ -102,7 +102,7 @@ cp /ścieżka/do/llm-code-gatekeeper/python/policy/gates.enforcing.yaml policy/
 cp /ścieżka/do/llm-code-gatekeeper/python/policy/exceptions.yaml      policy/
 ```
 
-Dwa profile, ta sama treść poza `warn_only`: `gates.yaml` (adopcja — `G1.static`, `G2.*`, `G3.sast`, `G3.sca` tylko ostrzegają) i `gates.enforcing.yaml` (produkcja — nic nie jest wyciszone). `gatekeeper` czyta domyślnie `policy/gates.yaml`, więc zaczynasz od adopcji. Po tygodniu obserwacji nadpisz `policy/gates.yaml` profilem enforcing — **zanim** Check Run stanie się required. Z profilem adopcji brama komentuje, nie chroni: naprawdę blokuje tylko sekret, nieistniejący pakiet, typosquat, za duży diff i złożoność.
+Dwa profile, ta sama treść poza `warn_only` i flagami `G1.static.require_*` (patrz wyżej): `gates.yaml` (adopcja — `G1.static`, `G2.*`, `G3.sast`, `G3.sca` tylko ostrzegają) i `gates.enforcing.yaml` (produkcja — nic nie jest wyciszone). `gatekeeper` czyta domyślnie `policy/gates.yaml`, więc zaczynasz od adopcji. Po tygodniu obserwacji nadpisz `policy/gates.yaml` profilem enforcing — **zanim** Check Run stanie się required. Z profilem adopcji brama komentuje, nie chroni: naprawdę blokuje tylko sekret, nieistniejący pakiet, typosquat, za duży diff i złożoność.
 
 To nie jest formalność techniczna. Polityka — czyli to, co blokuje i jakie są limity — ma leżeć w ocenianym repozytorium, być wersjonowana razem z kodem i chroniona przez CODEOWNERS. Chodzi o to, żeby **agent nie mógł sobie poprawić kryteriów, według których jest oceniany**. To granica bezpieczeństwa całego systemu (PLAN.md §4).
 
@@ -279,7 +279,7 @@ Jedyna nietrywialna decyzja: raportuje **tylko znaleziska w zmienionych liniach*
 |---|---|
 | `static.high_severity_count` | realne defekty (rodziny ruffa F/B/S/ASYNC/PL, błędy mypy/tsc/`dotnet build`) — nie styl |
 | `static.mypy_available` | `false`, gdy mypy nie jest skonfigurowany w repo — to nie jest błąd |
-| `static.tsconfig_found` / `static.eslint_config_found` / `static.csproj_found` | `false`, gdy w repo nie ma configu, którego narzędzie wymaga — bramka wtedy w ogóle go nie woła |
+| `static.tsconfig_found` / `static.eslint_config_found` / `static.csproj_found` | `false`, gdy w repo nie ma configu, którego narzędzie wymaga — bramka wtedy w ogóle go nie woła (z `require_tsc`/`require_eslint`/`require_dotnet_build: true` kończy się `error`) |
 
 Reguły stylistyczne ruffa (import order, formatowanie) i eslinta poza rdzeniowymi regułami „problem" (np. `no-undef`, `no-eval`) raportują się jako `low`/`medium` — zgłoszenie stylistyczne udające błąd to najprostszy sposób na to, żeby zespół przestał czytać raporty.
 
@@ -426,9 +426,9 @@ gates:
   G1.static:
     require_ruff: true             # brak ruffa = błąd bramki
     require_mypy: false            # wiele repo nie ma mypy skonfigurowanego
-    require_tsc: false             # jw. dla TS — bez tsconfig.json i tak się pomija
-    require_eslint: false          # jw. dla eslinta — bez configu i tak się pomija
-    require_dotnet_build: false    # jw. dla C# — bez .csproj i tak się pomija
+    require_tsc: false             # jw. dla TS — bez tsconfig.json pomija; true: brak = error
+    require_eslint: false          # jw. dla eslinta — bez configu pomija; true: brak = error
+    require_dotnet_build: false    # jw. dla C# — bez .csproj pomija; true: brak = error
   G2.cross_verify:
     python_path: ["src"]           # układ src/ — katalogi dokładane do PYTHONPATH
     timeout_s: 600
