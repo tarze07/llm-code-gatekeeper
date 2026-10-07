@@ -11,9 +11,9 @@ import json
 
 from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.core.finding import Verdict
+from gatekeeper_core.core.orchestrator import run_gates
 from gatekeeper_core.core.policy import Policy
 from gatekeeper_core.core.report import MARKER, render_check_runs, render_json, render_markdown
-from gatekeeper_core.core.sequence import run_gates
 from gatekeeper_core.core.store import Store
 from gatekeeper_core.deps.manifests import PYPI
 from gatekeeper_core.gates.g0_scope import ScopeGuard
