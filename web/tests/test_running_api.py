@@ -149,6 +149,9 @@ def test_diagnostyka_srodowiska(panel: Panel) -> None:
     body = panel.get("/api/v1/environment").json()
 
     assert "isolation" in body and "tools" in body
+    assert body["isolation"]["backend"] in ("bwrap", "container")
+    assert {"engine", "image", "image_present", "reason"} <= body["isolation"].keys()
+    assert all("in_image" in tool for tool in body["tools"])
     assert len(body["gates"]) >= 11
     # Lista bramek pochodzi z entry pointów, nie z listy wpisanej w panelu.
     assert any(gate["id"] == "G0.scope" for gate in body["gates"])
