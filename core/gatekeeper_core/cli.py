@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import sqlite3
 import sys
@@ -296,7 +297,22 @@ def _resolve_store(store_path: Path, repo: Path) -> Path:
     return store_path if store_path.is_absolute() else Path(repo) / store_path
 
 
+def _utf8_streams() -> None:
+    """Na konsoli Windows (cp1252/cp852) polskie komunikaty wychodziłyby krzakami.
+
+    Przestawiamy tylko stdout/stderr tego procesu; `errors="replace"`, żeby
+    nieznany znak nigdy nie przerwał raportu wyjątkiem kodowania.
+    """
+    platforma: str = sys.platform  # zmienna, by mypy nie uznał gałęzi za martwą
+    if platforma != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:  # pragma: no cover
+    _utf8_streams()
     try:
         app()
     except KeyboardInterrupt:

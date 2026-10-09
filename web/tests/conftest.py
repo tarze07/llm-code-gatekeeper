@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -189,3 +190,17 @@ def demo(panel: Panel) -> tuple[int, str]:
     assert response.status_code == 201, response.text
     run_id: str = response.json()["run"]["run_id"]
     return project_id, run_id
+
+
+def symlink_or_skip(link: Path, target: Path, target_is_directory: bool = False) -> None:
+    """Dowiązanie dla testów; na Windows bez Developer Mode — pominięcie.
+
+    Brak uprawnienia do symlinków (WinError 1314) to cecha maszyny, nie błąd
+    panelu: test nie ma czego sprawdzić, więc nie może też zawieść.
+    """
+    try:
+        link.symlink_to(target, target_is_directory)
+    except OSError as exc:
+        if sys.platform == "win32":
+            pytest.skip(f"brak uprawnienia do dowiązań symbolicznych: {exc}")
+        raise
