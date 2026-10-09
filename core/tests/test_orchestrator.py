@@ -62,16 +62,16 @@ def test_plan_uklada_bramki_w_fale_wedlug_zaleznosci(repo):
 
 def test_bramki_w_jednej_fali_biegna_rownolegle(repo):
     change = context(repo)
-    a, b = Stub("G1.deps", sleep_s=0.4), Stub("G3.secrets", sleep_s=0.4)
+    a, b = Stub("G1.deps", sleep_s=1.0), Stub("G3.secrets", sleep_s=1.0)
 
     started = time.monotonic()
     result = run_gates(change, policy(), gates=[Stub("G0.scope"), a, b])
     elapsed = time.monotonic() - started
 
-    # Windows startuje workery przez spawn (~0,3 s na proces) — sedno testu
-    # to nakładające się starty bramek, sprawdzane niżej.
-    assert elapsed < (4.0 if sys.platform == "win32" else 1.5)
-    assert abs(result.facts["G1.deps.started"] - result.facts["G3.secrets.started"]) < 0.3
+    # Równolegle = druga bramka rusza, zanim pierwsza skończy (sen 1 s).
+    # Odstęp startów to przygotowanie kopii i — na Windows — start przez spawn.
+    assert abs(result.facts["G1.deps.started"] - result.facts["G3.secrets.started"]) < 1.0
+    assert elapsed < (5.0 if sys.platform == "win32" else 2.0)
 
 
 def test_przekroczony_budzet_to_blad_a_nie_przeszlo(repo):
