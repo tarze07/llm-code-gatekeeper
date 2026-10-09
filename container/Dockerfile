@@ -58,7 +58,8 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
- && npm install -g --no-fund --no-audit @typescript-eslint/parser@8 typescript@5 \
+ && npm install -g --no-fund --no-audit \
+      @typescript-eslint/parser@8.69.0 eslint@10.8.1 typescript@7.0.2 vitest@5.0.0 \
  && npm cache clean --force
 
 # .NET SDK 8 + helper Roslyn.
@@ -79,6 +80,11 @@ RUN pip install \
       "diff-cover==10.5.1" \
       "semgrep==1.176.0" \
       "pip-audit>=2.7,<3"
+
+# Bez sieci (domyślnie) semgrep czekałby na timeouty sprawdzania wersji
+# i wysyłki metryk; kod nie ma też wychodzić na zewnątrz.
+ENV SEMGREP_ENABLE_VERSION_CHECK=0 \
+    SEMGREP_SEND_METRICS=off
 
 # Uruchamiane jako nie-root (backend i tak podaje --user); /work to kopia kodu.
 RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin gatekeeper \

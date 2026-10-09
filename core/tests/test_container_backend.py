@@ -166,3 +166,40 @@ def test_domyslny_backend_zalezy_od_systemu(monkeypatch):
     assert runner.backend() == "container"
     monkeypatch.setattr(sys, "platform", "linux")
     assert runner.backend() == "bwrap"
+
+
+def test_obraz_projektu_instaluje_wykryte_zaleznosci(tmp_path):
+    (tmp_path / "requirements.txt").write_text("requests\n")
+    (tmp_path / "package.json").write_text("{}")
+    (tmp_path / "package-lock.json").write_text("{}")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "App.csproj").write_text("<Project/>")
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "Stary.csproj").write_text("<Project/>")
+
+    text = container.project_dockerfile(tmp_path, base="gatekeeper-tools:1")
+
+    assert text.startswith("# Obraz projektu")
+    assert "FROM gatekeeper-tools:1" in text
+    assert "RUN pip install -r requirements.txt" in text
+    assert "RUN npm ci --no-audit --no-fund" in text
+    assert "RUN dotnet restore src/App.csproj" in text
+    assert "Stary.csproj" not in text
+    assert text.rstrip().endswith("USER gatekeeper")
+
+
+def test_obraz_projektu_bez_manifestow(tmp_path):
+    text = container.project_dockerfile(tmp_path)
+    assert "Nie wykryto manifestów" in text
+
+
+def test_kontener_konczy_sie_sam_nawet_bez_nadzorcy(fake_engine, tmp_path):
+    work = tmp_path / "wt"
+    work.mkdir()
+    command, _ = container.build_command(
+        ["sleep", "999"], work, {}, SandboxPolicy(), False, (), "gk-t", timeout_s=60
+    )
+    image_at = command.index(container.image())
+    assert command[image_at + 1:] == [
+        "timeout", "-s", "KILL", str(60 + container.SELF_DESTRUCT_GRACE_S), "sleep", "999"
+    ]

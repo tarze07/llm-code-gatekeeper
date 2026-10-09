@@ -214,6 +214,7 @@ def test_runner_nie_importuje_resource_bezwarunkowo():
 
 
 def test_sandbox_bez_izolacji_odmawia_przed_budowa_limitow(tmp_path, monkeypatch):
+    monkeypatch.setenv("GATEKEEPER_SANDBOX", "bwrap")
     monkeypatch.setattr(runner, "filesystem_isolation_available", lambda: False)
 
     def forbidden(self):

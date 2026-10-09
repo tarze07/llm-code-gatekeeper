@@ -29,6 +29,7 @@ from .core.change import ChangeContext
 from .core.finding import RunResult, Verdict
 from .core.orchestrator import run_gates
 from .core.policy import Policy
+from .core.runner import backend
 
 DEFAULT_CASES_PATH = Path("calibration/cases.yaml")
 DEFAULT_FIXTURES_DIR = Path("calibration/fixtures")
@@ -124,7 +125,10 @@ def run_calibration(
     fixtures_dir = Path(fixtures_dir)
     report = CalibrationReport()
     for case in cases:
-        missing = next((t for t in case.requires_tools if shutil.which(t) is None), None)
+        # W kontenerze narzędzia pochodzą z obrazu — brak zgłosi samo uruchomienie.
+        missing = None if backend() == "container" else next(
+            (t for t in case.requires_tools if shutil.which(t) is None), None
+        )
         if missing:
             report.results.append(
                 CaseResult(

@@ -21,6 +21,8 @@ from .gates import gate_config_errors, known_facts, known_gate_ids
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="Brama jakości dla kodu z LLM")
 policy_app = typer.Typer(no_args_is_help=True, help="Operacje na polityce")
 app.add_typer(policy_app, name="policy")
+container_app = typer.Typer(no_args_is_help=True, help="Izolacja w kontenerze (Docker/Podman)")
+app.add_typer(container_app, name="container")
 
 DEFAULT_POLICY = Path("policy/gates.yaml")
 
@@ -235,6 +237,58 @@ def metrics(
 ) -> None:
     """Skuteczność bramy: co blokuje, jak trafnie, jak szybko."""
     typer.echo(metrics_module.collect(Store(store_path), days).render())
+
+
+@container_app.command("check")
+def container_check() -> None:
+    """Sprawdza wybrany backend izolacji i uruchamia próbę w kontenerze."""
+    from .core import container as backend_container
+    from .core.runner import Sandbox, SandboxUnavailable, backend, describe_isolation
+
+    try:
+        chosen = backend()
+    except SandboxUnavailable as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(EXIT_BLOCK) from exc
+    typer.echo(f"backend: {chosen}")
+    typer.echo(f"silnik: {backend_container.engine() or 'brak'}")
+    typer.echo(f"obraz: {backend_container.image()}")
+    typer.echo(describe_isolation())
+    if chosen != "container":
+        typer.echo(f"(kontener włącza {BACKEND_ENV_HINT})")
+        return
+    try:
+        probe = Sandbox().run(["python", "--version"], cwd=Path.cwd(), timeout_s=120)
+    except SandboxUnavailable as exc:
+        typer.secho(f"BŁĄD: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(EXIT_BLOCK) from exc
+    if not probe.ok:
+        typer.secho(f"BŁĄD: próba w kontenerze: {probe.tail()}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(EXIT_BLOCK)
+    typer.secho(f"OK — {probe.stdout.strip()} w kontenerze", fg=typer.colors.GREEN)
+
+
+@container_app.command("init")
+def container_init(
+    repo: Path = typer.Option(Path("."), "--repo", help="Oceniane repozytorium"),
+    output: Path = typer.Option(Path("Dockerfile.gatekeeper"), "--output", "-o"),
+    base: str = typer.Option("gatekeeper-tools:latest", "--base", help="Obraz narzędzi"),
+    force: bool = typer.Option(False, "--force", help="Nadpisz istniejący plik"),
+) -> None:
+    """Generuje Dockerfile obrazu projektu (narzędzia + zależności repo)."""
+    from .core.container import project_dockerfile
+
+    target = output if output.is_absolute() else repo / output
+    if target.exists() and not force:
+        typer.secho(f"{target} już istnieje (użyj --force)", fg=typer.colors.RED, err=True)
+        raise typer.Exit(EXIT_BLOCK)
+    target.write_text(project_dockerfile(repo.resolve(), base), encoding="utf-8", newline="\n")
+    typer.echo(f"zapisano {target}")
+    typer.echo(f"docker build -t gatekeeper-projekt:latest -f {output} {repo}")
+    typer.echo("potem: GATEKEEPER_CONTAINER_IMAGE=gatekeeper-projekt:latest")
+
+
+BACKEND_ENV_HINT = "GATEKEEPER_SANDBOX=container"
 
 
 def _resolve_store(store_path: Path, repo: Path) -> Path:

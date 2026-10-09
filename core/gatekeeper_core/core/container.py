@@ -49,6 +49,11 @@ OWNER_LABEL = "gatekeeper.owner"
 #: Prywatny HOME (tmpfs): `--read-only` nie pozwala go utworzyć w obrazie
 #: dla dowolnego uid, a narzędzia (npm, dotnet) chcą do niego pisać.
 _HOME = "/home/gatekeeper"
+#: Gdzie w kontenerze widać cache NuGet hosta.
+NUGET_HOST_CACHE = "/opt/nuget-host"
+#: Zapas ponad limit czasu wywołania, po którym kontener kończy się sam —
+#: także gdy proces bramy zginął i nikt nie wywoła `docker rm`.
+SELF_DESTRUCT_GRACE_S = 30
 #: Limit procesów w kontenerze — w przeciwieństwie do RLIMIT_NPROC liczy tylko
 #: procesy tego kontenera, więc może być ustawiony zawsze.
 PIDS_LIMIT = 1024
@@ -96,11 +101,33 @@ def container_isolation_available() -> bool:
     return found is not None and _image_present(found, image())
 
 
+def _engine_problem(engine_path: str) -> str | None:
+    """Opis, czemu demon nie odpowiada (uprawnienia do gniazda, nie działa)."""
+    try:
+        probe = subprocess.run(
+            [engine_path, "version", "--format", "{{.Server.Version}}"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=20, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return str(exc)
+    if probe.returncode != 0 or not probe.stdout.strip():
+        return (probe.stderr.strip().splitlines() or ["brak odpowiedzi serwera"])[-1]
+    return None
+
+
 def unavailable_reason() -> str:
-    if engine() is None:
+    found = engine()
+    if found is None:
         return (
             "brak silnika kontenerów — zainstaluj Docker albo Podman "
             f"(albo wskaż go w {ENGINE_ENV}); wykonanie bez izolacji jest zabronione"
+        )
+    problem = _engine_problem(found)
+    if problem:
+        return (
+            f"silnik kontenerów nie odpowiada ({problem}); "
+            "wykonanie bez izolacji jest zabronione"
         )
     return (
         f"brak obrazu {image()} — zbuduj go (`docker build -t {DEFAULT_IMAGE} "
@@ -200,6 +227,12 @@ def _mounts(
         if path == cwd or path.is_relative_to(cwd):
             continue
         mounts.append(_Mount(path, f"/ro/{index}", read_only=True))
+    # Cache NuGet hosta (pakiety, bez NuGet.Config i poświadczeń) — jak przy
+    # Bubblewrap: restore działa offline. Obraz projektu ma własny /opt/nuget.
+    nuget = Path.home() / ".nuget" / "packages"
+    if nuget.is_dir():
+        extra += ["--mount", _bind(nuget.resolve(), NUGET_HOST_CACHE, True)]
+        extra += ["--env", f"NUGET_PACKAGES={NUGET_HOST_CACHE}"]
     for index, path in enumerate(policy.writable_paths):
         resolved = path.resolve(strict=True)
         if resolved == cwd or resolved.is_relative_to(cwd):
@@ -280,6 +313,7 @@ def build_command(
     network: bool,
     dependencies: Sequence[Path],
     name: str,
+    timeout_s: float | None = None,
 ) -> tuple[list[str], _PathMap]:
     found = engine()
     assert found is not None  # sprawdzone przez wywołującego
@@ -291,8 +325,8 @@ def build_command(
         "--label", "gatekeeper=1",
         "--network", "bridge" if network else "none",
         "--read-only",
-        "--tmpfs", "/tmp:rw,exec,nosuid,size=2g",
-        "--tmpfs", f"{_HOME}:rw,exec,nosuid,size=1g",
+        "--tmpfs", "/tmp:rw,exec,nosuid,size=2g,mode=1777",
+        "--tmpfs", f"{_HOME}:rw,exec,nosuid,size=1g,mode=1777",
         "--cap-drop", "ALL",
         "--security-opt", "no-new-privileges",
         "--pids-limit", str(PIDS_LIMIT),
@@ -315,6 +349,10 @@ def build_command(
     for key, value in sorted(_environment(env, policy, mapping).items()):
         command += ["--env", f"{key}={value}"]
     command.append(image())
+    if timeout_s is not None:
+        # Kontener nie przeżyje bramy: `timeout` (coreutils w obrazie) zabija
+        # narzędzie, nawet gdy nadzorca zginął przed `docker rm`.
+        command += ["timeout", "-s", "KILL", str(int(timeout_s) + SELF_DESTRUCT_GRACE_S)]
     command.append(_executable(argv[0], mapping))
     command += [mapping.to_container(arg) for arg in argv[1:]]
     return command, mapping
@@ -334,7 +372,9 @@ def run(
     if not container_isolation_available():
         raise SandboxUnavailable(unavailable_reason())
     name = f"gk-{uuid.uuid4().hex[:16]}"
-    command, mapping = build_command(argv, cwd, env, policy, network, dependencies, name)
+    command, mapping = build_command(
+        argv, cwd, env, policy, network, dependencies, name, timeout_s
+    )
     started = time.monotonic()
     proc = subprocess.Popen(  # noqa: S603
         command,
@@ -393,3 +433,60 @@ def remove_containers(*, name: str | None = None, owner: str | None = None) -> N
             subprocess.run(
                 [found, "rm", "-f", *targets], capture_output=True, timeout=30, check=False
             )
+
+
+def project_dockerfile(repo: Path, base: str = DEFAULT_IMAGE) -> str:
+    """Szablon obrazu projektu: narzędzia bramy + zależności ocenianego repo.
+
+    Odpowiednik przygotowania venv/`node_modules`/cache NuGet przy Bubblewrap.
+    Zależności instaluje operator, raz, przy budowaniu obrazu — nie bramka
+    w trakcie przebiegu (instalacja wykonuje kod pakietów, np. setup.py).
+    """
+    lines = [
+        "# Obraz projektu dla llm-code-gatekeeper (backend izolacji `container`).",
+        "# Zbuduj z katalogu ocenianego repo:",
+        "#   docker build -t gatekeeper-projekt:latest -f Dockerfile.gatekeeper .",
+        "# i wskaż go bramie: GATEKEEPER_CONTAINER_IMAGE=gatekeeper-projekt:latest",
+        f"FROM {base}",
+        "USER root",
+        "WORKDIR /opt/projekt",
+    ]
+    python_manifests = sorted(
+        p.name for p in repo.glob("requirements*.txt") if p.is_file()
+    )
+    if python_manifests:
+        lines.append(f"COPY {' '.join(python_manifests)} ./")
+        lines += [f"RUN pip install -r {name}" for name in python_manifests]
+    elif (repo / "pyproject.toml").is_file():
+        lines += [
+            "# Zależności z pyproject.toml (bez samego pakietu — jego kod przychodzi z PR-a).",
+            "COPY pyproject.toml ./",
+            "RUN python -c \"import tomllib, subprocess, sys; d = tomllib.load(open("
+            "'pyproject.toml', 'rb')); deps = d.get('project', {}).get('dependencies', []);"
+            " deps and subprocess.check_call([sys.executable, '-m', 'pip', 'install', *deps])\"",
+        ]
+    if (repo / "package.json").is_file():
+        lock = "package-lock.json" if (repo / "package-lock.json").is_file() else ""
+        lines += [
+            "# Pakiety npm dla Linuksa (moduły natywne z Windows tu nie zadziałają).",
+            f"COPY package.json {lock} ./".replace("  ", " "),
+            "RUN npm ci --no-audit --no-fund" if lock else "RUN npm install --no-audit --no-fund",
+            "ENV NODE_PATH=/opt/projekt/node_modules:/usr/local/lib/node_modules",
+        ]
+    projects = sorted(
+        str(p.relative_to(repo).as_posix())
+        for pattern in ("*.csproj", "*/*.csproj", "*/*/*.csproj")
+        for p in repo.glob(pattern)
+        if "bin" not in p.parts and "obj" not in p.parts
+    )
+    if projects:
+        lines.append("# Pakiety NuGet do /opt/nuget — bramka przywraca je potem bez sieci.")
+        for project in projects:
+            lines.append(f"COPY {project} {project}")
+        for project in projects:
+            lines.append(f"RUN dotnet restore {project}")
+        lines.append("RUN chmod -R a+rX /opt/nuget")
+    if len(lines) == 7:
+        lines.append("# Nie wykryto manifestów zależności — obraz bazowy wystarczy.")
+    lines += ["WORKDIR /work", "USER gatekeeper", ""]
+    return "\n".join(lines)

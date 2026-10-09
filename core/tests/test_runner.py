@@ -15,6 +15,13 @@ from gatekeeper_core.core.runner import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _backend_bwrap(monkeypatch):
+    """Te testy sprawdzają Bubblewrap; backend kontenerowy ma własne
+    (`test_container_backend.py`, `test_container_integration.py`)."""
+    monkeypatch.setenv("GATEKEEPER_SANDBOX", "bwrap")
+
+
 def python(code: str) -> list[str]:
     return [sys.executable, "-c", code]
 
