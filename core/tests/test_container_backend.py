@@ -139,8 +139,9 @@ def test_mapa_nie_rusza_sciezek_tylko_podobnych():
 
 
 def test_przecinek_w_sciezce_nie_rozbija_specyfikacji_mount():
-    spec = container._bind(Path("/tmp/a,b"), "/work", True)
-    assert spec == 'type=bind,"source=/tmp/a,b",target=/work,readonly'
+    source = Path("/tmp/a,b")
+    spec = container._bind(source, "/work", True)
+    assert spec == f'type=bind,"source={source}",target=/work,readonly'
 
 
 def test_brak_silnika_to_brak_izolacji_nie_wykonanie(monkeypatch, tmp_path):

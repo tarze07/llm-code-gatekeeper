@@ -10,6 +10,7 @@ from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.core.finding import Decision, RunResult, Verdict
 from gatekeeper_core.core.paths import is_absolute_path
 from gatekeeper_core.core.report import render_markdown
+from gatekeeper_core.core.runner import isolation_available
 from gatekeeper_core.gates.g3_secrets import SecretsGate
 
 GOLDEN = Path(__file__).parent / "data" / "gitleaks_report.json"
@@ -110,8 +111,8 @@ def test_sciezki_bezwzgledne_sa_sprowadzane_do_sciezek_repozytorium(tmp_path):
 
 def test_sekret_z_tego_pr_blokuje_przy_prawdziwym_gitleaksie(repo):
     """Test integracyjny na żywym binarium — pomijany, gdy go nie ma."""
-    if not gitleaks.is_available():
-        pytest.skip("gitleaks niedostępny")
+    if not gitleaks.is_available() or not isolation_available():
+        pytest.skip("gitleaks albo izolacja niedostępne")
 
     repo.checkout("feature", create=True)
     repo.write("src/ci.py", 'GITHUB_TOKEN = "ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"\n')

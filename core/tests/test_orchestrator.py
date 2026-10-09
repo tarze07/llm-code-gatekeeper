@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import time
 
 from gatekeeper_core.core.change import ChangeContext
@@ -67,7 +68,9 @@ def test_bramki_w_jednej_fali_biegna_rownolegle(repo):
     result = run_gates(change, policy(), gates=[Stub("G0.scope"), a, b])
     elapsed = time.monotonic() - started
 
-    assert elapsed < 1.5
+    # Windows startuje workery przez spawn (~0,3 s na proces) — sedno testu
+    # to nakładające się starty bramek, sprawdzane niżej.
+    assert elapsed < (4.0 if sys.platform == "win32" else 1.5)
     assert abs(result.facts["G1.deps.started"] - result.facts["G3.secrets.started"]) < 0.3
 
 

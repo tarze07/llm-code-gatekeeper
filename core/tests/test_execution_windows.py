@@ -8,6 +8,7 @@ ma być usunięta. Także proces w nowej grupie i bez konsoli (odpowiednik
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import textwrap
@@ -118,8 +119,12 @@ def test_smierc_nadzorcy_zabija_narzedzia_bramki(repo, tmp_path):
     """), encoding="utf-8")
     del change
 
+    core_root = Path(__file__).resolve().parents[1]
+    # `python skrypt.py` dodaje do sys.path katalog skryptu, nie cwd — pakiet
+    # `tests` (klasa Spawner) musi być widoczny jawnie.
+    env = {**os.environ, "PYTHONPATH": str(core_root)}
     supervisor = subprocess.Popen(  # noqa: S603
-        [sys.executable, str(script)], cwd=Path(__file__).resolve().parents[1]
+        [sys.executable, str(script)], cwd=core_root, env=env
     )
     try:
         pid = _wait_for_pid(pid_file)
