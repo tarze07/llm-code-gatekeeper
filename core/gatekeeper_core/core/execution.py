@@ -7,6 +7,7 @@ import multiprocessing as mp
 import os
 import signal
 import time
+import uuid
 from collections import deque
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass, replace
@@ -15,11 +16,12 @@ from multiprocessing.process import BaseProcess
 from pathlib import Path
 
 from ..gates import Gate
+from . import container
 from .change import ChangeContext
 from .finding import GateResult
 from .policy import Policy
 from .progress import RunCancelled, RunControl
-from .runner import dependency_access, dependency_paths
+from .runner import backend, dependency_access, dependency_paths
 
 #: Ile nadzorca czeka, aż zabite procesy bramki naprawdę znikną, zanim usunie
 #: jej kopię kodu. SIGKILL nie da się zignorować, więc w praktyce to milisekundy;
@@ -47,10 +49,17 @@ def _die_with_supervisor() -> None:
 
 
 def _worker(
-    gate: Gate, change: ChangeContext, output: Connection, dependencies: tuple[Path, ...]
+    gate: Gate,
+    change: ChangeContext,
+    output: Connection,
+    dependencies: tuple[Path, ...],
+    owner: str,
 ) -> None:
     os.setsid()
     _die_with_supervisor()
+    # Kontenery tej bramki dostają etykietę — nadzorca usuwa je w `close()`,
+    # bo zabicie klienta `docker run` nie zatrzymuje kontenera.
+    os.environ[container.OWNER_ENV] = owner
     started = time.monotonic()
     try:
         with dependency_access(dependencies):
@@ -130,6 +139,7 @@ class Running:
     output: Connection
     deadline: float
     resources: ExitStack
+    owner: str = ""
 
     def close(self) -> None:
         """Zabija bramkę i *wszystkich* jej potomków, potem sprząta kopię.
@@ -170,6 +180,8 @@ class Running:
             time.sleep(0.02)
         # Po karencji sprzątamy mimo wszystko: proces po SIGKILL nie wykona już
         # żadnego kodu, a pozostawiona kopia byłaby trwałym wyciekiem dysku.
+        if self.owner and backend() == "container":
+            container.remove_containers(owner=self.owner)
         self.resources.close()
 
 
@@ -200,13 +212,21 @@ def run_wave(
                         (root / "node_modules").symlink_to(dependencies[0], True)
                     isolated = replace(change, repo=root, scratch_dir=root.parent)
                     receive, send = context.Pipe(duplex=False)
+                    owner = f"{os.getpid()}-{uuid.uuid4().hex[:12]}"
                     process = context.Process(
-                        target=_worker, args=(gate, isolated, send, dependencies)
+                        target=_worker, args=(gate, isolated, send, dependencies, owner)
                     )
                     process.start()
                     send.close()
                     active.append(
-                        Running(gate, process, receive, time.monotonic() + gate.budget_s, resources)
+                        Running(
+                            gate,
+                            process,
+                            receive,
+                            time.monotonic() + gate.budget_s,
+                            resources,
+                            owner,
+                        )
                     )
                     if control is not None:
                         control.emit("gate_started", gate=gate.id, message=gate.name or gate.id)
