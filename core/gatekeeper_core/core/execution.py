@@ -1,4 +1,9 @@
-"""Procesy bramek, termin zakończenia i prywatne kopie kodu (Linux)."""
+"""Procesy bramek, termin zakończenia i prywatne kopie kodu.
+
+Linux/POSIX: `fork`, `setsid`, `PR_SET_PDEATHSIG` i spis potomków z `/proc`.
+Windows: `spawn` i Job Object (`winjob.py`) — członkostwo w jobie dziedziczą
+wszystkie procesy bramki, a job ginie razem z nadzorcą.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ import ctypes
 import multiprocessing as mp
 import os
 import signal
+import sys
 import time
 import uuid
 from collections import deque
@@ -13,15 +19,22 @@ from contextlib import ExitStack, suppress
 from dataclasses import dataclass, replace
 from multiprocessing.connection import Connection, wait
 from multiprocessing.process import BaseProcess
+from multiprocessing.synchronize import Event
 from pathlib import Path
 
 from ..gates import Gate
 from . import container
 from .change import ChangeContext
 from .finding import GateResult
+from .fsutil import link_dir
 from .policy import Policy
 from .progress import RunCancelled, RunControl
 from .runner import backend, dependency_access, dependency_paths
+from .winjob import Job
+
+_WINDOWS = sys.platform == "win32"
+#: Ile worker na Windows czeka na potwierdzenie, że jest już w jobie nadzorcy.
+JOB_HANDSHAKE_S = 30.0
 
 #: Ile nadzorca czeka, aż zabite procesy bramki naprawdę znikną, zanim usunie
 #: jej kopię kodu. SIGKILL nie da się zignorować, więc w praktyce to milisekundy;
@@ -54,9 +67,21 @@ def _worker(
     output: Connection,
     dependencies: tuple[Path, ...],
     owner: str,
+    in_job: Event | None = None,
 ) -> None:
-    os.setsid()
-    _die_with_supervisor()
+    if in_job is not None:
+        # Windows: nie uruchamiamy niczego, zanim nadzorca nie przypisze nas
+        # do joba — inaczej narzędzie zdążyłoby wymknąć się spod `close()`.
+        if not in_job.wait(JOB_HANDSHAKE_S):
+            output.send(GateResult(
+                gate=gate.id, status="error",
+                message="proces bramki nie dostał przydziału do Job Object nadzorcy",
+            ))
+            output.close()
+            return
+    else:
+        os.setsid()
+        _die_with_supervisor()
     # Kontenery tej bramki dostają etykietę — nadzorca usuwa je w `close()`,
     # bo zabicie klienta `docker run` nie zatrzymuje kontenera.
     os.environ[container.OWNER_ENV] = owner
@@ -140,6 +165,7 @@ class Running:
     deadline: float
     resources: ExitStack
     owner: str = ""
+    job: Job | None = None
 
     def close(self) -> None:
         """Zabija bramkę i *wszystkich* jej potomków, potem sprząta kopię.
@@ -149,6 +175,9 @@ class Running:
         nie korzysta — inaczej narzędzie po timeoucie dalej pisałoby
         (lub trzymało otwarte pliki) w katalogu, którego już nie ma.
         """
+        if self.job is not None:
+            self._close_job()
+            return
         tree: dict[int, _ProcStat] = {}
         pid = self.process.pid
         if pid is not None:
@@ -184,6 +213,23 @@ class Running:
             container.remove_containers(owner=self.owner)
         self.resources.close()
 
+    def _close_job(self) -> None:
+        """Windows: job zabija całe drzewo, a `terminate` czeka, aż procesy
+        znikną — dopiero wtedy pliki kopii są zwolnione do usunięcia."""
+        assert self.job is not None
+        try:
+            self.job.terminate(REAP_GRACE_S)
+            if self.process.is_alive():
+                self.process.kill()
+            self.process.join()
+            self.process.close()
+            self.output.close()
+            if self.owner and backend() == "container":
+                container.remove_containers(owner=self.owner)
+            self.resources.close()
+        finally:
+            self.job.close()
+
 
 def run_wave(
     gates: list[Gate],
@@ -194,9 +240,10 @@ def run_wave(
 ) -> list[GateResult]:
     if max_workers < 1:
         raise ValueError("max_workers musi być dodatnie")
-    # fork zachowuje zainstalowane pluginy i konfigurację bez wymogu
+    # POSIX: fork zachowuje zainstalowane pluginy i konfigurację bez wymogu
     # serializowania obiektów dostawców. Nadzorca nie uruchamia wątków.
-    context = mp.get_context("fork")
+    # Windows nie ma fork: spawn, a bramka i zmiana muszą być picklowalne.
+    context = mp.get_context("spawn") if _WINDOWS else mp.get_context("fork")
     pending = deque(gates)
     active: list[Running] = []
     results: list[GateResult] = []
@@ -209,15 +256,29 @@ def run_wave(
                     root = resources.enter_context(change.worktree_at(change.head_sha))
                     dependencies = dependency_paths(change.repo)
                     if dependencies and not (root / "node_modules").exists():
-                        (root / "node_modules").symlink_to(dependencies[0], True)
+                        link_dir(root / "node_modules", dependencies[0])
                     isolated = replace(change, repo=root, scratch_dir=root.parent)
                     receive, send = context.Pipe(duplex=False)
                     owner = f"{os.getpid()}-{uuid.uuid4().hex[:12]}"
+                    job = Job() if _WINDOWS else None
+                    if job is not None:
+                        resources.callback(job.close)
+                    in_job = context.Event() if job is not None else None
                     process = context.Process(
-                        target=_worker, args=(gate, isolated, send, dependencies, owner)
+                        target=_worker,
+                        args=(gate, isolated, send, dependencies, owner, in_job),
                     )
                     process.start()
                     send.close()
+                    if job is not None and in_job is not None:
+                        assert process.pid is not None
+                        try:
+                            job.assign(process.pid)
+                        except OSError:
+                            process.kill()
+                            process.join()
+                            raise
+                        in_job.set()
                     active.append(
                         Running(
                             gate,
@@ -226,6 +287,7 @@ def run_wave(
                             time.monotonic() + gate.budget_s,
                             resources,
                             owner,
+                            job,
                         )
                     )
                     if control is not None:

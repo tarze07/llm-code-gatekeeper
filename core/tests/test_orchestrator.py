@@ -120,11 +120,13 @@ def test_droga_bramka_rusza_gdy_tanie_sa_zielone(repo):
     assert result.facts["G4.review.started"] is not None
 
 
-def test_awaria_jednej_bramki_nie_zatrzymuje_pozostalych(repo):
-    class Wybuchowa(Stub):
-        def run(self, change):
-            raise RuntimeError("bum")
+class Wybuchowa(Stub):
+    # Na poziomie modułu: na Windows (spawn) bramka jest picklowana do workera.
+    def run(self, change):
+        raise RuntimeError("bum")
 
+
+def test_awaria_jednej_bramki_nie_zatrzymuje_pozostalych(repo):
     change = context(repo)
     zdrowa = Stub("G3.secrets")
 
