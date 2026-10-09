@@ -35,7 +35,7 @@ from gatekeeper_core.core.change import ChangeContext
 from gatekeeper_core.core.plugins import ComplexityOutcome, MethodComplexity
 from gatekeeper_core.core.runner import Sandbox, SandboxPolicy, SandboxUnavailable
 
-from ..node import node_env
+from ..node import node_env, node_path_entries
 from .linters import ESLINT, resolve_bin
 
 _MESSAGE_RE = re.compile(r"^(?P<descriptor>.+?) has a complexity of (?P<complexity>\d+)\.")
@@ -195,7 +195,7 @@ class TsComplexityAnalyzer:
                     SandboxPolicy(
                         memory_mb=None,
                         read_only_paths=tuple(
-                            Path(p) for p in env.get("NODE_PATH", "").split(":") if p
+                            Path(p) for p in node_path_entries(env)
                         ),
                     )
                 )

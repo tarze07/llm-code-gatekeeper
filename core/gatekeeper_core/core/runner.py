@@ -1,6 +1,9 @@
-"""Uruchamianie narzędzi w Bubblewrap: prywatny system plików, PID i sieć.
+"""Uruchamianie narzędzi w izolacji: Bubblewrap albo kontener Linuksa.
 
-Brak działającego Bubblewrap jest błędem. Nie ma automatycznego przejścia
+Backend wybiera `GATEKEEPER_SANDBOX` (`bwrap` | `container`); domyślnie
+kontener na Windows, Bubblewrap gdzie indziej. Kontener: `core/container.py`.
+
+Brak działającego backendu jest błędem. Nie ma automatycznego przejścia
 na wykonanie kodu PR-a z uprawnieniami procesu bramy. Widoczne są wyłącznie
 runtime, katalog roboczy i jawnie udostępnione ścieżki; HOME i /tmp są prywatne.
 """
@@ -9,7 +12,6 @@ from __future__ import annotations
 
 import functools
 import os
-import resource
 import shutil
 import signal
 import subprocess
@@ -21,6 +23,14 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+
+from . import container
+from .fsutil import is_link
+
+if sys.platform != "win32":
+    import resource
+else:  # pragma: no cover - Windows: Sandbox.run i tak odmawia wykonania
+    resource = None
 
 #: Fragmenty nazw zmiennych środowiskowych, które nie mają prawa trafić do
 #: uruchamianego procesu.
@@ -37,6 +47,22 @@ SECRET_ENV_MARKERS = (
 )
 
 Isolation = Literal["container", "network-namespace", "none", "filesystem", "filesystem-network"]
+
+
+#: Wybór backendu izolacji.
+BACKEND_ENV = "GATEKEEPER_SANDBOX"
+Backend = Literal["bwrap", "container"]
+
+
+def backend() -> Backend:
+    chosen = os.environ.get(BACKEND_ENV, "").strip().lower()
+    if chosen in ("bwrap", "container"):
+        return chosen  # type: ignore[return-value]
+    if chosen:
+        raise SandboxUnavailable(
+            f"nieznany backend izolacji {chosen!r} w {BACKEND_ENV} (bwrap | container)"
+        )
+    return "container" if sys.platform == "win32" else "bwrap"
 
 
 class SandboxUnavailable(RuntimeError):
@@ -65,7 +91,7 @@ def dependency_paths(root: Path) -> tuple[Path, ...]:
     if not modules.is_dir():
         return ()
     resolved = modules.resolve()
-    if modules.is_symlink() and resolved not in _DEPENDENCIES.get():
+    if is_link(modules) and resolved not in _DEPENDENCIES.get():
         raise SandboxUnavailable("node_modules jest niezaufanym dowiązaniem poza kopię kodu")
     return (resolved,)
 
@@ -128,6 +154,12 @@ class Sandbox:
         argv = list(command)
         if not argv:
             raise ValueError("puste polecenie")
+        if backend() == "container":
+            # Narzędzia są w obrazie — nie szukamy ich na hoście.
+            return container.run(
+                argv, Path(cwd).resolve(), environment, self.policy, want_network,
+                timeout, _DEPENDENCIES.get(),
+            )
         executable = shutil.which(argv[0], path=environment.get("PATH", os.defpath))
         if executable is None:
             raise ExecutableUnavailable(f"nie znaleziono programu: {argv[0]}")
@@ -161,6 +193,8 @@ class Sandbox:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 start_new_session=True,  # własna grupa procesów — da się ubić w całości
                 preexec_fn=self._limits(),  # noqa: PLW1509
             )
@@ -191,6 +225,8 @@ class Sandbox:
         max_processes = self.policy.max_processes
 
         def apply() -> None:  # pragma: no cover - wykonuje się w procesie potomnym
+            if resource is None:
+                raise SandboxUnavailable("limity zasobów wymagają systemu POSIX")
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
             if memory_mb:
                 limit = memory_mb * 1024 * 1024
@@ -261,7 +297,7 @@ def _wrap_filesystem(
     command.extend(("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"))
     declared = {p.resolve() for p in policy.read_only_paths} | set(_DEPENDENCIES.get())
     modules = cwd / "node_modules"
-    if modules.is_symlink() and modules.resolve() not in declared:
+    if is_link(modules) and modules.resolve() not in declared:
         raise SandboxUnavailable("node_modules jest niezaufanym dowiązaniem poza kopię kodu")
     readable = _runtime_paths(argv[0]) | declared
     if modules.is_dir():
@@ -289,7 +325,7 @@ def _wrap_filesystem(
     # Kod może pisać artefakty budowania, ale nie zmieniać bazy Git ani
     # współdzielonych pakietów. Dowiązania poza whitelistę pozostają niewidoczne.
     for protected in (cwd / ".git", modules):
-        if protected.exists() and not protected.is_symlink():
+        if protected.exists() and not is_link(protected):
             command.extend(("--ro-bind", str(protected.resolve()), str(protected)))
     command.extend(("--dir", "/tmp/gatekeeper-home", "--chdir", str(cwd)))
     environment.update(HOME="/tmp/gatekeeper-home", TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp")
@@ -329,9 +365,20 @@ def filesystem_isolation_available() -> bool:
     return probe.returncode == 0
 
 
-def network_isolation_available() -> bool:
-    """Zgodność API: bez Bubblewrap nie uruchamiamy też testów sieciowych."""
+def isolation_available() -> bool:
+    """Czy wybrany backend izolacji jest gotowy (bez niego nic nie ruszy)."""
+    try:
+        chosen = backend()
+    except SandboxUnavailable:
+        return False
+    if chosen == "container":
+        return container.container_isolation_available()
     return filesystem_isolation_available()
+
+
+def network_isolation_available() -> bool:
+    """Zgodność API: bez izolacji nie uruchamiamy też testów sieciowych."""
+    return isolation_available()
 
 
 def scrub_environment(env: dict[str, str], keep: Sequence[str] = ()) -> dict[str, str]:
@@ -346,6 +393,14 @@ def scrub_environment(env: dict[str, str], keep: Sequence[str] = ()) -> dict[str
 
 def describe_isolation() -> str:
     """Jednozdaniowy opis do raportu — brama ma mówić, czego *nie* gwarantuje."""
+    try:
+        chosen = backend()
+    except SandboxUnavailable as exc:
+        return f"BRAK izolacji — {exc}"
+    if chosen == "container":
+        if container.container_isolation_available():
+            return container.describe()
+        return f"BRAK izolacji w kontenerze — {container.unavailable_reason()}"
     if filesystem_isolation_available():
         return (
             "izolacja Bubblewrap: prywatny system plików i PID; sieć testów odcięta, "

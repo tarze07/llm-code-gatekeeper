@@ -13,41 +13,129 @@ nadzorcy (PLAN-WEB-UI.md §5).
 from __future__ import annotations
 
 import argparse
-import shutil
+import os
 import signal
 import sys
 import tempfile
+import threading
 import traceback
 from pathlib import Path
 from types import FrameType
 from typing import Any
 
+from gatekeeper_core.core.fsutil import remove_tree
 from gatekeeper_core.core.progress import ProgressEvent, RunCancelled, RunControl
 from gatekeeper_core.core.report import render_json
 from gatekeeper_core.core.service import PreparationError, RunRequest, execute, prepare
 
 from ..config import Settings
+from ..console import utf8_console
 from ..services.policies import materialize
 from ..services.reports import parse_report
 from ..storage import Database, Job, JobQueue, PolicyRevision, Repository
 from .spec import JobInputError, require_supported
+from .supervisor import HANDSHAKE_START, HANDSHAKE_STOP
 
-#: Ustawiane przez obsługę SIGTERM. Nadzorca prosi grzecznie, zanim zabije.
+#: Ustawiane przez obsługę SIGTERM (POSIX) albo `stop` ze stdin (Windows).
+#: Nadzorca prosi grzecznie, zanim zabije.
 _stop_requested = False
 
 
 def _handle_sigterm(signum: int, frame: FrameType | None) -> None:  # pragma: no cover
+    _request_stop()
+
+
+def _request_stop() -> None:
     global _stop_requested
     _stop_requested = True
+
+
+def _read_line(fd: int) -> bytes | None:
+    """Jedna linia z surowego deskryptora; `None` = koniec strumienia.
+
+    Bajt po bajcie i bez obiektów plikowych Pythona: komunikaty są krótkie,
+    a czytający wątek nie trzyma żadnej blokady bufora, która mogłaby
+    zawiesić zamykanie interpretera.
+    """
+    line = bytearray()
+    while True:
+        chunk = os.read(fd, 1)
+        if not chunk:
+            return None
+        if chunk == b"\n":
+            return bytes(line).strip()
+        line += chunk
+
+
+def detach_stdin() -> int:
+    """Przenosi stdin (kanał od nadzorcy) na prywatny deskryptor; stdin → NUL.
+
+    Windows: oczekujący synchroniczny odczyt z rury blokuje każdy proces,
+    który dziedziczy ten sam uchwyt jako standardowe wejście — `git`
+    uruchomiony przez `prepare()` wisiał na starcie. Kanał czytamy więc
+    z nieodziedziczalnej kopii, a dzieci dostają NUL.
+    """
+    channel = os.dup(0)  # nowe deskryptory są nieodziedziczalne
+    devnull = os.open(os.devnull, os.O_RDONLY)
+    try:
+        # `dup2` na deskryptor 0 przestawia też uchwyt standardowego wejścia
+        # procesu, z którego `subprocess` bierze stdin dla dzieci.
+        os.dup2(devnull, 0)
+    finally:
+        os.close(devnull)
+    return channel
+
+
+def wait_for_job_handshake(fd: int) -> bool:
+    """Windows: czeka, aż nadzorca przypisze ten proces do swojego Job Object.
+
+    Przed `start` nie wolno niczego uruchamiać — proces potomny założony przed
+    przypisaniem nie należałby do joba i przeżyłby anulowanie. Po `start`
+    dalsze linie słucha wątek: `stop` albo koniec strumienia (nadzorca
+    zniknął) to odpowiednik SIGTERM. Flaga anulowania w bazie działa
+    niezależnie od tego kanału.
+    """
+    try:
+        first = _read_line(fd)
+    except OSError:
+        return False
+    if first != HANDSHAKE_START.strip():
+        return False
+
+    def _listen() -> None:
+        try:
+            while True:
+                line = _read_line(fd)
+                if line is None or line == HANDSHAKE_STOP.strip():
+                    break
+        except OSError:
+            pass
+        _request_stop()
+
+    threading.Thread(target=_listen, name="gk-stop", daemon=True).start()
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Wykonanie jednego zadania panelu")
     parser.add_argument("--state-dir", required=True)
     parser.add_argument("--job-id", type=int, required=True)
+    parser.add_argument(
+        "--job-handshake",
+        action="store_true",
+        help="Czekaj na `start` ze stdin (Windows: przypisanie do Job Object nadzorcy)",
+    )
     args = parser.parse_args(argv)
+    utf8_console()
 
-    signal.signal(signal.SIGTERM, _handle_sigterm)
+    if args.job_handshake:
+        if not wait_for_job_handshake(detach_stdin()):
+            # Fail-closed: bez potwierdzenia joba nic nie uruchamiamy.
+            # Nadzorca rozliczy zadanie jako nieudane.
+            print("brak potwierdzenia przydziału do Job Object nadzorcy", file=sys.stderr)
+            return 2
+    else:
+        signal.signal(signal.SIGTERM, _handle_sigterm)
     settings = Settings(state_dir=Path(args.state_dir))
     return run_job(settings, args.job_id)
 
@@ -70,7 +158,7 @@ def run_job(settings: Settings, job_id: int) -> int:
     try:
         return _execute(settings, queue, repository, job, workspace)
     finally:
-        shutil.rmtree(workspace, ignore_errors=True)
+        remove_tree(workspace)
 
 
 def _execute(

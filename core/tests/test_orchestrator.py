@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import time
 
 from gatekeeper_core.core.change import ChangeContext
@@ -61,14 +62,16 @@ def test_plan_uklada_bramki_w_fale_wedlug_zaleznosci(repo):
 
 def test_bramki_w_jednej_fali_biegna_rownolegle(repo):
     change = context(repo)
-    a, b = Stub("G1.deps", sleep_s=0.4), Stub("G3.secrets", sleep_s=0.4)
+    a, b = Stub("G1.deps", sleep_s=1.0), Stub("G3.secrets", sleep_s=1.0)
 
     started = time.monotonic()
     result = run_gates(change, policy(), gates=[Stub("G0.scope"), a, b])
     elapsed = time.monotonic() - started
 
-    assert elapsed < 1.5
-    assert abs(result.facts["G1.deps.started"] - result.facts["G3.secrets.started"]) < 0.3
+    # Równolegle = druga bramka rusza, zanim pierwsza skończy (sen 1 s).
+    # Odstęp startów to przygotowanie kopii i — na Windows — start przez spawn.
+    assert abs(result.facts["G1.deps.started"] - result.facts["G3.secrets.started"]) < 1.0
+    assert elapsed < (5.0 if sys.platform == "win32" else 2.0)
 
 
 def test_przekroczony_budzet_to_blad_a_nie_przeszlo(repo):
@@ -120,11 +123,13 @@ def test_droga_bramka_rusza_gdy_tanie_sa_zielone(repo):
     assert result.facts["G4.review.started"] is not None
 
 
-def test_awaria_jednej_bramki_nie_zatrzymuje_pozostalych(repo):
-    class Wybuchowa(Stub):
-        def run(self, change):
-            raise RuntimeError("bum")
+class Wybuchowa(Stub):
+    # Na poziomie modułu: na Windows (spawn) bramka jest picklowana do workera.
+    def run(self, change):
+        raise RuntimeError("bum")
 
+
+def test_awaria_jednej_bramki_nie_zatrzymuje_pozostalych(repo):
     change = context(repo)
     zdrowa = Stub("G3.secrets")
 

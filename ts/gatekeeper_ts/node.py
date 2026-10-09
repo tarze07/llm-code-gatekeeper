@@ -16,6 +16,7 @@ używa `require(...)`.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from functools import lru_cache
 
@@ -25,9 +26,20 @@ def global_node_modules() -> str | None:
     """`npm root -g` albo `None`, gdy npm nie odpowiada. Wynik jest cache'owany
     na proces — to jedno wywołanie podprocesu na cały przebieg bramki, nie
     jedno na plik."""
+    # Na Windows npm to `npm.cmd` — `which` rozwiązuje je przez PATHEXT.
+    # Lista argumentów jest stała, więc uruchomienie `.cmd` jest bezpieczne.
+    npm = shutil.which("npm")
+    if npm is None:
+        return None
     try:
         result = subprocess.run(
-            ["npm", "root", "-g"], capture_output=True, text=True, timeout=15, check=True
+            [npm, "root", "-g"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            check=True,
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
@@ -47,4 +59,10 @@ def node_env(base: dict[str, str] | None = None) -> dict[str, str]:
     return env
 
 
-__all__ = ["global_node_modules", "node_env"]
+def node_path_entries(env: dict[str, str]) -> tuple[str, ...]:
+    """Wpisy `NODE_PATH` rozdzielone `os.pathsep` (`:` na POSIX, `;` na Windows —
+    dwukropek rozbiłby `C:\\...`)."""
+    return tuple(p for p in env.get("NODE_PATH", "").split(os.pathsep) if p)
+
+
+__all__ = ["global_node_modules", "node_env", "node_path_entries"]

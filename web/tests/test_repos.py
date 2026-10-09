@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import GitRepo
+from conftest import GitRepo, symlink_or_skip
 
 from gatekeeper_web.services.repos import (
     RepoError,
@@ -33,7 +32,7 @@ def test_dowiazanie_nie_omija_dozwolonego_katalogu(git_repo: GitRepo, tmp_path: 
     dozwolony = tmp_path / "dozwolony"
     dozwolony.mkdir()
     skrot = dozwolony / "skrot"
-    os.symlink(git_repo.path, skrot)
+    symlink_or_skip(skrot, git_repo.path, target_is_directory=True)
 
     with pytest.raises(RepoError, match="poza katalogami dozwolonymi"):
         resolve_repo_path(str(skrot), (dozwolony,))

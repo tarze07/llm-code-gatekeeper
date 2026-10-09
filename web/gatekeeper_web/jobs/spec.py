@@ -98,6 +98,8 @@ def repo_identity(repo: Path) -> str:
             ["git", "-C", str(repo), "rev-list", "--max-parents=0", "HEAD"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
             check=False,
         )

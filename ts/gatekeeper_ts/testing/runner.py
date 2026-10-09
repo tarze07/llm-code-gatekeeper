@@ -23,12 +23,12 @@ możliwy tylko dlatego, że tam nazwa testu to identyfikator języka.
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from gatekeeper_core.core.paths import is_absolute_path, to_repo_relative
 from gatekeeper_core.core.plugins import ToolchainUnavailable
 from gatekeeper_core.core.runner import Sandbox, SandboxUnavailable
 
@@ -226,11 +226,11 @@ def _relative(name: str, root: Path) -> str:
     """`testResults[].name` jest ścieżką bezwzględną; nodeid — względną."""
     if not name:
         return ""
-    path = Path(name)
-    try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
-    except ValueError:
-        return path.as_posix().lstrip(os.sep)
+    # Wspólna normalizacja: ścieżki Windows i `/work/…` (raport zapisany
+    # w kontenerze) — bez niej wynik testu nie trafiał do nodeid i test
+    # wychodził „bez rozstrzygnięcia”.
+    relative = to_repo_relative(name, root)
+    return relative.lstrip("/") if is_absolute_path(relative) else relative
 
 
 __all__ = [

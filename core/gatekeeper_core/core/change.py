@@ -7,13 +7,14 @@ je testować bez repozytorium i uruchamiać na diffie z pliku.
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from .fsutil import is_link, remove_tree
 
 # Pliki generowane maszynowo. Wyłączone z limitu rozmiaru diffa — bez tego
 # każdy PR odświeżający lockfile przekracza próg i zespół w tydzień wyłącza
@@ -105,7 +106,7 @@ def write_worktree_file(root: Path, relative: str, content: str) -> None:
     target = root
     for part in path.parts:
         target = target / part
-        if target.is_symlink():
+        if is_link(target):
             raise GitError(f"dowiązanie w ścieżce nakładanego testu: {relative}")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
@@ -277,13 +278,20 @@ class ChangeContext:
         target = tmp / "wt"
         try:
             target.mkdir()
-            _git(target, "init", "-q", "--template=")
-            _git(target, "-c", "core.hooksPath=/dev/null", "fetch", "--no-tags",
+            options = _copy_git_options(tmp)
+            _git(target, *options, "init", "-q", "--template=")
+            # To samo trwale w `.git/config` kopii: bramki wołają potem git
+            # w kopii bez `-c`, a globalny config użytkownika nie może tam
+            # włączyć hooków ani konwersji końców linii.
+            for value in options[1::2]:
+                name, _, setting = value.partition("=")
+                _git(target, "config", name, setting)
+            _git(target, *options, "fetch", "--no-tags",
                  str(self.repo.resolve()), sha, self.base_sha)
-            _git(target, "-c", "core.hooksPath=/dev/null", "checkout", "--detach", sha)
+            _git(target, *options, "checkout", "--detach", sha)
             yield target
         finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+            remove_tree(tmp)
 
     # ---------- konstrukcja ----------
 
@@ -500,11 +508,32 @@ def _detect_ticket(
     return None
 
 
+def _copy_git_options(tmp: Path) -> tuple[str, ...]:
+    """Konfiguracja kopii roboczej niezależna od globalnego configu użytkownika.
+
+    * Hooki wskazują na pusty katalog w prywatnym `mkdtemp`, poza kopią kodu.
+      `/dev/null` na Windows to `C:\\dev\\null`, gdzie inny lokalny użytkownik
+      mógłby podłożyć `/dev/null/<hook>`.
+    * `core.autocrlf=false` — kopia ma bajty commita, nie konwersję końców linii
+      z globalnej konfiguracji (inaczej bramki widzą CRLF, którego w PR nie ma).
+    * `core.longpaths=true` — Git for Windows inaczej odmawia ścieżek > 260 znaków.
+    """
+    hooks = tmp / "hooks"
+    hooks.mkdir()
+    return (
+        "-c", f"core.hooksPath={hooks.as_posix()}",
+        "-c", "core.autocrlf=false",
+        "-c", "core.longpaths=true",
+    )
+
+
 def _git(repo: Path, *args: str) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if proc.returncode != 0:

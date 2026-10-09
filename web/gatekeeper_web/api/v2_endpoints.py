@@ -107,12 +107,18 @@ def environment(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
             "filesystem": env.isolation_available,
             "network": env.network_isolation,
             "note": env.isolation_note,
+            "backend": env.backend,
+            "engine": env.engine_path,
+            "image": env.image_name or None,
+            "image_present": env.image_present,
+            "reason": env.isolation_reason or None,
         },
         "tools": [
             {
                 "name": t.name,
                 "purpose": t.purpose,
                 "available": t.available,
+                "in_image": t.in_image,
                 "version": t.version,
             }
             for t in env.tools

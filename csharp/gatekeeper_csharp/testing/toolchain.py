@@ -21,6 +21,7 @@ from gatekeeper_core.core.diffcover import DiffCoverageResult, run_diff_cover_on
 from gatekeeper_core.core.plugins import ToolchainIsolationBroken
 from gatekeeper_core.core.runner import Sandbox, SandboxPolicy
 
+from ..adapters.dotnet import ISOLATED_BUILD_ARGS
 from . import discovery, quality
 from .discovery import TestItem
 from .quality import QualityIssue
@@ -179,6 +180,7 @@ class CsharpTestToolchain:
                             "--collect:XPlat Code Coverage;Format=cobertura",
                             "--results-directory",
                             str(results_dir),
+                            *ISOLATED_BUILD_ARGS,
                         ],
                         change.repo,
                         sandbox,

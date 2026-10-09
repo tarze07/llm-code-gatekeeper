@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -18,12 +19,17 @@ class Repo:
         self.git("config", "user.email", "test@example.com")
         self.git("config", "user.name", "Test")
         self.git("config", "commit.gpgsign", "false")
+        # Bajty w commicie mają odpowiadać temu, co zapisał test — także na
+        # Windows z globalnym `core.autocrlf=true`.
+        self.git("config", "core.autocrlf", "false")
 
     def git(self, *args: str) -> str:
         proc = subprocess.run(
             ["git", "-C", str(self.path), *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         return proc.stdout
@@ -31,7 +37,7 @@ class Repo:
     def write(self, rel: str, content: str) -> None:
         target = self.path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        target.write_text(content, encoding="utf-8", newline="\n")
 
     def commit(self, message: str) -> str:
         self.git("add", "-A")
@@ -75,3 +81,17 @@ class FakeRegistry:
             latest_release=datetime.now(UTC),
             repo_url=spec.get("repo_url", "https://github.com/example/example"),
         )
+
+
+def symlink_or_skip(link: Path, target: Path, target_is_directory: bool = False) -> None:
+    """Dowiązanie dla testów izolacji; na Windows bez Developer Mode — pominięcie.
+
+    Brak uprawnienia do symlinków (WinError 1314) to cecha maszyny, nie błąd
+    bramy: test nie ma czego sprawdzić, więc nie może też zawieść.
+    """
+    try:
+        link.symlink_to(target, target_is_directory)
+    except OSError as exc:
+        if sys.platform == "win32":
+            pytest.skip(f"brak uprawnienia do dowiązań symbolicznych: {exc}")
+        raise

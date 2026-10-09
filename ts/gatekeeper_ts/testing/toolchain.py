@@ -14,6 +14,7 @@ repo. Core czyta to przez `plugins.toolchain_languages()`.
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -156,7 +157,15 @@ class TsTestToolchain:
         target = worktree / "node_modules"
         if not source.is_dir() or target.exists():
             return False
-        os.symlink(source, target, target_is_directory=True)
+        if sys.platform == "win32":
+            # Zwykły symlink wymaga na Windows uprawnienia (Developer Mode / admin);
+            # junction katalogu nie. Junction usuwa się jak pusty katalog —
+            # `shutil.rmtree` (Python 3.12+) nie wchodzi do jego celu.
+            import _winapi  # type: ignore[import-not-found,unused-ignore]
+
+            _winapi.CreateJunction(str(source), str(target))
+        else:
+            os.symlink(source, target, target_is_directory=True)
         return True
 
     def _assert_isolation(self, change: ChangeContext, config: dict[str, Any]) -> None:
@@ -175,7 +184,10 @@ class TsTestToolchain:
             return
         repo = change.repo.resolve()
         for entry in self._package_dirs(node_modules):
-            if not entry.is_symlink():
+            # Na Windows npm/pnpm workspaces i `npm link` tworzą junctions,
+            # dla których `is_symlink()` jest False — bez tego sprawdzenia
+            # kontrola izolacji byłaby po cichu pomijana.
+            if not (entry.is_symlink() or entry.is_junction()):
                 continue
             try:
                 target = entry.resolve()
@@ -201,7 +213,9 @@ class TsTestToolchain:
         for entry in node_modules.iterdir():
             if entry.name.startswith("."):
                 continue
-            if entry.name.startswith("@") and entry.is_dir() and not entry.is_symlink():
+            if entry.name.startswith("@") and entry.is_dir() and not (
+                entry.is_symlink() or entry.is_junction()
+            ):
                 out.extend(child for child in entry.iterdir() if not child.name.startswith("."))
                 continue
             out.append(entry)

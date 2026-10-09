@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -94,17 +95,25 @@ class GitRepo:
         self.git("config", "user.email", "panel@example.com")
         self.git("config", "user.name", "Panel")
         self.git("config", "commit.gpgsign", "false")
+        # Bajty w commicie mają odpowiadać temu, co zapisał test — także na
+        # Windows z globalnym `core.autocrlf=true`.
+        self.git("config", "core.autocrlf", "false")
 
     def git(self, *args: str) -> str:
         proc = subprocess.run(
-            ["git", "-C", str(self.path), *args], capture_output=True, text=True, check=True
+            ["git", "-C", str(self.path), *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
         )
         return proc.stdout
 
     def write(self, rel: str, content: str) -> None:
         target = self.path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        target.write_text(content, encoding="utf-8", newline="\n")
 
     def commit(self, message: str) -> str:
         self.git("add", "-A")
@@ -181,3 +190,17 @@ def demo(panel: Panel) -> tuple[int, str]:
     assert response.status_code == 201, response.text
     run_id: str = response.json()["run"]["run_id"]
     return project_id, run_id
+
+
+def symlink_or_skip(link: Path, target: Path, target_is_directory: bool = False) -> None:
+    """Dowiązanie dla testów; na Windows bez Developer Mode — pominięcie.
+
+    Brak uprawnienia do symlinków (WinError 1314) to cecha maszyny, nie błąd
+    panelu: test nie ma czego sprawdzić, więc nie może też zawieść.
+    """
+    try:
+        link.symlink_to(target, target_is_directory)
+    except OSError as exc:
+        if sys.platform == "win32":
+            pytest.skip(f"brak uprawnienia do dowiązań symbolicznych: {exc}")
+        raise

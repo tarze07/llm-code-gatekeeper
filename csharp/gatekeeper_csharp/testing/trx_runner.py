@@ -20,6 +20,8 @@ from typing import Literal
 from gatekeeper_core.core.plugins import ToolchainUnavailable
 from gatekeeper_core.core.runner import Sandbox, SandboxUnavailable
 
+from ..adapters.dotnet import ISOLATED_BUILD_ARGS
+
 Outcome = Literal["passed", "failed", "error", "skipped", "missing"]
 
 #: Namespace TRX — bez niego `ElementTree.find()` nie trafia w żaden węzeł.
@@ -89,6 +91,7 @@ def run_dotnet_test(
                 f"trx;LogFileName={trx_name}",
                 "--results-directory",
                 str(results_dir),
+                *ISOLATED_BUILD_ARGS,
             ]
             try:
                 result = sandbox.run(command, cwd=worktree, timeout_s=timeout_s)
