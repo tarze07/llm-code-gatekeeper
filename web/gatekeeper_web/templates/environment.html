@@ -20,12 +20,31 @@
 <div class="karta">
   <h2>Izolacja</h2>
   <dl class="fakty">
+    <dt>Backend</dt>
+    <dd>
+      {% if env.backend == 'container' %}kontener (Docker/Podman)
+      {% elif env.backend == 'bwrap' %}Bubblewrap
+      {% else %}<span class="brak">nieznany</span>{% endif %}
+    </dd>
+    {% if env.backend == 'container' %}
+      <dt>Silnik</dt>
+      <dd>{% if env.engine_path %}<code>{{ env.engine_path }}</code>{% else %}<span class="brak">brak</span>{% endif %}</dd>
+      <dt>Obraz narzędzi</dt>
+      <dd>
+        <code>{{ env.image_name }}</code> —
+        {% if env.image_present %}jest{% else %}<span class="brak">brak lub silnik nie odpowiada</span>{% endif %}
+      </dd>
+    {% endif %}
     <dt>System plików</dt>
-    <dd>{{ 'Bubblewrap dostępny' if env.isolation_available else 'BRAK — wykonanie zablokowane' }}</dd>
+    <dd>{% if env.isolation_available %}{{ 'kontener dostępny' if env.backend == 'container' else 'Bubblewrap dostępny' }}{% else %}BRAK — wykonanie zablokowane{% endif %}</dd>
     <dt>Sieć</dt>
     <dd>{{ 'odcinana dla testów' if env.network_isolation else 'brak odcięcia sieci' }}</dd>
     <dt>Opis do raportu</dt>
     <dd>{{ env.isolation_note }}</dd>
+    {% if env.isolation_reason %}
+      <dt>Co naprawić</dt>
+      <dd>{{ env.isolation_reason }}</dd>
+    {% endif %}
   </dl>
 </div>
 
@@ -38,13 +57,15 @@
         <tr>
           <td class="mono">{{ tool.name }}</td>
           <td>
-            {% if tool.available %}
+            {% if tool.in_image %}
+              <span class="znacznik znacznik--pass">w obrazie</span>
+            {% elif tool.available %}
               <span class="znacznik znacznik--pass">jest</span>
             {% else %}
               <span class="znacznik znacznik--neutralny">brak</span>
             {% endif %}
           </td>
-          <td class="mono">{{ tool.version or '—' }}</td>
+          <td class="mono">{{ 'w obrazie' if tool.in_image else (tool.version or '—') }}</td>
           <td>{{ tool.purpose }}</td>
         </tr>
       {% endfor %}

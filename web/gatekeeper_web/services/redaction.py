@@ -35,9 +35,12 @@ _WIN_TEMP = (
 )
 #: Własny katalog stanu panelu (`…/gatekeeper-web/…`) i katalogi zadań
 #: (`…/prace/gk-job-…`) — niezależnie od systemu i od tego, gdzie leżą.
+#: Domyślny katalog Windows to `…\AppData\Local\gatekeeper-web`.
 _PANEL_DIRS = (
     rf"(?:[A-Za-z]:{_SEP}|/)(?:{_ANY_SEG}{_SEP})*?"
-    rf"(?:\.local{_SEP}state{_SEP}gatekeeper-web|gk-job-[\w.\-+@]*){_TAIL}"
+    rf"(?:\.local{_SEP}state{_SEP}gatekeeper-web"
+    rf"|AppData{_SEP}Local{_SEP}gatekeeper-web"
+    rf"|gk-job-[\w.\-+@]*){_TAIL}"
 )
 
 _TEMP_PATH_RE = re.compile(rf"(?<![\w.])(?:{_POSIX_TEMP}|{_WIN_TEMP}|{_PANEL_DIRS})")

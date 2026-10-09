@@ -56,3 +56,26 @@ def test_katalog_stanu_panelu_i_zadania() -> None:
 def test_redakcja_dziala_zagniezdnie_na_json_ucieczkach() -> None:
     data = {"evidence": ["C:\\\\Users\\\\jan\\\\AppData\\\\Local\\\\Temp\\\\wt\\\\a.py"]}
     assert redact_value(data) == {"evidence": ["…/a.py"]}
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        r"C:\Users\jan\AppData\Local\gatekeeper-web\prace\x\a.py",
+        "C:/Users/jan kowalski/AppData/Local/gatekeeper-web/panel.db",
+        "C:\\\\Users\\\\jan\\\\AppData\\\\Local\\\\gatekeeper-web\\\\panel.db",
+    ],
+)
+def test_domyslny_katalog_stanu_windows(raw: str) -> None:
+    out = redact_text(raw)
+    assert out.startswith("…/") and "gatekeeper-web" not in out and "Users" not in out
+
+
+def test_redakcja_jest_liniowa_na_duzych_wejsciach() -> None:
+    import time
+
+    for chunk in ("C:\\Users\\a b\\", "/a/b c/", "x" * 50 + "\\"):
+        text = chunk * (80_000 // len(chunk))
+        start = time.perf_counter()
+        redact_text(text, limit=10**9)
+        assert time.perf_counter() - start < 0.5

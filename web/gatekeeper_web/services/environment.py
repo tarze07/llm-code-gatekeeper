@@ -2,8 +2,9 @@
 
 Panel uruchamia narzędzia na cudzym kodzie, więc operator musi widzieć, czym
 dysponuje, **zanim** zleci kontrolę. Najważniejsze zdanie tego ekranu brzmi:
-bez Bubblewrapa nie da się nic uruchomić i panel tego nie obchodzi żadną
-„opcją bez izolacji" (PLAN-WEB-UI.md §8, core/SECURITY.md).
+bez izolacji (Bubblewrap na Linuksie, kontener na Windows) nie da się nic
+uruchomić i panel tego nie obchodzi żadną „opcją bez izolacji"
+(PLAN-WEB-UI.md §8, core/SECURITY.md).
 
 Brak narzędzia jest tu informacją, nie awarią panelu: bramka bez swojego
 narzędzia zwróci `error`, czyli „brak dowodu" — i tak to jest opisane.
@@ -13,15 +14,19 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError, entry_points, version
 from pathlib import Path
 from typing import Any
 
+from gatekeeper_core.core import container
 from gatekeeper_core.core.runner import (
+    SandboxUnavailable,
+    backend,
     describe_isolation,
-    filesystem_isolation_available,
+    isolation_available,
     network_isolation_available,
 )
 from gatekeeper_core.gates import all_gates
@@ -66,7 +71,20 @@ TOOLS: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("gatekeeper-cs-helper", ("--version",), "pack C#: G1.complexity, G2.*"),
 )
 
+#: Narzędzia, które w trybie kontenerowym siedzą w obrazie (container/Dockerfile),
+#: a nie na hoście — ich brak na hoście nie jest brakiem.
+IN_IMAGE_TOOLS = frozenset(
+    {"semgrep", "gitleaks", "diff-cover", "node", "npm", "dotnet", "gatekeeper-cs-helper"}
+)
+#: Narzędzia dotyczące wyłącznie Bubblewrapa — w trybie kontenerowym odpada.
+BWRAP_ONLY_TOOLS = frozenset({"bwrap"})
+
 VERSION_TIMEOUT_S = 5.0
+
+BWRAP_HINT = "`sudo apt-get install bubblewrap`"
+CONTAINER_BUILD_HINT = (
+    f"`docker build -t {container.DEFAULT_IMAGE} -f container/Dockerfile .`"
+)
 
 
 @dataclass(frozen=True)
@@ -75,10 +93,12 @@ class ToolStatus:
     purpose: str
     path: str | None
     version: str | None
+    #: Narzędzie żyje w obrazie kontenera, nie na hoście (tryb kontenerowy).
+    in_image: bool = False
 
     @property
     def available(self) -> bool:
-        return self.path is not None
+        return self.path is not None or self.in_image
 
 
 @dataclass(frozen=True)
@@ -99,6 +119,11 @@ class _Probe:
     plugins: list[PluginStatus]
     packages: dict[str, str | None]
     gates: list[dict[str, Any]]
+    backend: str = "bwrap"
+    engine_path: str | None = None
+    image_name: str = ""
+    image_present: bool = False
+    isolation_reason: str = ""
 
 
 @dataclass
@@ -113,6 +138,13 @@ class Environment:
     disk_free_mb: int | None = None
     disk_total_mb: int | None = None
     state_dir: str = ""
+    #: "bwrap" | "container" | "nieznany" (błędna wartość GATEKEEPER_SANDBOX).
+    backend: str = "bwrap"
+    engine_path: str | None = None
+    image_name: str = ""
+    image_present: bool = False
+    #: Konkretny powód braku izolacji (puste, gdy izolacja działa).
+    isolation_reason: str = ""
 
     @property
     def can_run(self) -> bool:
@@ -125,16 +157,34 @@ class Environment:
         if not self._tool("git").available:
             problems.append("brak `git` — panel nie policzy zakresu zmiany")
         if not self.isolation_available:
-            problems.append(
-                "brak działającego Bubblewrapa — uruchamianie narzędzi jest zablokowane "
-                "(`sudo apt-get install bubblewrap`); panel nie oferuje trybu bez izolacji"
-            )
+            problems.append(self._isolation_blocker())
         if self.disk_free_mb is not None and self.disk_free_mb < 500:
             problems.append(
                 f"mało miejsca na dysku ({self.disk_free_mb} MB) — każda bramka robi "
                 "własną kopię ocenianego commita"
             )
         return problems
+
+    def _isolation_blocker(self) -> str:
+        tail = "uruchamianie narzędzi jest zablokowane; panel nie oferuje trybu bez izolacji"
+        if self.backend == "container":
+            reason = self.isolation_reason or "silnik kontenerów albo obraz narzędzi niedostępny"
+            if sys.platform == "win32":
+                hint = (
+                    "zainstaluj Docker Desktop (backend WSL2), zbuduj obraz "
+                    f"{CONTAINER_BUILD_HINT} i sprawdź całość przez `gatekeeper container check`"
+                )
+            else:
+                hint = (
+                    f"zbuduj obraz {CONTAINER_BUILD_HINT} "
+                    "i sprawdź całość przez `gatekeeper container check`"
+                )
+            return f"izolacja w kontenerze niedostępna: {reason}. {hint}; {tail}"
+        if self.backend == "bwrap":
+            if sys.platform == "win32":
+                return f"Bubblewrap nie działa na Windows — użyj backendu kontenerowego; {tail}"
+            return f"brak działającego Bubblewrapa ({BWRAP_HINT}); {tail}"
+        return f"{self.isolation_note}; {tail}"
 
     def _tool(self, name: str) -> ToolStatus:
         for tool in self.tools:
@@ -152,12 +202,55 @@ CACHE_TTL_S = 60.0
 _probe_cache: tuple[float, _Probe] | None = None
 
 
+def _backend_name() -> str:
+    try:
+        return backend()
+    except SandboxUnavailable:
+        return "nieznany"
+
+
+def _tools_for(chosen: str) -> list[ToolStatus]:
+    tools: list[ToolStatus] = []
+    for name, args, purpose in TOOLS:
+        if chosen == "container":
+            if name in BWRAP_ONLY_TOOLS:
+                continue
+            if name in IN_IMAGE_TOOLS:
+                tools.append(
+                    ToolStatus(name=name, purpose=purpose, path=None, version=None, in_image=True)
+                )
+                continue
+        elif name in BWRAP_ONLY_TOOLS and sys.platform == "win32":
+            continue
+        tools.append(_tool_status(name, args, purpose))
+    return tools
+
+
 def _probe() -> _Probe:
+    chosen = _backend_name()
+    available = isolation_available()
+    engine_path: str | None = None
+    image_name = ""
+    image_present = False
+    reason = ""
+    if chosen == "container":
+        # Tylko odczyt: `engine()` i `_image_present()` mają własny cache i
+        # limity czasu; żadnego kontenera ta strona nie uruchamia.
+        engine_path = container.engine()
+        image_name = container.image()
+        image_present = available
+        if not available:
+            reason = container.unavailable_reason()
     return _Probe(
-        isolation_available=filesystem_isolation_available(),
+        isolation_available=available,
         network_isolation=network_isolation_available(),
         isolation_note=describe_isolation(),
-        tools=[_tool_status(name, args, purpose) for name, args, purpose in TOOLS],
+        backend=chosen,
+        engine_path=engine_path,
+        image_name=image_name,
+        image_present=image_present,
+        isolation_reason=reason,
+        tools=_tools_for(chosen),
         plugins=[
             PluginStatus(group=group, label=label, names=_entry_point_names(group))
             for group, label in PLUGIN_GROUPS
@@ -197,6 +290,11 @@ def _build(probe: _Probe, state_dir: Path | None) -> Environment:
         isolation_available=probe.isolation_available,
         network_isolation=probe.network_isolation,
         isolation_note=probe.isolation_note,
+        backend=probe.backend,
+        engine_path=probe.engine_path,
+        image_name=probe.image_name,
+        image_present=probe.image_present,
+        isolation_reason=probe.isolation_reason,
         tools=list(probe.tools),
         plugins=list(probe.plugins),
         packages=dict(probe.packages),
