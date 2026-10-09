@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ def kontener(monkeypatch):
     monkeypatch.setattr(env_mod, "_probe_cache", None)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Bubblewrap istnieje tylko na Linuksie")
 def test_bwrap_bez_zmian(monkeypatch) -> None:
     monkeypatch.setenv(runner.BACKEND_ENV, "bwrap")
     monkeypatch.setattr(runner, "filesystem_isolation_available", lambda: False)
