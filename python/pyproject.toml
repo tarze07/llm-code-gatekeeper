@@ -50,6 +50,7 @@ gatekeeper_python = ["rules/semgrep/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q"
 
 [tool.ruff]

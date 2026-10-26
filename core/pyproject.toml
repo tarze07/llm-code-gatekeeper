@@ -69,6 +69,7 @@ gatekeeper_core = ["rules/semgrep/*.yaml", "py.typed", "data/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q"
 
 [tool.ruff]

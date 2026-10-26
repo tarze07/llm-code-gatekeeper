@@ -41,6 +41,7 @@ gatekeeper_web = ["templates/*.html", "static/*.css", "static/*.js", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q"
 
 [tool.ruff]
