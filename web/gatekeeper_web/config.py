@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+
 #: Stan panelu żyje **poza** ocenianymi repozytoriami (PLAN-WEB-UI.md §5).
 #: `.gatekeeper/runs.db` w ocenianym repo pozostaje bazą CLI i panel jej nie dotyka.
-DEFAULT_STATE_DIR = Path.home() / ".local" / "state" / "gatekeeper-web"
+def default_state_dir() -> Path:
+    """Windows: `%LOCALAPPDATA%\\gatekeeper-web`; gdzie indziej `~/.local/state/…`."""
+    if sys.platform == "win32":
+        local = os.environ.get("LOCALAPPDATA")
+        base = Path(local) if local else Path.home() / "AppData" / "Local"
+        return base / "gatekeeper-web"
+    return Path.home() / ".local" / "state" / "gatekeeper-web"
+
+
+DEFAULT_STATE_DIR = default_state_dir()
 
 #: Nasłuch wyłącznie na pętli zwrotnej. Zmiana na `0.0.0.0` nie jest
 #: „udostępnieniem zespołowi” — to wystawienie wykonywania narzędzi na kodzie
@@ -65,6 +76,7 @@ class Settings:
 
     def ensure_state_dir(self) -> Path:
         # 0700: baza zawiera treść raportów z cudzych repozytoriów.
+        # Na Windows `mode` jest ignorowany — dostęp wynika z ACL profilu użytkownika.
         self.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.work_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         return self.state_dir
@@ -74,7 +86,7 @@ class Settings:
         raw = os.environ.get("GATEKEEPER_WEB_STATE_DIR")
         roots = os.environ.get("GATEKEEPER_WEB_REPO_ROOTS")
         return cls(
-            state_dir=Path(raw).expanduser() if raw else DEFAULT_STATE_DIR,
+            state_dir=Path(raw).expanduser() if raw else default_state_dir(),
             host=os.environ.get("GATEKEEPER_WEB_HOST", DEFAULT_HOST),
             port=int(os.environ.get("GATEKEEPER_WEB_PORT", str(DEFAULT_PORT))),
             allowed_repo_roots=(

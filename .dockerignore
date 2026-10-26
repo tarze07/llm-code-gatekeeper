@@ -1,0 +1,15 @@
+# Kontekst budowania container/Dockerfile to korzeń repo; potrzebny jest
+# tylko helper C#. Reszta wydłużałaby budowanie i mogłaby wnieść sekrety.
+**/.venv
+**/.venv-*
+**/node_modules
+**/bin
+**/obj
+**/__pycache__
+**/*.pyc
+.git
+.kilo
+.claude
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache

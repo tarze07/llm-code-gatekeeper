@@ -36,7 +36,7 @@ from typing import Any
 
 from gatekeeper_core.core.runner import Sandbox, SandboxPolicy, SandboxUnavailable
 
-from ..node import node_env
+from ..node import node_env, node_path_entries
 
 HELPER_NAME = "helper.cjs"
 
@@ -77,7 +77,7 @@ def run_helper(command: str, root: Path, relative_paths: list[str]) -> dict[str,
         return {}
     env = node_env()
     readable = (helper_path(),) + tuple(
-        Path(p) for p in env.get("NODE_PATH", "").split(":") if p
+        Path(p) for p in node_path_entries(env)
     )
     sandbox = Sandbox(SandboxPolicy(memory_mb=None, read_only_paths=readable))
     try:

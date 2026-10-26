@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
@@ -52,4 +53,5 @@ def test_cli_backup_zapisuje_plik(tmp_path: Path) -> None:
     )
     assert wynik.exit_code == 0, wynik.output
     assert dest.is_file()
-    assert dest.stat().st_mode & 0o777 == 0o600
+    if sys.platform != "win32":  # Windows nie ma bitów uprawnień POSIX
+        assert dest.stat().st_mode & 0o777 == 0o600

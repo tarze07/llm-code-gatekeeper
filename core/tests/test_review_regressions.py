@@ -12,6 +12,7 @@ from gatekeeper_core.core.orchestrator import run_gates
 from gatekeeper_core.core.policy import Exemption, Policy
 from gatekeeper_core.gates import Gate, build_gates
 from gatekeeper_core.gates.g2_crossverify import CrossVerify
+from tests.conftest import symlink_or_skip
 
 
 def test_wyjatek_nie_wycisza_innego_znaleziska_tej_samej_reguly():
@@ -88,21 +89,35 @@ def change_at_head(repo):
     return ChangeContext.from_git(repo.path, "main")
 
 
+# Bramki testowe na poziomie modułu: na Windows (spawn) są picklowane do workera.
+class Inspect(Gate):
+    def __init__(self, name):
+        super().__init__()
+        self.id = name
+
+    def run(self, snapshot):
+        path = snapshot.repo / "src/app.py"
+        content = path.read_text()
+        path.write_text("mutated by gate\n")
+        return self.result(status="pass", facts={self.id: content})
+
+
+class Hung(Gate):
+    budget_s = 0.1
+
+    def __init__(self, name):
+        super().__init__()
+        self.id = name
+
+    def run(self, change):
+        time.sleep(30)
+        return self.result(status="pass")
+
+
 def test_bramki_analizuja_wskazany_commit_i_nie_dziela_zapisu(repo):
     change = change_at_head(repo)
     repo.checkout("main")
     repo.write("src/app.py", "dirty = True\n")
-
-    class Inspect(Gate):
-        def __init__(self, name):
-            super().__init__()
-            self.id = name
-
-        def run(self, snapshot):
-            path = snapshot.repo / "src/app.py"
-            content = path.read_text()
-            path.write_text("mutated by gate\n")
-            return self.result(status="pass", facts={self.id: content})
 
     result = run_gates(change, Policy(), gates=[Inspect("a"), Inspect("b")], max_workers=1)
     assert result.facts == {"a": "committed = True\n", "b": "committed = True\n"}
@@ -113,17 +128,6 @@ def test_bramki_analizuja_wskazany_commit_i_nie_dziela_zapisu(repo):
 
 @pytest.mark.parametrize("count", [1, 2])
 def test_timeout_nie_czeka_na_zawieszona_bramke(repo, count):
-    class Hung(Gate):
-        budget_s = 0.1
-
-        def __init__(self, name):
-            super().__init__()
-            self.id = name
-
-        def run(self, change):
-            time.sleep(30)
-            return self.result(status="pass")
-
     change = change_at_head(repo)
     started = time.monotonic()
     result = run_gates(change, Policy(), gates=[Hung(str(i)) for i in range(count)])
@@ -160,7 +164,7 @@ def test_nakladanie_testow_nie_podaza_za_dowiazaniem(tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "test.py").write_text("original")
-    (work / "tests").symlink_to(outside, True)
+    symlink_or_skip(work / "tests", outside, True)
     with pytest.raises(GitError, match="dowiązanie"):
         write_worktree_file(work, "tests/test.py", "replacement")
     assert (outside / "test.py").read_text() == "original"

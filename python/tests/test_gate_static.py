@@ -109,6 +109,8 @@ def test_znaleziska_poza_zmienionymi_liniami_sa_odfiltrowane(repo):
 
 
 def test_brak_ruffa_jest_bledem_bramki(repo, monkeypatch):
+    # Brak narzędzia symulowany przez PATH hosta — scenariusz backendu bwrap.
+    monkeypatch.setenv("GATEKEEPER_SANDBOX", "bwrap")
     repo.checkout("feature", create=True)
     repo.write("src/app.py", "x = 1\n")
     repo.commit("zmiana")
@@ -129,6 +131,8 @@ def test_brak_ruffa_jest_bledem_bramki(repo, monkeypatch):
 
 @requires_ruff
 def test_require_mypy_brak_mypy_jest_bledem(repo, monkeypatch):
+    # Brak narzędzia symulowany przez PATH hosta — scenariusz backendu bwrap.
+    monkeypatch.setenv("GATEKEEPER_SANDBOX", "bwrap")
     repo.checkout("feature", create=True)
     repo.write("src/app.py", "x = 1\n")
     repo.commit("zmiana")

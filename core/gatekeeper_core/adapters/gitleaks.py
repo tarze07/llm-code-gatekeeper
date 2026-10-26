@@ -21,7 +21,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ..core.finding import Finding, Severity
-from ..core.runner import Sandbox, SandboxPolicy, SandboxUnavailable
+from ..core.paths import is_absolute_path, to_repo_relative
+from ..core.runner import Sandbox, SandboxPolicy, SandboxUnavailable, backend
 
 BINARY = "gitleaks"
 INSTALL_HINT = (
@@ -59,7 +60,9 @@ def redact(secret: str) -> str:
 
 
 def is_available() -> bool:
-    return shutil.which(BINARY) is not None
+    # W kontenerze gitleaks pochodzi z obrazu, nie z hosta — brak w obrazie
+    # zgłosi samo uruchomienie (ExecutableUnavailable → ToolMissing).
+    return backend() == "container" or shutil.which(BINARY) is not None
 
 
 def version() -> str | None:
@@ -145,7 +148,9 @@ def scan(
                 f"gitleaks zakończył się kodem {proc.returncode}: {proc.stderr[-500:]}"
             )
         if not report.exists():
-            return []
+            # gitleaks z `--report-path` zawsze zapisuje raport (pusty `[]`).
+            # Brak pliku to brak dowodu, nie „zero sekretów”.
+            raise ToolFailed("gitleaks nie zapisał raportu — brak dowodu skanu")
         return parse_report(report.read_text(encoding="utf-8"), root=source)
 
 
@@ -186,14 +191,13 @@ def to_finding(leak: Leak, gate_id: str, in_diff: bool) -> Finding:
 def _normalize_path(path: str, root: Path | str | None = None) -> str:
     if not path:
         return ""
-    candidate = Path(path)
     if root is not None:
-        try:
-            return candidate.resolve().relative_to(Path(root).resolve()).as_posix()
-        except ValueError:
-            pass  # znalezisko spoza katalogu skanowania — zostawiamy jak jest
-    if candidate.is_absolute():
-        return candidate.as_posix()
+        # Wspólna normalizacja: ścieżki Windows, `file://` i `/work/…`
+        # (raport zapisany w kontenerze). Spoza katalogu skanowania zostaje
+        # bezwzględna — zgadywanie prefiksu byłoby gorsze niż brak dopasowania.
+        return to_repo_relative(path, Path(root))
+    if is_absolute_path(path):
+        return path.replace("\\", "/")
     return PurePosixPath(path.removeprefix("./")).as_posix()
 
 

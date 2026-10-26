@@ -29,6 +29,7 @@ from .core.change import ChangeContext
 from .core.finding import RunResult, Verdict
 from .core.orchestrator import run_gates
 from .core.policy import Policy
+from .core.runner import backend
 
 DEFAULT_CASES_PATH = Path("calibration/cases.yaml")
 DEFAULT_FIXTURES_DIR = Path("calibration/fixtures")
@@ -124,7 +125,10 @@ def run_calibration(
     fixtures_dir = Path(fixtures_dir)
     report = CalibrationReport()
     for case in cases:
-        missing = next((t for t in case.requires_tools if shutil.which(t) is None), None)
+        # W kontenerze narzędzia pochodzą z obrazu — brak zgłosi samo uruchomienie.
+        missing = None if backend() == "container" else next(
+            (t for t in case.requires_tools if shutil.which(t) is None), None
+        )
         if missing:
             report.results.append(
                 CaseResult(
@@ -175,6 +179,8 @@ def _build_case_repo(fixture_dir: Path) -> Iterator[tuple[Path, str, str]]:
         _git(repo_path, "config", "user.email", "calibration@example.com")
         _git(repo_path, "config", "user.name", "Kalibracja")
         _git(repo_path, "config", "commit.gpgsign", "false")
+        # Fixture ma trafić do commita bajt w bajt, niezależnie od globalnego configu.
+        _git(repo_path, "config", "core.autocrlf", "false")
 
         _sync_tree(repo_path, fixture_dir / "base")
         base_sha = _commit(repo_path, "kalibracja: stan bazowy")
@@ -215,6 +221,11 @@ def _commit(repo_path: Path, message: str) -> str:
 
 def _git(repo_path: Path, *args: str) -> str:
     proc = subprocess.run(
-        ["git", "-C", str(repo_path), *args], capture_output=True, text=True, check=True
+        ["git", "-C", str(repo_path), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
     )
     return proc.stdout

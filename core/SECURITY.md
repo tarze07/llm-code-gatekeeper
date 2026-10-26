@@ -1,10 +1,16 @@
 # Uruchamianie ocenianego kodu
 
-Brama wymaga Linuksa, Bubblewrap (`bwrap`) i działających przestrzeni nazw
-użytkownika, procesów oraz sieci. Na Ubuntu/Debian backend instaluje się przez
-`sudo apt-get install bubblewrap`. Brak backendu lub błąd jego konfiguracji
-przerywa wykonanie narzędzia; `require_isolation=False` nie wyłącza zabezpieczeń.
-Szablon workflow i CI monorepo instalują Bubblewrap.
+Każde narzędzie uruchamiane na kodzie PR-a działa w izolacji. Są dwa backendy,
+wybierane przez `GATEKEEPER_SANDBOX`:
+
+* `bwrap` (domyślny na Linuksie) — Bubblewrap i przestrzenie nazw użytkownika,
+  procesów oraz sieci (`sudo apt-get install bubblewrap`). Szablon workflow
+  i CI monorepo instalują Bubblewrap.
+* `container` (domyślny na Windows) — kontener Linuksa przez Docker albo
+  Podman, obraz `gatekeeper-tools` (`container/Dockerfile`). Opis niżej.
+
+Brak backendu lub błąd jego konfiguracji przerywa wykonanie narzędzia;
+`require_isolation=False` nie wyłącza zabezpieczeń. Wykonania bez izolacji nie ma.
 
 Każda bramka uruchomiona przez `run_gates` otrzymuje własną kopię `head_sha`
 z niezależną bazą Git. Lokalne zmiany i aktualnie wybrana gałąź nie wpływają
@@ -61,3 +67,41 @@ z `warn_only`.
 
 Semantyka montowań i przestrzeni nazw:
 [dokumentacja Bubblewrap](https://github.com/containers/bubblewrap/blob/main/bwrap.xml).
+
+## Backend `container`
+
+Każde wywołanie narzędzia to jeden `docker run --rm` (`core/container.py`):
+
+* sieć `none`, chyba że adapter jawnie żąda sieci (rejestry, SCA);
+* `--read-only`, zapisywalne tylko kopia commita (`/work`) i tmpfs `/tmp`
+  oraz `HOME`; baza Git, `node_modules` i cache NuGet hosta tylko do odczytu;
+* `--cap-drop ALL`, `no-new-privileges`, uid operatora (Linux) albo 1000
+  (Windows), nigdy root; `--memory` i `--pids-limit`;
+* do kontenera trafiają tylko zmienne wniesione przez wywołującego
+  (np. `PYTHONPATH`) i `keep_env` — środowisko hosta jako całość nie;
+* narzędzia pochodzą z obrazu, nie z hosta. Zależności ocenianego repo
+  instaluje operator w obrazie projektu (`gatekeeper container init`),
+  jak dziś przygotowuje venv dla Bubblewrap.
+
+Sprzątanie: kontener ma nazwę i etykietę bramki. Po przekroczeniu limitu
+czasu albo budżetu bramki nadzorca usuwa go (`docker rm -f`); zabicie samego
+klienta `docker run` kontenera nie zatrzymuje. Niezależnie od tego narzędzie
+w kontenerze działa pod `timeout -s KILL` (limit wywołania + 30 s), więc
+kontener kończy się sam, także gdy proces bramy zginął.
+
+Granica zaufania jest inna niż przy Bubblewrap: demon Dockera działa
+z uprawnieniami roota, a członkostwo w grupie `docker` daje faktycznie
+uprawnienia roota na hoście. Brama nie montuje gniazda Dockera do kontenera
+ani nie przyznaje mu uprawnień; ucieczka z kontenera wymagałaby podatności
+w jądrze albo w środowisku uruchomieniowym kontenerów. Na Windows (Docker
+Desktop) kontenery działają w maszynie wirtualnej WSL2, co dodaje warstwę
+izolacji od systemu hosta.
+
+Ścieżki: kopia jest widoczna jako `/work`. Ścieżki hosta w argumentach są
+przepisywane na ścieżki kontenera, a w stdout/stderr narzędzia z powrotem.
+Pliki zapisane przez narzędzie (raporty JSON, TRX, cobertura) zawierają
+ścieżki `/work/…`; parsery sprowadzają je do ścieżek repo przez
+`core/paths.py`. Skutek uboczny: na hoście z prawdziwym katalogiem `/work`
+ścieżka spoza ocenianego repo pod `/work` byłaby przypisana do repo —
+może to dać fałszywy alarm, nigdy przepuszczenie.
+

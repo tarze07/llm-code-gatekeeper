@@ -17,6 +17,7 @@ from pathlib import Path
 from ..adapters import gitleaks
 from ..core.change import ChangeContext
 from ..core.finding import GateResult
+from ..core.paths import is_absolute_path
 from . import Gate, register
 
 
@@ -80,7 +81,7 @@ class SecretsGate(Gate):
             # ścieżki repozytorium — wtedy porównanie z diffem jest bezwartościowe
             # i sekret z tego PR-a wyglądałby na zastany. Liczymy takie przypadki
             # jawnie, zamiast po cichu klasyfikować je jako „nie w diffie".
-            if leak.file.startswith("/"):
+            if is_absolute_path(leak.file):
                 unresolved += 1
             in_diff = leak.file in changed
             findings.append(gitleaks.to_finding(leak, self.id, in_diff))

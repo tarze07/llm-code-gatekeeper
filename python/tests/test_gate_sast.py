@@ -73,6 +73,8 @@ def test_wzorzec_poza_zmienionymi_liniami_nie_blokuje_tego_pr(repo):
 
 
 def test_brak_semgrepa_jest_bledem_bramki(repo, monkeypatch):
+    # Brak narzędzia symulowany przez PATH hosta — scenariusz backendu bwrap.
+    monkeypatch.setenv("GATEKEEPER_SANDBOX", "bwrap")
     repo.checkout("feature", create=True)
     repo.write("src/app.py", "x = 1\n")
     repo.commit("zmiana")

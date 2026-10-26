@@ -18,8 +18,34 @@ from __future__ import annotations
 import re
 from typing import Any
 
-#: Katalogi tymczasowe: to z nich bramki analizują kopię commita.
-_TEMP_PATH_RE = re.compile(r"(?<![\w.])/(?:tmp|var/tmp|var/folders|run|dev/shm)/[\w./\-+@]*")
+#: Separator ścieżki: `/`, `\\` albo `\\\\` (raport bywa ciągiem uciekanym do JSON-a).
+_SEP = r"(?:\\\\|[\\/])"
+#: Segment ścieżki za znacznikiem katalogu i segment przed nim (ten może mieć
+#: spacje — nazwa profilu Windows — ale nie przekracza separatora ani cudzysłowu).
+_SEG = r"[\w.\-+@~]+"
+_ANY_SEG = r'[^\\/:*?"<>|\r\n]+'
+_TAIL = rf"(?:{_SEP}{_SEG})*{_SEP}?"
+
+#: Katalogi tymczasowe: to z nich bramki analizują kopię commita (POSIX).
+_POSIX_TEMP = r"/(?:tmp|var/tmp|var/folders|run|dev/shm)/[\w./\-+@]*"
+#: To samo na Windows: `X:\...\AppData\Local\Temp\...` i `X:\Windows\Temp\...`.
+_WIN_TEMP = (
+    rf"[A-Za-z]:{_SEP}(?:{_ANY_SEG}{_SEP})*?"
+    rf"(?:AppData{_SEP}Local{_SEP}Temp|Windows{_SEP}Temp){_TAIL}"
+)
+#: Własny katalog stanu panelu (`…/gatekeeper-web/…`) i katalogi zadań
+#: (`…/prace/gk-job-…`) — niezależnie od systemu i od tego, gdzie leżą.
+#: Domyślny katalog Windows to `…\AppData\Local\gatekeeper-web`.
+_PANEL_DIRS = (
+    rf"(?:[A-Za-z]:{_SEP}|/)(?:{_ANY_SEG}{_SEP})*?"
+    rf"(?:\.local{_SEP}state{_SEP}gatekeeper-web"
+    rf"|AppData{_SEP}Local{_SEP}gatekeeper-web"
+    rf"|gk-job-[\w.\-+@]*){_TAIL}"
+)
+
+_TEMP_PATH_RE = re.compile(rf"(?<![\w.])(?:{_POSIX_TEMP}|{_WIN_TEMP}|{_PANEL_DIRS})")
+
+_SEP_SPLIT_RE = re.compile(r"(?:\\\\|[\\/])+")
 
 #: Nazwa pola deklarująca sekret. `tool_fingerprint` gitleaksa nie wpada tu
 #: z nazwy, tylko przez redakcję ścieżki — i tak ma być.
@@ -63,5 +89,5 @@ def redact_value(value: Any, key: str = "", depth: int = 0) -> Any:
 
 def _shorten_path(match: re.Match[str]) -> str:
     path = match.group(0)
-    tail = path.rstrip("/").rsplit("/", 1)[-1]
+    tail = _SEP_SPLIT_RE.split(path.rstrip("\\/"))[-1]
     return f"…/{tail}" if tail else "…"

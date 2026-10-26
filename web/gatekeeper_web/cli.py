@@ -7,9 +7,11 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+from dataclasses import dataclass
 from pathlib import Path
 
 import typer
+from gatekeeper_core.core.winjob import Job
 
 from .config import (
     DEFAULT_HOST,
@@ -18,11 +20,16 @@ from .config import (
     DEFAULT_STATE_DIR,
     Settings,
 )
+from .console import utf8_console
 from .services.importing import import_report
 from .services.reports import ReportImportError
 from .storage import Database, ReportConflict, Repository
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="Panel WWW bramy jakości")
+
+#: Zmienna, nie `sys.platform` wprost: mypy na Linuksie uznałby gałąź
+#: Windows za martwą (i odwrotnie z `--platform win32`).
+_WINDOWS = sys.platform == "win32"
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -165,36 +172,94 @@ def supervise(
         raise typer.Exit(EXIT_USAGE) from exc
 
 
-def _start_supervisor(settings: Settings) -> subprocess.Popen[bytes] | None:
+#: Ile `serve` czeka na łagodne zatrzymanie nadzorcy. Nadzorca sam daje
+#: workerowi `CANCEL_GRACE_S` (20 s), więc limit musi być od tego dłuższy.
+SUPERVISOR_STOP_S = 30.0
+
+
+@dataclass
+class SupervisorProcess:
+    """Proces nadzorcy uruchomiony przez `serve`.
+
+    Windows: nadzorca siedzi w Job Object z `KILL_ON_JOB_CLOSE`, którego
+    jedyny uchwyt trzyma `serve`. Zabicie `serve` (nawet TerminateProcess)
+    zamyka uchwyt, a system zabija nadzorcę, workera i narzędzia bramek —
+    zagnieżdżone joby tego nie zmieniają. Łagodne zatrzymanie idzie przez
+    plik stopu, bo SIGTERM na Windows to twarde TerminateProcess, po którym
+    nadzorca nie zdążyłby rozliczyć zadania.
+    """
+
+    process: subprocess.Popen[bytes]
+    stop_file: Path | None = None
+    job: Job | None = None
+
+
+def _start_supervisor(settings: Settings) -> SupervisorProcess | None:
     from .jobs.supervisor import supervisor_running
 
     if supervisor_running(settings):
         typer.secho("nadzorca już działa — nie uruchamiam drugiego", fg=typer.colors.YELLOW)
         return None
-    process = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "gatekeeper_web.jobs.supervisor",
-            "--state-dir",
-            str(settings.state_dir),
-        ],
-        start_new_session=True,
-    )
-    typer.echo(f"nadzorca kolejki: proces {process.pid}")
-    return process
+    command = [
+        sys.executable,
+        "-m",
+        "gatekeeper_web.jobs.supervisor",
+        "--state-dir",
+        str(settings.state_dir),
+    ]
+    if not _WINDOWS:
+        process = subprocess.Popen(command, start_new_session=True)
+        typer.echo(f"nadzorca kolejki: proces {process.pid}")
+        return SupervisorProcess(process)
 
-
-def _stop_supervisor(process: subprocess.Popen[bytes]) -> None:
-    """Zatrzymanie panelu zatrzymuje też nadzorcę — bez sierot po analizach."""
-    if process.poll() is not None:
-        return
-    process.terminate()
+    stop_file = settings.state_dir / f"supervisor-{os.getpid()}.stop"
+    stop_file.unlink(missing_ok=True)
+    job = Job()
     try:
-        process.wait(timeout=30)
-    except subprocess.TimeoutExpired:  # pragma: no cover
+        process = subprocess.Popen(
+            [*command, "--stop-file", str(stop_file)],
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # type: ignore[attr-defined,unused-ignore]
+        )
+    except BaseException:
+        job.close()
+        raise
+    try:
+        # Bez uzgodnienia: zanim nadzorca zaimportuje moduły i weźmie zadanie,
+        # już jest w jobie. A nawet gdyby zdążył uruchomić workera wcześniej,
+        # worker siedzi we własnym jobie nadzorcy, który i tak ginie z nim.
+        job.assign(process.pid)
+    except OSError:
+        # Bez joba śmierć `serve` zostawiłaby nadzorcę sierotą: odmawiamy.
         process.kill()
-        process.wait(timeout=5)
+        process.wait()
+        job.close()
+        raise
+    typer.echo(f"nadzorca kolejki: proces {process.pid}")
+    return SupervisorProcess(process, stop_file=stop_file, job=job)
+
+
+def _stop_supervisor(supervisor: SupervisorProcess) -> None:
+    """Zatrzymanie panelu zatrzymuje też nadzorcę — bez sierot po analizach."""
+    process = supervisor.process
+    try:
+        if process.poll() is not None:
+            return
+        if supervisor.stop_file is not None:
+            supervisor.stop_file.touch()
+        else:
+            process.terminate()
+        try:
+            process.wait(timeout=SUPERVISOR_STOP_S)
+        except subprocess.TimeoutExpired:  # pragma: no cover
+            if supervisor.job is not None:
+                supervisor.job.terminate()
+            process.kill()
+            process.wait(timeout=5)
+    finally:
+        if supervisor.job is not None:
+            supervisor.job.close()
+        if supervisor.stop_file is not None:
+            supervisor.stop_file.unlink(missing_ok=True)
 
 
 @app.command()
@@ -323,6 +388,7 @@ def ensure_dotnet_root() -> str | None:
 
 
 def main() -> None:  # pragma: no cover
+    utf8_console()
     ensure_tools_on_path()
     ensure_dotnet_root()
     try:

@@ -43,6 +43,11 @@ from gatekeeper_core.core.finding import Finding, Severity
 from gatekeeper_core.core.plugins import StaticCheckOutcome
 from gatekeeper_core.core.runner import Sandbox, SandboxPolicy
 
+#: Bez trwałych procesów MSBuild i serwera kompilatora: po bramce nic nie
+#: zostaje w tle i nie trzyma plików kopii kodu (na Windows blokuje to
+#: sprzątanie, w kontenerze — zakończenie `docker run`).
+ISOLATED_BUILD_ARGS = ("-nodeReuse:false", "-p:UseSharedCompilation=false")
+
 
 def dotnet_build_scenario(level: str, code: str, message: str) -> str:
     return (
@@ -78,7 +83,7 @@ def run_dotnet_build(
         )
         run_tool(
             [DOTNET, "restore", project, "--configfile", str(config),
-             "-p:NuGetAudit=false", "-v", "quiet"],
+             "-p:NuGetAudit=false", "-v", "quiet", *ISOLATED_BUILD_ARGS],
             repo, sandbox, timeout_s,
         )
     remaining = timeout_s - (time.monotonic() - started)
@@ -92,6 +97,7 @@ def run_dotnet_build(
         "-v",
         "quiet",
         "/clp:NoSummary",
+        *ISOLATED_BUILD_ARGS,
         *(args or []),
     ]
     # dotnet build: 0 = czysto (mogą być ostrzeżenia), 1 = błędy kompilacji

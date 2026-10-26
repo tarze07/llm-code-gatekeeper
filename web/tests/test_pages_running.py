@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from conftest import MINIMALNA_POLITYKA, GitRepo, Panel
+from gatekeeper_core.core.fsutil import remove_tree
+
+from gatekeeper_web.services import environment
+
+#: Istniejący katalog poza `allowed_repo_roots` (tmp_path) — na każdym systemie,
+#: w przeciwieństwie do `/etc`, którego na Windows nie ma.
+POZA_DOZWOLONYMI = str(Path(__file__).resolve().parent)
 
 
 def test_ekran_srodowiska_mowi_o_izolacji(panel: Panel) -> None:
@@ -33,7 +42,7 @@ def test_zla_sciezka_w_formularzu_wraca_z_komunikatem(panel: Panel) -> None:
     project_id = panel.create_project("Zły katalog")
     response = panel.post(
         f"/projekty/{project_id}/ustawienia",
-        data={"name": "Zły katalog", "repo_path": "/etc"},
+        data={"name": "Zły katalog", "repo_path": POZA_DOZWOLONYMI},
         follow_redirects=True,
     )
     assert response.status_code == 200
@@ -41,8 +50,13 @@ def test_zla_sciezka_w_formularzu_wraca_z_komunikatem(panel: Panel) -> None:
 
 
 def test_formularz_nowej_kontroli_pokazuje_zakres_przed_uruchomieniem(
-    panel: Panel, gotowy_projekt: int
+    panel: Panel, gotowy_projekt: int, monkeypatch
 ) -> None:
+    # Przycisk „Uruchom” zależy od izolacji maszyny testowej (na Windows bez
+    # Dockera jej nie ma) — tu sprawdzamy podgląd zakresu, nie maszynę.
+    monkeypatch.setattr(environment, "isolation_available", lambda: True)
+    monkeypatch.setattr(environment, "network_isolation_available", lambda: True)
+    monkeypatch.setattr(environment, "_probe_cache", None)
     response = panel.post(
         "/nowa-kontrola/podglad",
         data={"project_id": gotowy_projekt, "base": "main", "head": "HEAD", "fast_path": "1"},
@@ -179,9 +193,8 @@ def test_repozytorium_znika_po_rejestracji(panel: Panel, git_repo: GitRepo) -> N
         {"repo_path": str(git_repo.path), "policy_profile_id": profile["id"]},
     )
 
-    import shutil
 
-    shutil.rmtree(git_repo.path)
+    remove_tree(git_repo.path)  # pliki .git tylko do odczytu na Windows
 
     response = panel.post_json("/api/v1/jobs", {"project_id": project_id, "base": "main"})
     assert response.status_code == 409

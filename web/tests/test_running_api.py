@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from conftest import Panel
+
+#: Istniejący katalog poza `allowed_repo_roots` (tmp_path) — na każdym systemie,
+#: w przeciwieństwie do `/etc`, którego na Windows nie ma.
+POZA_DOZWOLONYMI = str(Path(__file__).resolve().parent)
 
 
 def test_lista_referencji_pochodzi_z_repozytorium(panel: Panel, gotowy_projekt: int) -> None:
@@ -149,6 +155,9 @@ def test_diagnostyka_srodowiska(panel: Panel) -> None:
     body = panel.get("/api/v1/environment").json()
 
     assert "isolation" in body and "tools" in body
+    assert body["isolation"]["backend"] in ("bwrap", "container")
+    assert {"engine", "image", "image_present", "reason"} <= body["isolation"].keys()
+    assert all("in_image" in tool for tool in body["tools"])
     assert len(body["gates"]) >= 11
     # Lista bramek pochodzi z entry pointów, nie z listy wpisanej w panelu.
     assert any(gate["id"] == "G0.scope" for gate in body["gates"])
@@ -156,6 +165,6 @@ def test_diagnostyka_srodowiska(panel: Panel) -> None:
 
 def test_zla_sciezka_repozytorium_jest_odrzucona(panel: Panel) -> None:
     project_id = panel.create_project("Zły katalog")
-    response = panel.patch_json(f"/api/v1/projects/{project_id}", {"repo_path": "/etc"})
+    response = panel.patch_json(f"/api/v1/projects/{project_id}", {"repo_path": POZA_DOZWOLONYMI})
     assert response.status_code == 422
     assert "poza katalogami dozwolonymi" in response.json()["detail"]

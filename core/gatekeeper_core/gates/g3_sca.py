@@ -117,8 +117,12 @@ class ScaGuard(Gate):
         if unresolved:
             message += f" · nierozwiązane: {', '.join(sorted(unresolved))}"
 
+        # Nierozwiązany pakiet to brak dowodu, nie „czysto": bez tego awaria
+        # sandboxa/narzędzia dawała `pass`. Znaleziska dla reszty pakietów
+        # zostają (`fail`), a bez znalezisk wynik to `error`.
+        status = "fail" if findings else ("error" if unresolved else "pass")
         return self.result(
-            status="fail" if findings else "pass",
+            status=status,
             duration_s=time.monotonic() - started,
             facts=facts,
             findings=findings,

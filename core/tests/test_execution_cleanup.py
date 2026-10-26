@@ -28,6 +28,18 @@ from gatekeeper_core.core.policy import Policy
 from gatekeeper_core.core.runner import Sandbox, filesystem_isolation_available
 from gatekeeper_core.gates import Gate
 
+# Spis procesów z /proc, sygnały i `sleep` — mechanizm linuksowy. Odpowiednik
+# na Windows (Job Object): test_execution_windows.py.
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="mechanizm POSIX (/proc)")
+
+
+@pytest.fixture(autouse=True)
+def _backend_bwrap(monkeypatch):
+    """Te testy sprawdzają Bubblewrap; backend kontenerowy ma własne
+    (`test_container_backend.py`, `test_container_integration.py`)."""
+    monkeypatch.setenv("GATEKEEPER_SANDBOX", "bwrap")
+
+
 CORE_ROOT = Path(__file__).resolve().parents[1]
 
 

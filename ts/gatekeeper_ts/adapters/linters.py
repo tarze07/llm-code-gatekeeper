@@ -37,6 +37,8 @@ def resolve_bin(repo: Path, name: str) -> str:
     """Preferuj binarkę przypiętą w `node_modules/.bin` repozytorium nad
     globalną — projekt ma zwykle zablokowaną konkretną wersję tsc/eslinta
     w `package.json`, a `PATH` może wskazywać coś zupełnie innego."""
+    # UWAGA: na Windows `.bin/<x>` to shim `.cmd` — nie uruchamiać z argumentami
+    # z PR-a (wstrzyknięcie argumentów przez cmd.exe); patrz plan W1.
     local = repo / "node_modules" / ".bin" / name
     return str(local) if local.is_file() else name
 

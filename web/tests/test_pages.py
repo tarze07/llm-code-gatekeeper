@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from conftest import GitRepo, Panel
+
+#: Istniejący katalog poza `allowed_repo_roots` (tmp_path) — na każdym systemie,
+#: w przeciwieństwie do `/etc`, którego na Windows nie ma.
+POZA_DOZWOLONYMI = str(Path(__file__).resolve().parent)
 
 
 def test_pulpit_dziala_bez_zadnych_danych(panel: Panel) -> None:
@@ -247,7 +253,7 @@ def test_odrzucona_sciezka_nie_zostawia_projektu_widma(panel: Panel) -> None:
     """Komunikat zamiast projektu, który trzeba potem sprzątać."""
     response = panel.post(
         "/projekty",
-        data={"name": "Poza zakresem", "repo_path": "/etc"},
+        data={"name": "Poza zakresem", "repo_path": POZA_DOZWOLONYMI},
         follow_redirects=False,
     )
     assert response.status_code == 303

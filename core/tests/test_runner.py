@@ -15,10 +15,18 @@ from gatekeeper_core.core.runner import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _backend_bwrap(monkeypatch):
+    """Te testy sprawdzają Bubblewrap; backend kontenerowy ma własne
+    (`test_container_backend.py`, `test_container_integration.py`)."""
+    monkeypatch.setenv("GATEKEEPER_SANDBOX", "bwrap")
+
+
 def python(code: str) -> list[str]:
     return [sys.executable, "-c", code]
 
 
+@pytest.mark.skipif(not filesystem_isolation_available(), reason="Bubblewrap niedostępny")
 def test_sekrety_nie_trafiaja_do_uruchamianego_procesu(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_tajne")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "tajne")
@@ -33,6 +41,7 @@ def test_sekrety_nie_trafiaja_do_uruchamianego_procesu(tmp_path, monkeypatch):
     assert result.stdout.strip() == "[]"
 
 
+@pytest.mark.skipif(not filesystem_isolation_available(), reason="Bubblewrap niedostępny")
 def test_keep_env_przywraca_wskazana_zmienna(tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_API_TOKEN", "potrzebny")
     sandbox = Sandbox(SandboxPolicy(keep_env=("TEST_API_TOKEN",)))
@@ -73,6 +82,7 @@ def test_pliki_pozostaja_czytelne_mimo_izolacji(tmp_path):
     assert "zawartość" in result.stdout
 
 
+@pytest.mark.skipif(not filesystem_isolation_available(), reason="Bubblewrap niedostępny")
 def test_sieci_da_sie_zazadac_swiadomie(tmp_path):
     """Bramka odpytująca rejestr pakietów musi móc wyjść na zewnątrz."""
     result = Sandbox().run(python("print('ok')"), cwd=tmp_path, network=True)
@@ -81,6 +91,7 @@ def test_sieci_da_sie_zazadac_swiadomie(tmp_path):
     assert result.stdout.strip() == "ok"
 
 
+@pytest.mark.skipif(not filesystem_isolation_available(), reason="Bubblewrap niedostępny")
 def test_przekroczony_limit_czasu_zabija_caly_proces(tmp_path):
     result = Sandbox(SandboxPolicy(timeout_s=1.0)).run(
         python("import time; time.sleep(30)"), cwd=tmp_path
@@ -91,6 +102,7 @@ def test_przekroczony_limit_czasu_zabija_caly_proces(tmp_path):
     assert result.duration_s < 10
 
 
+@pytest.mark.skipif(not filesystem_isolation_available(), reason="Bubblewrap niedostępny")
 def test_limit_pamieci_jest_egzekwowany(tmp_path):
     sandbox = Sandbox(SandboxPolicy(memory_mb=128))
 

@@ -131,6 +131,39 @@ z raportem, również do eksportu.
 Limit dziesięciu znalezisk z komentarza w PR **nie** obowiązuje w panelu:
 widok i eksport zawierają komplet.
 
+## Windows 11
+
+Panel działa natywnie na Windows 11 (bez WSL po stronie panelu); izolację
+narzędzi zapewnia kontener.
+
+**Wymagania:** Python 3.12+, Git for Windows, Docker Desktop z backendem WSL2.
+
+```powershell
+cd web
+python -m venv .venv ; .\.venv\Scripts\Activate.ps1
+pip install -e ..\core ; pip install -e ".[dev]"
+
+# obraz z narzędziami (z korzenia repozytorium)
+docker build -t gatekeeper-tools:latest -f container/Dockerfile .
+$env:GATEKEEPER_SANDBOX = "container"
+gatekeeper container check          # diagnoza: Docker, obraz, montowanie
+gatekeeper container init           # obraz projektu (zależności projektu)
+
+gatekeeper-web serve --repo-root C:\projekty
+```
+
+* **Stan** (baza, logi) domyślnie w `%LOCALAPPDATA%\gatekeeper-web`;
+  `--state-dir` to zmienia.
+* **Anulowanie:** panel ustawia flagę anulowania w bazie, a nadzorca kończy
+  drzewo procesów bramki przez Job Object — razem z procesami potomnymi.
+* **Obraz projektu:** natywne moduły z `node_modules` zbudowane na Windows nie
+  uruchomią się w kontenerze Linuksa; zależności instaluje się w obrazie
+  projektu (`gatekeeper container init`), nie kopiuje z hosta.
+* **Docker na Linuksie:** członkostwo w grupie `docker` jest równoważne
+  uprawnieniom roota — dotyczy to hostów Linux z tym backendem.
+* **Testy:** te używające dowiązań symbolicznych są pomijane bez Developer Mode
+  (Ustawienia → Dla deweloperów); bity uprawnień POSIX nie są sprawdzane.
+
 ## Bezpieczeństwo
 
 Panel czyta raporty z cudzych repozytoriów, więc granice dostępu są częścią
@@ -147,8 +180,9 @@ funkcji, a nie dodatkiem (plan §8):
   po `--end-of-options` — pole tekstowe nie staje się opcją ani komendą;
 * API nie przyjmuje ścieżek do wykonania, interpretera, pluginów ani treści
   polityki: operator wybiera zarejestrowany projekt i zatwierdzony profil;
-* bez działającego Bubblewrapa panel **nie oferuje** trybu bez izolacji —
-  mówi, czego brakuje;
+* bez działającej izolacji (Bubblewrap na Linuksie, backend kontenerowy
+  `GATEKEEPER_SANDBOX=container` na Windows i gdzie indziej) panel **nie
+  oferuje** trybu bez izolacji — mówi, czego brakuje;
 * CSP bez CDN-a i bez `unsafe-inline`, `nosniff`, `DENY` dla ramek;
 * `Referrer-Policy: same-origin` — ścieżka raportu nie wycieka do obcej
   strony. Świadomie **nie** `no-referrer`: przy tamtej wartości przeglądarka

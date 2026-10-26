@@ -8,15 +8,27 @@ semgrepa i bez sieci.
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
 import time
 from pathlib import Path
 
 import pytest
 from conftest import GitRepo
+from gatekeeper_core.core import container
 
 from gatekeeper_web.config import Settings
 from gatekeeper_web.jobs.spec import build_job_input
-from gatekeeper_web.jobs.supervisor import Supervisor, SupervisorBusy
+from gatekeeper_web.jobs.supervisor import (
+    HANDSHAKE_START,
+    HANDSHAKE_STOP,
+    Supervisor,
+    SupervisorBusy,
+    remove_worker_containers,
+    supervisor_running,
+)
 from gatekeeper_web.services.repos import preview_scope, resolve_repo_path
 from gatekeeper_web.storage import (
     Database,
@@ -230,3 +242,218 @@ def test_zle_wejscie_zadania_konczy_sie_awaria_a_nie_zawieszeniem(
     assert panelownia.pracuj(job.id, limit_s=60.0) == "failed"
     failed = panelownia.queue.get(job.id)
     assert failed is not None and "nowszego panelu" in (failed.error or "")
+
+
+# ------------------------------------------------- procesy: POSIX i Windows
+
+
+def test_zatrzymanie_nadzorcy_zatrzymuje_proces_przebiegu(panelownia: Panelownia) -> None:
+    """`shutdown()` nie zostawia workera: łagodnie (SIGTERM / „stop"), potem siłą."""
+    job_id = panelownia.zlec()
+    panelownia.supervisor.acquire_lock()
+    panelownia.supervisor.tick()
+    active = panelownia.supervisor.active
+    assert active is not None
+
+    panelownia.supervisor.shutdown()
+
+    assert active.process.poll() is not None, "proces przebiegu przeżył nadzorcę"
+    assert active.job is None, "uchwyt joba workera nie został zamknięty"
+    assert panelownia.supervisor.active is None
+    job = panelownia.queue.get(job_id)
+    assert job is not None and job.is_terminal
+    assert not supervisor_running(panelownia.settings)
+
+
+def test_eskalacja_zabija_proces_przebiegu(panelownia: Panelownia) -> None:
+    """Druga faza anulowania: SIGKILL grupy (POSIX) albo TerminateJobObject (Windows)."""
+    job_id = panelownia.zlec()
+    panelownia.supervisor.tick()
+    active = panelownia.supervisor.active
+    assert active is not None
+    panelownia.queue.request_cancel(job_id)
+
+    panelownia.supervisor._terminate(active, escalate=True)
+    state = panelownia.pracuj(job_id, limit_s=60.0)
+
+    assert active.process.poll() is not None
+    assert active.killed
+    # Zabity przebieg nie ma decyzji — chyba że raport zdążył się zapisać.
+    assert state in ("cancelled", "completed")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Job Object to mechanizm Windows")
+def test_smierc_nadzorcy_zabija_proces_przebiegu_windows(panelownia: Panelownia) -> None:
+    """Jedyny uchwyt joba workera trzyma nadzorca. Jego śmierć (tu: zamknięcie
+    uchwytu, jak przy TerminateProcess nadzorcy) zabija całe drzewo przebiegu."""
+    from gatekeeper_core.core.winjob import process_alive
+
+    panelownia.zlec()
+    panelownia.supervisor.tick()
+    active = panelownia.supervisor.active
+    assert active is not None and active.job is not None
+    pid = active.process.pid
+
+    active.job.close()
+
+    active.process.wait(timeout=10)
+    assert not process_alive(pid)
+
+
+def test_worker_bez_potwierdzenia_joba_niczego_nie_uruchamia(
+    panelownia: Panelownia,
+) -> None:
+    """`--job-handshake`: bez `start` na stdin worker kończy się, zanim cokolwiek
+    uruchomi — proces spoza joba nadzorcy przeżyłby anulowanie."""
+    job_id = panelownia.zlec()
+    claimed = panelownia.queue.claim("test:1", 30.0)
+    assert claimed is not None and claimed.id == job_id
+
+    for wejscie in (b"", b"cokolwiek\n"):
+        wynik = subprocess.run(
+            [sys.executable, "-m", "gatekeeper_web.jobs.worker",
+             "--state-dir", str(panelownia.settings.state_dir),
+             "--job-id", str(job_id), "--job-handshake"],
+            input=wejscie, capture_output=True, timeout=60, check=False,
+        )
+        assert wynik.returncode == 2, wynik.stderr.decode("utf-8", errors="replace")
+
+    job = panelownia.queue.get(job_id)
+    assert job is not None and job.state == "preparing"
+    assert "prepared" not in [e.kind for e in panelownia.queue.events(job_id)]
+
+
+def _czekaj_na_stop(worker: object) -> bool:
+    deadline = time.monotonic() + 5
+    while not worker._stop_requested and time.monotonic() < deadline:  # type: ignore[attr-defined]
+        time.sleep(0.02)
+    return bool(worker._stop_requested)  # type: ignore[attr-defined]
+
+
+def test_stop_od_nadzorcy_dziala_jak_sigterm(monkeypatch: pytest.MonkeyPatch) -> None:
+    import gatekeeper_web.jobs.worker as worker
+
+    monkeypatch.setattr(worker, "_stop_requested", False)
+    czytaj, pisz = os.pipe()
+    try:
+        os.write(pisz, HANDSHAKE_START)
+        assert worker.wait_for_job_handshake(czytaj)
+        time.sleep(0.2)
+        assert not worker._stop_requested, "samo `start` nie może zatrzymać przebiegu"
+
+        os.write(pisz, b"cos innego\n")
+        time.sleep(0.2)
+        assert not worker._stop_requested, "nieznany komunikat nie zatrzymuje przebiegu"
+
+        os.write(pisz, HANDSHAKE_STOP)
+        assert _czekaj_na_stop(worker)
+    finally:
+        os.close(pisz)
+    os.close(czytaj)  # wątek skończył czytać po `stop`
+
+
+def test_koniec_kanalu_zatrzymuje_przebieg(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nadzorca zniknął (koniec strumienia) = prośba o zatrzymanie."""
+    import gatekeeper_web.jobs.worker as worker
+
+    monkeypatch.setattr(worker, "_stop_requested", False)
+    czytaj, pisz = os.pipe()
+    os.write(pisz, HANDSHAKE_START)
+    assert worker.wait_for_job_handshake(czytaj)
+    os.close(pisz)
+
+    assert _czekaj_na_stop(worker)
+    os.close(czytaj)
+
+
+def test_blokada_nadzorcy_widac_z_innego_procesu(panelownia: Panelownia) -> None:
+    """Pulpit pyta o nadzorcę z procesu serwera — blokada musi być widoczna
+    między procesami na każdym systemie, a plik czytelny mimo blokady."""
+    sprawdz = [
+        sys.executable, "-c",
+        "import sys; from pathlib import Path;"
+        "from gatekeeper_web.config import Settings;"
+        "from gatekeeper_web.jobs.supervisor import supervisor_running;"
+        "print(supervisor_running(Settings(state_dir=Path(sys.argv[1]))))",
+        str(panelownia.settings.state_dir),
+    ]
+
+    def z_zewnatrz() -> str:
+        return subprocess.run(
+            sprawdz, capture_output=True, text=True, timeout=60, check=True
+        ).stdout.strip()
+
+    assert z_zewnatrz() == "False"
+    panelownia.supervisor.acquire_lock()
+    try:
+        assert z_zewnatrz() == "True"
+        tresc = panelownia.settings.supervisor_lock_path.read_text(encoding="utf-8")
+        assert tresc.strip() == panelownia.supervisor.owner
+    finally:
+        panelownia.supervisor.release_lock()
+    assert z_zewnatrz() == "False"
+    # Zwolnioną blokadę może wziąć następca.
+    nastepca = Supervisor(panelownia.settings)
+    nastepca.acquire_lock()
+    nastepca.release_lock()
+
+
+FAKE_ENGINE = '''
+import json, sys
+from pathlib import Path
+
+LOG = Path(__file__).with_name("wywolania.jsonl")
+WLASCICIELE = {"c1": "4242-aaa", "c2": "42424-bbb", "c3": "4242-ccc", "c4": "1-4242-x"}
+args = sys.argv[1:]
+with LOG.open("a", encoding="utf-8") as log:
+    log.write(json.dumps(args) + "\\n")
+if args[0] == "ps":
+    filtry = [args[i + 1] for i, a in enumerate(args) if a == "--filter"]
+    wybrane = list(WLASCICIELE)
+    for f in filtry:
+        if f.startswith("label=gatekeeper.owner="):
+            owner = f.split("=", 2)[2]
+            wybrane = [c for c in wybrane if WLASCICIELE[c] == owner]
+    print("\\n".join(wybrane))
+elif args[0] == "inspect":
+    print("\\n".join(WLASCICIELE[c] for c in args if c in WLASCICIELE))
+'''
+
+
+def test_kontenery_zabitego_workera_sa_usuwane(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Zabity worker nie usunie kontenerów swoich bramek. Nadzorca usuwa te,
+    których właściciel zaczyna się od `<pid workera>-` — i tylko te."""
+    skrypt = tmp_path / "silnik.py"
+    skrypt.write_text(FAKE_ENGINE, encoding="utf-8")
+    if sys.platform == "win32":
+        silnik = tmp_path / "docker.cmd"
+        silnik.write_text(f'@"{sys.executable}" "{skrypt}" %*\r\n', encoding="utf-8")
+    else:
+        silnik = tmp_path / "docker"
+        silnik.write_text(f"#!{sys.executable}\n" + FAKE_ENGINE, encoding="utf-8")
+        silnik.chmod(0o755)
+    monkeypatch.setenv("GATEKEEPER_CONTAINER_ENGINE", str(silnik))
+    monkeypatch.setenv("GATEKEEPER_SANDBOX", "container")
+    # `engine()` pamięta pierwszy wynik — wcześniejszy test mógł już zapytać.
+    container.engine.cache_clear()
+    request.addfinalizer(container.engine.cache_clear)
+
+    remove_worker_containers(4242)
+
+    wywolania = [
+        json.loads(line)
+        for line in (tmp_path / "wywolania.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    usuniete = [c for args in wywolania if args[0] == "rm" for c in args[2:]]
+    assert sorted(usuniete) == ["c1", "c3"]
+
+
+def test_bez_backendu_kontenerow_nie_wola_silnika(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GATEKEEPER_CONTAINER_ENGINE", str(tmp_path / "nie-istnieje"))
+    monkeypatch.setenv("GATEKEEPER_SANDBOX", "bwrap")
+
+    remove_worker_containers(4242)  # nie rzuca, nie szuka silnika

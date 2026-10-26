@@ -17,9 +17,18 @@ llm-code-gatekeeper/
 
 Pełny opis architektury (dwa poziomy grup entry points, kontrakty pluginów) jest w [`core/README.md`](core/README.md) — to on jest właściwym punktem wejścia do zrozumienia systemu; ten plik to ściągawka „jak z tym pracować".
 
-Uruchamianie narzędzi wymaga **Linuksa i Bubblewrap** (`sudo apt-get install
-bubblewrap` na Ubuntu/Debian). Każda bramka analizuje osobną kopię wskazanego
-commita i ma egzekwowany limit czasu. Wymagania dotyczące zależności oraz
+Uruchamianie narzędzi wymaga izolacji: na Linuksie **Bubblewrap**
+(`sudo apt-get install bubblewrap`), na Windows 11 (i opcjonalnie na Linuksie)
+**kontenera** — Docker albo Podman z obrazem `gatekeeper-tools`:
+
+```bash
+docker build -t gatekeeper-tools:latest -f container/Dockerfile .
+GATEKEEPER_SANDBOX=container gatekeeper container check   # na Windows to domyślny backend
+gatekeeper container init --repo /ścieżka/do/repo          # obraz projektu z zależnościami
+```
+
+Każda bramka analizuje osobną kopię wskazanego commita i ma egzekwowany limit
+czasu. Wymagania dotyczące zależności oraz
 zakres izolacji opisuje [core/SECURITY.md](core/SECURITY.md).
 
 ### Czym bramki się posługują
@@ -30,11 +39,15 @@ cichego `pass`. Zakładka **Środowisko** w panelu pokazuje, czego brakuje.
 
 | narzędzie | skąd | czego dotyczy |
 |---|---|---|
-| `git`, `bwrap` | dystrybucja | zakres zmiany i izolacja — wymagane zawsze |
-| `semgrep`, `gitleaks`, `diff-cover` | zależności `core` i packów (`pip`) | `G3.sast`, `G3.secrets`, `G2.diff_coverage` |
+| `git` + `bwrap` albo Docker/Podman | dystrybucja / Docker Desktop | zakres zmiany i izolacja — wymagane zawsze |
+| `semgrep`, `diff-cover` | zależności `core` i packów (`pip`) | `G3.sast`, `G2.diff_coverage` |
+| `gitleaks` | binarka z [wydań gitleaks](https://github.com/gitleaks/gitleaks/releases) — `pip` jej nie instaluje | `G3.secrets` |
 | `node`, `npm` | dystrybucja albo menedżer wersji | pack TS/JS |
 | `dotnet` (SDK 8+) | instalator Microsoftu | pack C# |
 | `gatekeeper-cs-helper` | **osobno**, patrz niżej | `G1.complexity` i `G2.*` w packu C# |
+
+Z backendem `container` wszystkie narzędzia z tabeli poza `git` są w obrazie
+`gatekeeper-tools` — na hoście potrzebny jest tylko git i Docker/Podman.
 
 `gatekeeper-cs-helper` (Roslyn) jest jedynym, którego nie dociągnie żaden
 `pip install` — to program .NET z [`csharp/tools/`](csharp/tools/):

@@ -46,6 +46,7 @@ gatekeeper_ts = ["rules/semgrep/*.yaml", "tools/*.cjs"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q"
 
 [tool.ruff]

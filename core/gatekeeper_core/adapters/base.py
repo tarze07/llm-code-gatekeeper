@@ -16,10 +16,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
 
 from ..core.change import ChangeContext
 from ..core.finding import Finding, Severity
+from ..core.paths import to_repo_relative
 from ..core.runner import ExecResult, ExecutableUnavailable, Sandbox, SandboxUnavailable
 
 
@@ -74,17 +74,7 @@ def relative_to_repo(path: str, repo: Path) -> str:
     ich do jednej porównanie ze zmienionymi plikami zawsze zwraca „brak
     trafienia", a wtedy filtrowanie do diffa po cichu wycina wszystko.
     """
-    if not path:
-        return ""
-    if path.startswith("file://"):
-        path = unquote(urlparse(path).path)
-    candidate = Path(path)
-    if candidate.is_absolute():
-        try:
-            return candidate.resolve().relative_to(repo.resolve()).as_posix()
-        except ValueError:
-            return candidate.as_posix()
-    return candidate.as_posix().removeprefix("./")
+    return to_repo_relative(path, repo)
 
 
 def only_changed_lines(
