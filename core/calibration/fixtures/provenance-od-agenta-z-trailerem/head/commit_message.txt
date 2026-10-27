@@ -1,0 +1,4 @@
+feat: add worker return
+
+Generated-By: test-agent/1.0
+Session-Id: ses-abc-123
