@@ -208,3 +208,65 @@ jobs:
           npm install --silent --no-audit --no-fund
           npm run build
           git diff --exit-code ../gatekeeper_web/static/app.js
+
+  # Backend container (Docker) — weryfikacja izolacji kontenerowej na Ubuntu.
+  container:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Zaleznosci
+        run: |
+          pip install --quiet -e ".[dev,gates]"
+
+      - name: Budowanie obrazu gatekeeper-tools
+        run: |
+          docker build -t gatekeeper-tools:latest -f ../container/Dockerfile ..
+
+      - name: Sprawdzenie kontenera
+        run: |
+          GATEKEEPER_SANDBOX=container gatekeeper container check
+
+      - name: Testy backendu kontenerowego
+        run: |
+          GATEKEEPER_SANDBOX=container pytest -q tests/test_container_backend.py tests/test_container_integration.py
+
+      - name: Kalibracja w kontenerze
+        run: |
+          GATEKEEPER_SANDBOX=container gatekeeper calibrate
+
+  # Windows — testy jednostkowe mechanizmów Windows (Job Object, msvcrt, ścieżki).
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Zaleznosci core
+        run: |
+          cd core
+          pip install --quiet -e ".[dev]"
+
+      - name: Testy jednostkowe core (Windows)
+        run: |
+          cd core
+          pytest -q
+
+      - name: Zaleznosci web
+        run: |
+          cd web
+          pip install --quiet -e ../core
+          pip install --quiet -e ".[dev]"
+
+      - name: Testy jednostkowe web (Windows)
+        run: |
+          cd web
+          pytest -q

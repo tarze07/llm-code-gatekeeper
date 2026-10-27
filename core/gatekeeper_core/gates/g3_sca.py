@@ -30,6 +30,7 @@ from ..adapters.base import ToolMissing
 from ..core.change import ChangeContext
 from ..core.finding import Finding, GateResult
 from ..core.plugins import EcosystemProvider
+from ..core.runner import sanitize_keep_env
 from ..deps import manifests
 from . import Gate, register
 
@@ -81,7 +82,7 @@ class ScaGuard(Gate):
         facts["sca.checked_ecosystems"] = sorted(by_ecosystem)
 
         require_tool = bool(self.config.get("require_tool", True))
-        keep_env = tuple(self.config.get("keep_env", ()))
+        keep_env = sanitize_keep_env(self.config.get("keep_env", ()))
         findings: list[Finding] = []
         unresolved: list[str] = []
 

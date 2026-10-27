@@ -192,3 +192,43 @@ def test_zepsuty_manifest_jest_bledem_a_nie_brakiem_zaleznosci(repo, monkeypatch
     assert result.status == "error"
     assert "package.json" in result.message
     assert called == []
+
+
+def test_keep_env_z_polityki_repo_nie_przekazuje_zmiennej_z_tokenem_do_sandboxa(
+    repo, monkeypatch
+):
+    captured_keep_env: tuple[str, ...] | None = None
+
+    def fake_run_pip_audit(*args, **kwargs):
+        return []
+
+    # Zastępujemy PyPIEcosystem.scan_sca, aby podejrzeć przekazywany keep_env
+    from gatekeeper_core.deps.ecosystems import PyPIEcosystem
+
+    orig_scan = PyPIEcosystem.scan_sca
+
+    def spy_scan(self, repo_path, gate, deps, timeout_s, keep_env):
+        nonlocal captured_keep_env
+        captured_keep_env = keep_env
+        return orig_scan(self, repo_path, gate, deps, timeout_s, keep_env)
+
+    monkeypatch.setattr(PyPIEcosystem, "scan_sca", spy_scan)
+    monkeypatch.setattr(sca, "run_pip_audit", fake_run_pip_audit)
+    monkeypatch.setenv("GATEKEEPER_KEEP_ENV", "OPERATOR_SAFE_VAR")
+
+    repo.write("pyproject.toml", manifest("requests"))
+    repo.commit("baza")
+    repo.checkout("feature", create=True)
+    repo.write("pyproject.toml", manifest("requests", "six"))
+    repo.commit("feat: six")
+    change = ChangeContext.from_git(repo.path, "main", "HEAD")
+
+    # Polityka repozytorium próbuje przekazać GITHUB_TOKEN oraz bezpieczną zmienną
+    guard = ScaGuard({"keep_env": ["GITHUB_TOKEN", "REPO_SAFE_VAR"]})
+    result = guard.run(change)
+
+    assert result.status == "pass"
+    assert captured_keep_env is not None
+    assert "GITHUB_TOKEN" not in captured_keep_env
+    assert "REPO_SAFE_VAR" in captured_keep_env
+    assert "OPERATOR_SAFE_VAR" in captured_keep_env

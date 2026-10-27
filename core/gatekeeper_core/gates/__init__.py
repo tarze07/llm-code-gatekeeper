@@ -17,6 +17,7 @@ from typing import Any
 
 from ..core.change import ChangeContext
 from ..core.finding import GateResult
+from ..core.runner import is_forbidden_env_var
 
 GATE_GROUP = "gatekeeper.gates"
 
@@ -52,6 +53,11 @@ class Gate:
         `policy lint` woła to dla każdej skonfigurowanej bramki, żeby literówka
         w konfiguracji wyszła przy walidacji, a nie dopiero przy starcie
         przebiegu. Domyślnie bramka niczego nie sprawdza."""
+        return []
+
+    @classmethod
+    def config_warnings(cls, config: dict[str, Any]) -> list[str]:
+        """Ostrzeżenia w sekcji `gates.<id>` polityki, np. niezalecany `keep_env`."""
         return []
 
     # pomocnicze
@@ -112,10 +118,45 @@ def gate_config_errors(policy: Any) -> list[str]:
         cls = by_id.get(gate_id)
         if cls is None:
             continue
+        config = policy.gate_config(gate_id)
+        keep_env = config.get("keep_env")
+        if keep_env:
+            if isinstance(keep_env, (list, tuple)):
+                forbidden = [str(var) for var in keep_env if is_forbidden_env_var(str(var))]
+                if forbidden:
+                    msg = (
+                        f"`gates.{gate_id}`: `keep_env` zawiera zakazane nazwy poświadczeń: "
+                        f"{', '.join(forbidden)} — polityka ocenianego repozytorium nie może "
+                        "przekazywać tokenów ani haseł"
+                    )
+                    errors.append(msg)
+            else:
+                errors.append(f"`gates.{gate_id}`: `keep_env` musi być listą nazw zmiennych")
         errors.extend(
-            f"`gates.{gate_id}`: {e}" for e in cls.config_errors(policy.gate_config(gate_id))
+            f"`gates.{gate_id}`: {e}" for e in cls.config_errors(config)
         )
     return errors
+
+
+def gate_config_warnings(policy: Any) -> list[str]:
+    """`Gate.config_warnings()` dla każdej bramki skonfigurowanej w `policy.gates`."""
+    by_id = {cls.id: cls for cls in all_gates()}
+    warnings: list[str] = []
+    for gate_id in sorted(policy.gates):
+        cls = by_id.get(gate_id)
+        if cls is None:
+            continue
+        config = policy.gate_config(gate_id)
+        if "keep_env" in config:
+            warnings.append(
+                f"`gates.{gate_id}`: `keep_env` w polityce ocenianego repozytorium "
+                "jest niezalecane — konfiguracja zmiennych środowiskowych przysługuje "
+                "operatorowi poprzez zmienną GATEKEEPER_KEEP_ENV"
+            )
+        warnings.extend(
+            f"`gates.{gate_id}`: {w}" for w in cls.config_warnings(config)
+        )
+    return warnings
 
 
 def build_gates(policy: Any, only: Iterable[str] | None = None) -> list[Gate]:

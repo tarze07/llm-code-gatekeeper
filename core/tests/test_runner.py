@@ -11,6 +11,7 @@ from gatekeeper_core.core.runner import (
     SandboxUnavailable,
     filesystem_isolation_available,
     network_isolation_available,
+    sanitize_keep_env,
     scrub_environment,
 )
 
@@ -52,9 +53,21 @@ def test_keep_env_przywraca_wskazana_zmienna(tmp_path, monkeypatch):
 
 
 def test_scrub_environment_jest_czysta_funkcja():
-    env = {"PATH": "/bin", "NPM_TOKEN": "x", "DB_PASSWORD": "y", "HOME": "/h"}
+    env = {"PATH": "/bin", "NPM_TOKEN": "x", "DB_PASSWORD": "y", "HOME": "/h", "GITHUB_TOKEN": "z"}
     assert set(scrub_environment(env)) == {"PATH", "HOME"}
     assert set(scrub_environment(env, keep=("NPM_TOKEN",))) == {"PATH", "HOME", "NPM_TOKEN"}
+    # Tokeny CI są bezwzględnie usuwane, nawet jeśli wywołujący przekaże je w keep
+    assert "GITHUB_TOKEN" not in scrub_environment(env, keep=("GITHUB_TOKEN",))
+
+
+def test_sanitize_keep_env_odrzuca_poswiadczenia_i_laczy_z_operatorem():
+    # Poświadczenia w repozytorium są usuwane
+    repo_vars = ["GITHUB_TOKEN", "MY_SECRET_KEY", "DB_PASSWORD", "CUSTOM_FLAG"]
+    assert sanitize_keep_env(repo_vars, operator_env="") == ("CUSTOM_FLAG",)
+
+    # Zmienne operatora są dołączane
+    sanitized = sanitize_keep_env(repo_vars, operator_env="HTTP_PROXY,HTTPS_PROXY")
+    assert sanitized == ("HTTP_PROXY", "HTTPS_PROXY", "CUSTOM_FLAG")
 
 
 @pytest.mark.skipif(not network_isolation_available(), reason="brak przestrzeni nazw użytkownika")

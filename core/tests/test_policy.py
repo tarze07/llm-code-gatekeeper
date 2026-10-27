@@ -6,6 +6,7 @@ import pytest
 
 from gatekeeper_core.core.finding import Finding, GateResult, Severity, Verdict
 from gatekeeper_core.core.policy import Exemption, Expression, Policy, PolicyError
+from gatekeeper_core.gates import gate_config_errors, gate_config_warnings
 
 POLICY = {
     "version": 1,
@@ -195,3 +196,29 @@ def test_powod_decyzji_wskazuje_znaleziska():
     decision = policy().decide({"secrets.found_in_diff": True}, results)
     assert decision.reasons[0].fingerprints == (finding.fingerprint,)
     assert decision.reasons[0].gate == "G3.secrets"
+
+
+def test_gate_config_errors_odrzuca_keep_env_z_poswiadczeniami():
+    p = Policy.from_dict({
+        "version": 1,
+        "gates": {
+            "G3.sca": {
+                "keep_env": ["GITHUB_TOKEN", "SAFE_VAR"]
+            }
+        }
+    })
+    errors = gate_config_errors(p)
+    assert any("GITHUB_TOKEN" in e and "zakazane" in e for e in errors)
+
+
+def test_gate_config_warnings_ostrzega_o_keep_env_w_polityce():
+    p = Policy.from_dict({
+        "version": 1,
+        "gates": {
+            "G3.sca": {
+                "keep_env": ["SAFE_VAR"]
+            }
+        }
+    })
+    warnings = gate_config_warnings(p)
+    assert any("keep_env" in w and "niezalecane" in w for w in warnings)

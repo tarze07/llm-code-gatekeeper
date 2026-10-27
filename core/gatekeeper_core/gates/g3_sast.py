@@ -25,7 +25,7 @@ from ..adapters.semgrep import run_semgrep
 from ..core.change import ChangeContext
 from ..core.finding import GateResult, Severity
 from ..core.plugins import SemgrepRulePackProvider
-from ..core.runner import Sandbox, SandboxPolicy
+from ..core.runner import Sandbox, SandboxPolicy, sanitize_keep_env
 from . import Gate, register
 
 RULE_PACK_GROUP = "gatekeeper.semgrep_rule_packs"
@@ -79,7 +79,7 @@ class SastGuard(Gate):
                 # zamiast czytelnym błędem — limit narzędzie egzekwuje samo
                 # przez `--max-memory` (patrz `adapters/semgrep.py`).
                 memory_mb=None,
-                keep_env=tuple(self.config.get("keep_env", ())),
+                keep_env=sanitize_keep_env(self.config.get("keep_env", ())),
             )
         )
         try:
