@@ -44,8 +44,14 @@ Mogą zapisywać w kopii repo oraz prywatnym `/tmp` i `HOME`. Baza Git,
 runtime Pythona/Node/.NET i współdzielone pakiety są dostępne tylko do
 odczytu. Pozostałe pliki hosta, jego procesy i gniazdo agenta SSH nie są
 udostępniane. Sieć testów jest odcięta; adaptery rejestrów/SCA mogą żądać jej
-jawnie. Zmienne wyglądające na poświadczenia są usuwane, z wyjątkiem
-świadomie skonfigurowanego `keep_env`.
+jawnie. Zmienne wyglądające na poświadczenia (w tym `*TOKEN*`, `*SECRET*`, `*PASSWORD*`,
+`*CREDENTIAL*`, `*API_KEY*`, `*AUTH*`, `*BEARER*`) są bezwzględnie usuwane.
+Polityka ocenianego repozytorium (`gates.yaml`) nie ma prawa przekazać poświadczeń do
+żadnego procesu — próby konfiguracji takich zmiennych w `keep_env` są wykrywane jako błąd
+przez `gatekeeper policy lint` i odrzucane w runtime (`sanitize_keep_env`).
+Zaufaną listę zmiennych operator może skonfigurować niezależnie od repozytorium
+przez zmienną środowiskową `GATEKEEPER_KEEP_ENV`. Tokeny CI (`GITHUB_TOKEN`, `GH_TOKEN` itp.)
+są trwale zablokowane i nigdy nie trafiają do procesów bramek.
 
 Zainstaluj zależności przed uruchomieniem bramy. Zwykły katalog
 `node_modules` jest udostępniany kopiom tylko do odczytu; brama nie akceptuje
@@ -78,7 +84,7 @@ Każde wywołanie narzędzia to jeden `docker run --rm` (`core/container.py`):
 * `--cap-drop ALL`, `no-new-privileges`, uid operatora (Linux) albo 1000
   (Windows), nigdy root; `--memory` i `--pids-limit`;
 * do kontenera trafiają tylko zmienne wniesione przez wywołującego
-  (np. `PYTHONPATH`) i `keep_env` — środowisko hosta jako całość nie;
+  (np. `PYTHONPATH`) i bezpieczne zmienne z `keep_env` / `GATEKEEPER_KEEP_ENV` — środowisko hosta jako całość nie;
 * narzędzia pochodzą z obrazu, nie z hosta. Zależności ocenianego repo
   instaluje operator w obrazie projektu (`gatekeeper container init`),
   jak dziś przygotowuje venv dla Bubblewrap.

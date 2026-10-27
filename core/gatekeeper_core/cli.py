@@ -17,7 +17,7 @@ from .core.report import render_check_runs, render_json, render_markdown
 from .core.service import PreparationError, RunRequest, execute, prepare
 from .core.store import DEFAULT_PATH as DEFAULT_STORE
 from .core.store import Store
-from .gates import gate_config_errors, known_facts, known_gate_ids
+from .gates import gate_config_errors, gate_config_warnings, known_facts, known_gate_ids
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="Brama jakości dla kodu z LLM")
 policy_app = typer.Typer(no_args_is_help=True, help="Operacje na polityce")
@@ -131,8 +131,11 @@ def policy_lint(
         raise typer.Exit(EXIT_BLOCK) from exc
 
     errors = policy.lint(known_facts(), known_gate_ids()) + gate_config_errors(policy)
+    warnings = gate_config_warnings(policy)
     for err in errors:
         typer.secho(f"BŁĄD: {err}", fg=typer.colors.RED, err=True)
+    for warn in warnings:
+        typer.secho(f"UWAGA: {warn}", fg=typer.colors.YELLOW)
     for ex in policy.expiring_exemptions(expiring_days):
         typer.secho(
             f"UWAGA: wyjątek {ex.rule!r} ({ex.owner}) wygasa {ex.expires}",

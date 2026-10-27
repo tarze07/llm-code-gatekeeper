@@ -44,7 +44,54 @@ SECRET_ENV_MARKERS = (
     "APIKEY",
     "ACCESS_KEY",
     "PRIVATE_KEY",
+    "AUTH",
+    "BEARER",
 )
+
+#: Zmienne krytyczne CI, które NIGDY nie mogą trafić do żadnego sandboxa.
+CRITICAL_CI_VARS = (
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "GITLAB_TOKEN",
+    "CI_JOB_TOKEN",
+)
+
+OPERATOR_KEEP_ENV_VAR = "GATEKEEPER_KEEP_ENV"
+
+
+def is_forbidden_env_var(name: str) -> bool:
+    """Sprawdza, czy nazwa zmiennej pasuje do wzorców poświadczeń i sekretów."""
+    upper = name.upper()
+    return any(marker in upper for marker in SECRET_ENV_MARKERS)
+
+
+def sanitize_keep_env(
+    repo_keep_env: Sequence[str] = (),
+    operator_env: str | None = None,
+) -> tuple[str, ...]:
+    """Łączy zmienne operatora z bezpiecznymi zmiennymi repo, odrzucając poświadczenia.
+
+    Polityka ocenianego repozytorium (gates.yaml) NIGDY nie może przekazać zmiennych
+    zawierających poświadczenia (np. GITHUB_TOKEN, NPM_TOKEN). Takie zmienne
+    zostają bezwzględnie odrzucone. Dozwolone zmienne środowiskowe operator może
+    wskazać w zmiennej środowiskowej GATEKEEPER_KEEP_ENV.
+    """
+    raw_operator = (
+        operator_env
+        if operator_env is not None
+        else os.environ.get(OPERATOR_KEEP_ENV_VAR, "")
+    )
+    operator_vars = [
+        v.strip() for v in raw_operator.replace(";", ",").split(",") if v.strip()
+    ]
+
+    safe_repo_vars = [v for v in repo_keep_env if not is_forbidden_env_var(v)]
+
+    result: list[str] = []
+    for var in (*operator_vars, *safe_repo_vars):
+        if var not in result:
+            result.append(var)
+    return tuple(result)
 
 Isolation = Literal["container", "network-namespace", "none", "filesystem", "filesystem-network"]
 
@@ -382,8 +429,11 @@ def network_isolation_available() -> bool:
 
 
 def scrub_environment(env: dict[str, str], keep: Sequence[str] = ()) -> dict[str, str]:
-    """Usuwa zmienne wyglądające na poświadczenia; `keep` przywraca wskazane."""
-    keep_set = set(keep)
+    """Usuwa zmienne wyglądające na poświadczenia.
+
+    `keep` przywraca wskazane (z wyłączeniem poświadczeń CI).
+    """
+    keep_set = {name for name in keep if name not in CRITICAL_CI_VARS}
     return {
         name: value
         for name, value in env.items()
