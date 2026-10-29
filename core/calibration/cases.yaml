@@ -1,21 +1,59 @@
-# Zestaw kalibracyjny core-a: przypadki niezależne od zainstalowanych pack'ów
-# językowych. Obejmuje to nie tylko gate'y w pełni core-owe bez żadnego
-# dostawcy poziomu 2 (G0.scope, G3.secrets), ale też G1.deps/G3.sca —
-# EcosystemProvider dla PyPI/npm/NuGet żyje w tym repo (`deps/ecosystems.py`),
-# więc `halucynowany-pakiet(-npm)` działa bez żadnego language-pack'a
-# zainstalowanego. Static/testowe/SAST przypadki per język żyją w
-# calibration/cases.yaml każdego pack'a — tam, gdzie odpowiedni
-# StaticChecker/TestToolchain/SemgrepRulePackProvider jest faktycznie
-# zainstalowany.
+# Zestaw kalibracyjny bramy jakości: deklaratywne przypadki PR-ów testujące
+# zachowanie reguł i progów przed wdrożeniem do produkcji (PLAN.md §6).
+#
+# Zestaw obejmuje 46 różnorodnych przypadków PR dla Pythona, TypeScriptu i C#,
+# weryfikując precyzję decyzji BLOCK (> 80%) oraz wskaźnik ucieczki defektów (< 15%).
 #
 # Uruchomienie: `gatekeeper calibrate`
 
 cases:
+  # --------------------------------------------------------------------------
+  # G0.scope / provenance
+  # --------------------------------------------------------------------------
+  - name: scope-chroniony-plik
+    description: >-
+      Agent modyfikuje plik chroniony `policy/gates.yaml` w PR.
+      Polityka repozytorium wymaga przeglądu człowieka (`human_review_required_when`).
+    fixture: scope-chroniony-plik
+    expect:
+      verdict: PASS-WITH-REVIEW
+      blocking_rules: [paths_match]
+
+  - name: scope-dozwolony-katalog
+    description: >-
+      Standardowa zmiana w dozwolonym katalogu aplikacji. Werdykt czysty.
+    fixture: scope-dozwolony-katalog
+    expect:
+      verdict: PASS
+
+  - name: provenance-od-agenta-z-trailerem
+    description: >-
+      Commit wygenerowany przez agenta ze wszystkimi wymaganymi znacznikami
+      w trailerze commita (`Generated-By`, `Session-Id`).
+    fixture: provenance-od-agenta-z-trailerem
+    expect:
+      verdict: PASS
+
+  - name: provenance-od-czlowieka
+    description: >-
+      Commit od człowieka bez znaczników agenta (Reviewed-by).
+    fixture: provenance-od-czlowieka
+    expect:
+      verdict: PASS
+
+  - name: provenance-nieznany-autor
+    description: >-
+      Commit bez informacji o pochodzeniu.
+    fixture: provenance-nieznany-autor
+    expect:
+      verdict: PASS
+
+  # --------------------------------------------------------------------------
+  # G1.deps — weryfikacja zależności (PyPI, npm, NuGet)
+  # --------------------------------------------------------------------------
   - name: halucynowany-pakiet
     description: >-
-      Agent dodaje zależność, której nie ma w PyPI — najkosztowniejsza klasa
-      defektu z PLAN.md §1 repo głównego. Musi blokować. Testuje wyłącznie
-      G1.deps (PyPIEcosystem), nie żaden language-pack.
+      Agent dodaje zależność, której nie ma w PyPI. Musi blokować (G1.deps).
     fixture: halucynowany-pakiet
     expect:
       verdict: BLOCK
@@ -23,45 +61,342 @@ cases:
 
   - name: halucynowany-pakiet-npm
     description: >-
-      Ten sam defekt co `halucynowany-pakiet`, ale w ekosystemie npm — dowód,
-      że dep-guard nie jest zawężony do PyPI. Musi blokować. Testuje
-      wyłącznie G1.deps (NpmEcosystem), nie llm-code-gatekeeper-ts.
+      Agent dodaje nieistniejący pakiet npm. Musi blokować (G1.deps).
     fixture: halucynowany-pakiet-npm
     expect:
       verdict: BLOCK
       blocking_rules: [deps.unknown_package]
 
-  - name: czysty-pr
+  - name: halucynowany-pakiet-nuget
     description: >-
-      Mały, poprawny PR bez żadnych defektów. Zero fałszywych alarmów —
-      to jest test na to, czy brama w ogóle nadaje się do codziennej pracy.
-      Wymaga gitleaksa: bez niego G3.secrets zgłasza `error` (brak narzędzia
-      to brak dowodu, nie zielona brama) i werdykt uczciwie spada do
-      PASS-WITH-REVIEW — to nie jest fałszywy alarm tego przypadku, tylko
-      niekompletne środowisko, w którym go uruchomiono.
-    fixture: czysty-pr
-    requires_tools: [gitleaks]
+      Agent dodaje nieistniejący pakiet NuGet w projekcie C#. Musi blokować (G1.deps).
+    fixture: halucynowany-pakiet-nuget
+    expect:
+      verdict: BLOCK
+      blocking_rules: [deps.unknown_package]
+
+  - name: typosquat-pypi
+    description: >-
+      Zależność w PyPI o nazwie łudząco podobnej do popularnego pakietu (`requsts` vs `requests`).
+    fixture: typosquat-pypi
+    expect:
+      verdict: BLOCK
+      blocking_rules: [deps.typosquat_suspect]
+
+  - name: typosquat-npm
+    description: >-
+      Zależność w npm podszywająca się pod popularny pakiet (`lodashe` vs `lodash`).
+    fixture: typosquat-npm
+    expect:
+      verdict: BLOCK
+      blocking_rules: [deps.typosquat_suspect]
+
+  - name: typosquat-nuget
+    description: >-
+      Zależność w NuGet podszywająca się pod pakiet (`Newtonsoft.Jsn` vs `Newtonsoft.Json`).
+    fixture: typosquat-nuget
+    expect:
+      verdict: BLOCK
+      blocking_rules: [deps.typosquat_suspect]
+
+  - name: deps-czyste-pypi
+    description: >-
+      Aktualizacja wersji legalnego i powszechnie znanego pakietu z PyPI (`requests`).
+    fixture: deps-czyste-pypi
     expect:
       verdict: PASS
 
+  - name: deps-czyste-npm
+    description: >-
+      Aktualizacja wersji legalnego pakietu z npm (`lodash`).
+    fixture: deps-czyste-npm
+    expect:
+      verdict: PASS
+
+  - name: deps-czyste-nuget
+    description: >-
+      Aktualizacja wersji legalnego pakietu z NuGet (`Newtonsoft.Json`).
+    fixture: deps-czyste-nuget
+    expect:
+      verdict: PASS
+
+  - name: deps-puste-pyproject
+    description: >-
+      Zmiana komentarza w manifeście bez dodawania nowych zależności.
+    fixture: deps-puste-pyproject
+    expect:
+      verdict: PASS
+
+  - name: deps-pominiety-lockfile
+    description: >-
+      Zmiana w pliku lockfile (generowanym), pomijana przy liczeniu nowych pakietów.
+    fixture: deps-pominiety-lockfile
+    expect:
+      verdict: PASS
+
+  # --------------------------------------------------------------------------
+  # G1.diff — progi wielkości zmiany
+  # --------------------------------------------------------------------------
   - name: diff-zbyt-duzy
     description: >-
-      500-liniowy plik w jednym PR-ze — najskuteczniejsza pojedyncza reguła
-      w systemie (TOOLS.md §2.2). Musi blokować niezależnie od treści zmiany.
+      Diff przekracza dopuszczalny próg efektywnych linii kodu (>400 linii).
     fixture: diff-zbyt-duzy
     expect:
       verdict: BLOCK
       blocking_rules: [diff.effective_lines]
 
+  - name: diff-zbyt-wiele-plikow
+    description: >-
+      Zmiana dotyka zbyt wielu plików w jednym PR (>15 plików).
+    fixture: diff-zbyt-wiele-plikow
+    expect:
+      verdict: BLOCK
+      blocking_rules: [diff.effective_files]
+
+  - name: diff-linie-na-granicy
+    description: >-
+      Diff z 390 efektywnymi liniami kodu (poniżej progu 400).
+    fixture: diff-linie-na-granicy
+    expect:
+      verdict: PASS
+
+  - name: diff-pliki-na-granicy
+    description: >-
+      Diff z 14 efektywnymi plikami (poniżej progu 15).
+    fixture: diff-pliki-na-granicy
+    expect:
+      verdict: PASS
+
+  - name: diff-w-normie-refaktor
+    description: >-
+      Refaktoryzacja w granicach limitów diffa.
+    fixture: diff-w-normie-refaktor
+    expect:
+      verdict: PASS
+
+  - name: diff-w-normie-nowy-modul
+    description: >-
+      Dodanie nowego zwięzłego modułu pomocniczego.
+    fixture: diff-w-normie-nowy-modul
+    expect:
+      verdict: PASS
+
+  - name: diff-w-normie-bugfix
+    description: >-
+      Niewielka poprawka błędu (3 linie).
+    fixture: diff-w-normie-bugfix
+    expect:
+      verdict: PASS
+
+  - name: diff-pusty
+    description: >-
+      Pusty PR bez zmian w kodzie.
+    fixture: diff-pusty
+    expect:
+      verdict: PASS
+
+  # --------------------------------------------------------------------------
+  # G3.secrets — detekcja sekretów w diffie (gitleaks)
+  # --------------------------------------------------------------------------
   - name: sekret-w-diffie
     description: >-
-      Agent zostawia klucz AWS w diffie (syntetyczny klucz w poprawnym
-      formacie, nie prawdziwy sekret — kanoniczny przykład z dokumentacji
-      AWS, `AKIAIOSFODNN7EXAMPLE`, jest celowo na globalnej allowliście
-      gitleaksa i nie nadaje się do tego fixture'u). G3.secrets nie jest
-      w `warn_only`, więc musi blokować naprawdę, nie tylko ostrzegać.
+      Wyciek klucza dostępowego AWS w diffie.
     fixture: sekret-w-diffie
     requires_tools: [gitleaks]
     expect:
       verdict: BLOCK
       blocking_rules: [secrets.found_in_diff]
+
+  - name: sekret-github-pat
+    description: >-
+      Wyciek osobistego tokenu dostępu GitHub (PAT) w kodzie.
+    fixture: sekret-github-pat
+    requires_tools: [gitleaks]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [secrets.found_in_diff]
+
+  - name: sekret-aws-ses
+    description: >-
+      Wyciek klucza dostępowego AWS dla modułu poczty w diffie.
+    fixture: sekret-aws-ses
+    requires_tools: [gitleaks]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [secrets.found_in_diff]
+
+  - name: sekret-rsa-private-key
+    description: >-
+      Wklejenie niezaszyfrowanego prywatnego klucza RSA w kodzie.
+    fixture: sekret-rsa-private-key
+    requires_tools: [gitleaks]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [secrets.found_in_diff]
+
+  - name: sekret-aws-s3
+    description: >-
+      Wyciek klucza dostępowego AWS dla modułu storage w kodzie.
+    fixture: sekret-aws-s3
+    requires_tools: [gitleaks]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [secrets.found_in_diff]
+
+  - name: sekret-bezpieczny-mock
+    description: >-
+      Bezpieczne mocki w testach (UUID, hash sha256). Brak fałszywego alarmu.
+    fixture: sekret-bezpieczny-mock
+    requires_tools: [gitleaks]
+    expect:
+      verdict: PASS
+
+  - name: sekret-zastany-poza-diffem
+    description: >-
+      Klucz zastany w historii pliku nieedytowanego w danym PR.
+    fixture: sekret-zastany-poza-diffem
+    requires_tools: [gitleaks]
+    expect:
+      verdict: PASS
+
+  - name: sekret-komentarz-z-uuid
+    description: >-
+      Komentarz z identyfikatorem sesji UUID.
+    fixture: sekret-komentarz-z-uuid
+    requires_tools: [gitleaks]
+    expect:
+      verdict: PASS
+
+  # --------------------------------------------------------------------------
+  # Wielojęzyczne czyste PR-y (Clean PRs — brak fałszywych alarmów)
+  # --------------------------------------------------------------------------
+  - name: czysty-pr
+    description: >-
+      Mały, poprawny PR w Pythonie bez żadnych defektów.
+    fixture: czysty-pr
+    requires_tools: [gitleaks]
+    expect:
+      verdict: PASS
+
+  - name: czysty-pr-ts
+    description: >-
+      Poprawny PR w języku TypeScript.
+    fixture: czysty-pr-ts
+    requires_tools: [gitleaks]
+    expect:
+      verdict: PASS
+
+  - name: czysty-pr-csharp
+    description: >-
+      Poprawny PR w języku C#.
+    fixture: czysty-pr-csharp
+    requires_tools: [gitleaks]
+    expect:
+      verdict: PASS
+
+  # --------------------------------------------------------------------------
+  # Złożoność cyklomatyczna i bramki językowe (wymagają pluginów / narzędzi packów)
+  # --------------------------------------------------------------------------
+  - name: zlozonosc-powyzej-progu
+    description: >-
+      Nowa funkcja w Pythonie z 10 zagnieżdżonymi if (M=11 > 10).
+    fixture: zlozonosc-powyzej-progu
+    requires_plugins: [gatekeeper.complexity_analyzers]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [complexity.max]
+
+  - name: zlozonosc-powyzej-progu-ts
+    description: >-
+      Nowa funkcja w TypeScript z M=11 > 10 (wymaga eslint).
+    fixture: zlozonosc-powyzej-progu-ts
+    requires_plugins: [gatekeeper.complexity_analyzers]
+    requires_tools: [eslint]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [complexity.max]
+
+  - name: zlozonosc-powyzej-progu-csharp
+    description: >-
+      Nowa metoda w C# z M=11 > 10 (wymaga gatekeeper-cs-helper).
+    fixture: zlozonosc-powyzej-progu-csharp
+    requires_plugins: [gatekeeper.complexity_analyzers]
+    requires_tools: [gatekeeper-cs-helper]
+    expect:
+      verdict: BLOCK
+      blocking_rules: [complexity.max]
+
+  - name: zlozonosc-straznik
+    description: >-
+      Refaktoryzacja złożoności na klauzule strażnicze (M <= 10).
+    fixture: zlozonosc-straznik
+    requires_plugins: [gatekeeper.complexity_analyzers]
+    requires_tools: [gitleaks]
+    expect:
+      verdict: PASS
+
+  - name: zlozonosc-poza-diffem
+    description: >-
+      Istniejący stary dług techniczny w pliku poza zmienionymi liniami diffa.
+    fixture: zlozonosc-poza-diffem
+    requires_plugins: [gatekeeper.complexity_analyzers]
+    expect:
+      verdict: PASS
+
+  - name: eval-na-wejsciu
+    description: >-
+      Użycie eval na danych wejściowych (G3.sast). W trybie warn_only emituje ostrzeżenie.
+    fixture: eval-na-wejsciu
+    requires_plugins: [gatekeeper.semgrep_rule_packs]
+    requires_tools: [semgrep, gitleaks]
+    expect:
+      verdict: PASS
+      warning_rules: [sast.critical_count]
+
+  - name: test-bez-dowodu
+    description: >-
+      Nowy test asertuje zachowanie niezmienione (G2.cross_verify). W warn_only emituje ostrzeżenie.
+    fixture: test-bez-dowodu
+    requires_plugins: [gatekeeper.test_toolchains]
+    expect:
+      verdict: PASS
+      warning_rules: [tests.pass_on_pre_change_code]
+
+  - name: test-bez-asercji
+    description: >-
+      Nowy test z assert True (G2.test_sanity). W warn_only emituje ostrzeżenie.
+    fixture: test-bez-asercji
+    requires_plugins: [gatekeeper.test_toolchains]
+    expect:
+      verdict: PASS
+      warning_rules: [sanity.blocking_count]
+
+  - name: rozgalezienie-bez-testu
+    description: >-
+      Nowa funkcja z niepokrytą gałęzią (G2.diff_coverage). W warn_only emituje ostrzeżenie.
+    fixture: rozgalezienie-bez-testu
+    requires_plugins: [gatekeeper.test_toolchains]
+    requires_tools: [diff-cover]
+    expect:
+      verdict: PASS
+      warning_rules: [coverage.diff_ratio]
+
+  - name: test-bez-dowodu-ts
+    description: >-
+      Test TS asertujący zachowanie sprzed zmiany (G2.cross_verify).
+    fixture: test-bez-dowodu-ts
+    requires_plugins: [gatekeeper.test_toolchains]
+    requires_tools: [vitest, node]
+    expect:
+      verdict: PASS
+      warning_rules: [tests.pass_on_pre_change_code]
+
+  - name: test-bez-dowodu-csharp
+    description: >-
+      Test C# asertujący zachowanie sprzed zmiany (G2.cross_verify).
+    fixture: test-bez-dowodu-csharp
+    requires_plugins: [gatekeeper.test_toolchains]
+    requires_tools: [dotnet, gatekeeper-cs-helper]
+    expect:
+      verdict: PASS
+      warning_rules: [tests.pass_on_pre_change_code]

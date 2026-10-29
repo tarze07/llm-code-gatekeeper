@@ -1,0 +1,2 @@
+def work() -> None:
+    pass

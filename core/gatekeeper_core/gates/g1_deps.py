@@ -285,9 +285,10 @@ class DepGuard(Gate):
         if registry is None:
             return []
         info = registry.fetch(dep.name)
+        neighbours = typosquat.nearest_popular(dep.ecosystem, dep.name)
         if not info.exists:
             facts["deps.unknown_package"] = True
-            return [
+            findings = [
                 Finding(
                     gate=self.id,
                     rule_id="deps.unknown_package",
@@ -303,9 +304,31 @@ class DepGuard(Gate):
                     evidence={"snippet": dep.raw, "ecosystem": dep.ecosystem},
                 )
             ]
+            if neighbours:
+                similar = ", ".join(f"`{n.candidate}`" for n in neighbours)
+                facts["deps.typosquat_suspect"] = True
+                findings.append(
+                    Finding(
+                        gate=self.id,
+                        rule_id="deps.typosquat_suspect",
+                        severity=Severity.CRITICAL,
+                        title=f"Nazwa `{dep.name}` myląco podobna do: {similar}",
+                        failure_scenario=(
+                            f"Jeżeli `{dep.name}` jest podszyciem pod {similar}, jego kod "
+                            f"wykona się przy instalacji i w każdym imporcie — z dostępem do "
+                            f"zmiennych środowiskowych procesu budowania, czyli do sekretów CI."
+                        ),
+                        file=dep.manifest,
+                        evidence={
+                            "snippet": dep.raw,
+                            "ecosystem": dep.ecosystem,
+                            "similar_to": [n.candidate for n in neighbours],
+                        },
+                    )
+                )
+            return findings
 
-        findings: list[Finding] = []
-        neighbours = typosquat.nearest_popular(dep.ecosystem, dep.name)
+        findings = []
         age = info.age_days
         young = age is not None and age < self.min_age_days
 

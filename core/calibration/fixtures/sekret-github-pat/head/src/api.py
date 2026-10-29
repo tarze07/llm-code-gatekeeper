@@ -1,0 +1,2 @@
+GITHUB_PAT = "ghp_A1B2C3D4E5F6G7H8I9J0k1l2m3n4o5p6q7r8"
+def connect(): return GITHUB_PAT
