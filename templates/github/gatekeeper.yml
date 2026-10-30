@@ -21,6 +21,13 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # OPCJA KONTENEROWA:
+    # Odkomentuj poniższy blok container, aby uruchamiać analizy w gotowym,
+    # w pełni wyizolowanym obrazie narzędzi bramy (container/Dockerfile):
+    # container:
+    #   image: ghcr.io/tarze07/gatekeeper-tools:0.2.0
+    #   env:
+    #     GATEKEEPER_SANDBOX: container
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,42 +38,46 @@ jobs:
           python-version: "3.12"
 
       # Odkomentuj i dostosuj, jeśli oceniane repo zawiera TS/JS albo C# —
-      # G1.static/G3.sca wtedy realnie coś sprawdzą zamiast dawać `pass` bez
-      # dowodu (brak `tsconfig.json`/configu eslinta/`.csproj` to co innego
-      # niż brak samego narzędzia, ale bez node/dotnet w PATH brama i tak nie
-      # ma czym uruchomić tsc/eslint/`dotnet build`).
+      # wersje narzędzi są przypięte zgodnie z container/Dockerfile:
       # - uses: actions/setup-node@v4
       #   with: { node-version: "22" }
-      # - run: npm ci   # albo: npm install --global typescript eslint
+      # - run: |
+      #     npm install --global \
+      #       @typescript-eslint/parser@8.69.0 \
+      #       eslint@10.8.1 \
+      #       typescript@7.0.2 \
+      #       vitest@5.0.0
       # - uses: actions/setup-dotnet@v4
       #   with: { dotnet-version: "8.0.x" }
       # - run: dotnet restore   # bramka sama nie ściąga pakietów NuGet
-      #
-      # Dołóż odpowiedni pack, jeśli oceniane repo zawiera TS/JS albo C# —
-      # sam ten workflow instaluje tylko llm-code-gatekeeper-python:
-      # - run: pip install --quiet "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=ts"
-      # - run: pip install --quiet "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=csharp"
 
-      - name: Izolacja procesów
+      - name: Izolacja procesów (bubblewrap)
         run: sudo apt-get update && sudo apt-get install -y bubblewrap
 
-      - name: Instalacja bramy
-        # CLI (`gatekeeper`) żyje w llm-code-gatekeeper-core, instalowany tu
-        # tranzytywnie jako zależność tego pack'a — nie ma osobnej linii.
-        # `gates` — ruff/mypy/diff-cover, których G1.static/G2.diff_coverage
-        # potrzebują jako podprocesów; semgrep/pip-audit/gitleaks instalowane
-        # osobno niżej (core-owe, nie zależności tego pack'a).
+      - name: Instalacja bramy i narzędzi
+        # Wersje narzędzi przypięte zgodnie z container/Dockerfile
         run: |
-          pip install --quiet semgrep pip-audit
-          pip install --quiet -e ".[dev,gates]"
+          pip install --quiet \
+            "semgrep==1.176.0" \
+            "pip-audit>=2.7,<3" \
+            "ruff==0.16.5" \
+            "mypy==2.3.1" \
+            "diff-cover==10.5.1"
+          pip install --quiet "llm-code-gatekeeper-core>=0.2.0,<0.3.0"
+          # Zainstaluj pack(i) dla języków obecnych w repo:
+          pip install --quiet "llm-code-gatekeeper-python>=0.2.0,<0.3.0"
+          # pip install --quiet "llm-code-gatekeeper-ts>=0.2.0,<0.3.0"
+          # pip install --quiet "llm-code-gatekeeper-csharp>=0.2.0,<0.3.0"
 
       - name: Instalacja gitleaksa
         env:
           GITLEAKS_VERSION: "8.21.2"
+          GITLEAKS_SHA256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
         run: |
           set -euo pipefail
           curl -sSL -o /tmp/gitleaks.tar.gz \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
           gitleaks version
 
@@ -101,11 +112,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        # skrypt jest core-owy (llm-code-gatekeeper-core/scripts/), nie tego
-        # pack'a — pobierany, nie kopiowany, żeby nie rozjeżdżał się z core.
         run: |
           curl -sSL -o post_pr_comment.sh \
-            https://raw.githubusercontent.com/tarze07/llm-code-gatekeeper-core/main/scripts/post_pr_comment.sh
+            https://raw.githubusercontent.com/tarze07/llm-code-gatekeeper/main/core/scripts/post_pr_comment.sh
           chmod +x post_pr_comment.sh
           ./post_pr_comment.sh gatekeeper-report.md
 

@@ -380,7 +380,7 @@ Bramka wchodzi domyślnie w trybie `warn_only`: przez pierwszy tydzień ostrzega
 Skopiuj do swojego repozytorium dwa pliki:
 
 ```bash
-cp /ścieżka/do/llm-code-gatekeeper/python/.github/workflows/gatekeeper.yml ~/moj-projekt/.github/workflows/
+cp /ścieżka/do/llm-code-gatekeeper/templates/github/gatekeeper.yml ~/moj-projekt/.github/workflows/
 cp /ścieżka/do/llm-code-gatekeeper/scripts/post_pr_comment.sh      ~/moj-projekt/scripts/
 chmod +x ~/moj-projekt/scripts/post_pr_comment.sh
 ```
