@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-code-gatekeeper-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Silnik bramy jakości dla kodu generowanego przez agentów LLM: orchestrator, policy, plugin API"
 requires-python = ">=3.12"
 dependencies = [

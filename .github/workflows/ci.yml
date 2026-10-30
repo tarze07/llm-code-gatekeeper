@@ -2,8 +2,8 @@
 #
 # GitHub Actions czyta wylacznie korzeniowy `.github/workflows/` — pliki
 # `ci.yml` lezace wczesniej w kazdym packu byly martwe po scaleniu repo
-# i zostaly zastapione tym plikiem. `python/.github/workflows/gatekeeper.yml`
-# to co innego: szablon integracji dla *ocenianego* repo, nie CI tego repo.
+# i zostaly zastapione tym plikiem. Szablon integracji dla *ocenianego* repo
+# znajduje sie w `templates/github/gatekeeper.yml`.
 #
 # Roznica wobec wersji sprzed scalenia: core instalowany z checkoutu
 # (`pip install -e ./core`), nie z `git+https://...#subdirectory=core`.

@@ -68,21 +68,24 @@ w powłoce.
 
 ## Używanie bramy na cudzym repo (typowy przypadek)
 
-Nie trzeba klonować niczego z tego katalogu — instaluje się z GitHuba w **ocenianym** repozytorium (żaden z pakietów nie jest jeszcze na PyPI):
+Nie trzeba klonować niczego z tego katalogu — instaluje się pakiety wydane na PyPI (lub lokalnie w trybie edytowalnym) w **ocenianym** repozytorium:
 
 ```bash
-pip install "llm-code-gatekeeper-core @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=core"
+pip install llm-code-gatekeeper-core
 
 # dołóż pack(i) dla języków, które faktycznie występują w ocenianym repo:
-pip install "llm-code-gatekeeper-python @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=python"
-pip install "llm-code-gatekeeper-ts @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=ts"
-pip install "llm-code-gatekeeper-csharp @ git+https://github.com/tarze07/llm-code-gatekeeper.git#subdirectory=csharp"
+pip install llm-code-gatekeeper-python
+pip install llm-code-gatekeeper-ts
+pip install llm-code-gatekeeper-csharp
+
+# alternatywnie praca bezpośrednio z repozytorium (tryb edytowalny):
+# pip install -e ./core -e ./python
 
 gatekeeper policy lint --policy policy/gates.yaml
 gatekeeper run --repo /ścieżka/do/ocenianego/repo --base origin/main
 ```
 
-`policy/gates.yaml` (i `scope_map.yaml`/`exceptions.yaml`) trzeba mieć w ocenianym repo — kopia startowa jest w [`core/policy/`](core/policy/), w dwóch profilach: `gates.yaml` (**adopcja** — `G1.static`, `G2.*`, `G3.sast`, `G3.sca` tylko ostrzegają; naprawdę blokuje wtedy sekret, nieistniejący pakiet, typosquat, za duży diff i złożoność) oraz `gates.enforcing.yaml` (**produkcja** — pusty `warn_only`, blokuje wszystko; do tego `G1.static.require_*` zamienia brak tsc/eslinta/mypy/`dotnet build` albo ich configu — tsconfig, config eslinta, `.csproj` — przy plikach danego języka w diffie w `error`, zamiast cichego `pass`; repo bez plików danego języka nie potrzebuje jego configu). Profil adopcji to tydzień obserwacji; **zanim Check Run stanie się required, skopiuj `gates.enforcing.yaml` jako `policy/gates.yaml`**. Kopie w pack'ach i w panelu muszą zgadzać się z `core/policy/` — pilnuje tego `core/tests/test_policy_templates.py`. Gotowy szablon integracji z GitHub Actions: [`python/.github/workflows/gatekeeper.yml`](python/.github/workflows/gatekeeper.yml) (mimo nazwy katalogu — to uniwersalny workflow, nie coś specyficznego dla Pythona; zależności doinstalowuje pod oceniane repo).
+`policy/gates.yaml` (i `scope_map.yaml`/`exceptions.yaml`) trzeba mieć w ocenianym repo — kopia startowa jest w [`core/policy/`](core/policy/), w dwóch profilach: `gates.yaml` (**adopcja** — `G1.static`, `G2.*`, `G3.sast`, `G3.sca` tylko ostrzegają; naprawdę blokuje wtedy sekret, nieistniejący pakiet, typosquat, za duży diff i złożoność) oraz `gates.enforcing.yaml` (**produkcja** — pusty `warn_only`, blokuje wszystko; do tego `G1.static.require_*` zamienia brak tsc/eslinta/mypy/`dotnet build` albo ich configu — tsconfig, config eslinta, `.csproj` — przy plikach danego języka w diffie w `error`, zamiast cichego `pass`; repo bez plików danego języka nie potrzebuje jego configu). Profil adopcji to tydzień obserwacji; **zanim Check Run stanie się required, skopiuj `gates.enforcing.yaml` jako `policy/gates.yaml`**. Kopie w pack'ach i w panelu muszą zgadzać się z `core/policy/` — pilnuje tego `core/tests/test_policy_templates.py`. Gotowy szablon integracji z GitHub Actions: [`templates/github/gatekeeper.yml`](templates/github/gatekeeper.yml) (uniwersalny workflow, nie coś specyficznego dla Pythona; zależności doinstalowuje pod oceniane repo).
 
 Pełna instrukcja krok po kroku: [`python/USAGE.md`](python/USAGE.md).
 
@@ -133,7 +136,7 @@ ustawieniem systemu, bez JavaScriptu). Czego **nie** ma, mówi wprost
 
 Przegląd stanu i znalezisk: [`REVIEW.md`](REVIEW.md). Zapis podziału na packi: [`PODSUMOWANIE.md`](PODSUMOWANIE.md).
 
-CI: `.github/workflows/ci.yml` w korzeniu — cztery joby (`core`, `python`, `ts`, `csharp`), każdy z `working-directory` na swoim katalogu, z core'em instalowanym z checkoutu (`pip install -e ../core`), nie z GitHuba. Dzięki temu PR ruszający core i pack naraz jest testowany razem. Cztery pliki `ci.yml` leżące wcześniej per pack są w monorepo martwe (GitHub Actions czyta wyłącznie korzeń) — zastąpione tym jednym; `python/.github/workflows/gatekeeper.yml` **zostaje**, bo to szablon integracji dla *ocenianego* repo, nie CI tego repo.
+CI: `.github/workflows/ci.yml` w korzeniu — cztery joby (`core`, `python`, `ts`, `csharp`), każdy z `working-directory` na swoim katalogu, z core'em instalowanym z checkoutu (`pip install -e ../core`), nie z GitHuba. Dzięki temu PR ruszający core i pack naraz jest testowany razem. Cztery pliki `ci.yml` leżące wcześniej per pack są w monorepo martwe (GitHub Actions czyta wyłącznie korzeń) — zastąpione tym jednym; uniwersalny szablon integracji dla *ocenianego* repo znajduje się w [`templates/github/gatekeeper.yml`](templates/github/gatekeeper.yml).
 
 Uwaga o pushu: GitHub odrzuca **każdy** push tykający `.github/workflows/`,
 gdy token nie ma zakresu `workflow` (`remote rejected … without workflow
