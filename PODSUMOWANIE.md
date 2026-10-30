@@ -50,4 +50,4 @@ Native helpery `G2.cross_verify`/`test_sanity`/`diff_coverage` dla TS (TypeScrip
 
 ## Otwarty dług
 
-Po scaleniu repo (nota na górze) cztery workflow'y `ci.yml` per pack zostały zastąpione jednym korzeniowym `.github/workflows/ci.yml` z czterema jobami. Dług został ten sam: token `gh` używany w tych sesjach nie ma scope `workflow`, którego GitHub wymaga do push'a zmieniającego cokolwiek pod korzeniowym `.github/workflows/`, więc commit z tym plikiem czeka lokalnie. Odblokowanie: `gh auth refresh -h github.com -s workflow` (logowanie przez przeglądarkę), potem `git push`.
+Po scaleniu repo (nota na górze) cztery workflow'y `ci.yml` per pack zostały zastąpione jednym korzeniowym `.github/workflows/ci.yml`. Workflow został pomyślnie wypchnięty do zdalnego repozytorium przez SSH. Obecnym ograniczeniem dla automatycznych przebiegów GitHub Actions w chmurze pozostaje stan billingu/limitów konta na GitHubie, a nie brak uprawnień czy konfiguracji w kodzie. Szablon integracji dla ocenianych repozytoriów został ujednolicony w `templates/github/gatekeeper.yml`.

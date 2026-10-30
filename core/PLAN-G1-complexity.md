@@ -1,6 +1,6 @@
 # Plan: G1.complexity — bramka złożoności cyklomatycznej
 
-Dokument towarzyszący [`PLAN.md`](PLAN.md) i [`uncle-bob-gauntlet.md`](../uncle-bob-gauntlet.md). README mówi, co silnik dziś dostarcza (G0–G3). Ten dokument mówi, jak dodać jeden nowy gate ID: twardy limit kształtu funkcji w diffie, bez czytania implementacji.
+Dokument towarzyszący [`PLAN.md`](PLAN.md) i [`uncle-bob-gauntlet.md`](../docs/archive/uncle-bob-gauntlet.md). README mówi, co silnik dziś dostarcza (G0–G3). Ten dokument mówi, jak dodać jeden nowy gate ID: twardy limit kształtu funkcji w diffie, bez czytania implementacji.
 
 Nie jest to CRAP ani mutacja. CRAP wymaga pokrycia (`G2.diff_coverage`) i zostaje osobnym kamieniem (§8). Mutacja jest już w `PLAN.md` §G2.
 

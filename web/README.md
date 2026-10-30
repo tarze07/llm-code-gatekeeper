@@ -4,7 +4,7 @@ Panel WWW do przeglądania raportów bramy jakości. Pakiet **opcjonalny**:
 `core` i CLI `gatekeeper` działają bez niego, a on zależy od `core` tylko
 w jedną stronę.
 
-Zakres tego wydania to etapy 0–6 z [`PLAN-WEB-UI.md`](../PLAN-WEB-UI.md):
+Zakres tego wydania to etapy 0–6 z [`PLAN-WEB-UI.md`](../docs/PLAN-WEB-UI.md):
 przeglądarka raportów, rejestr projektów, **uruchamianie kontroli z kolejką
 i osobnym nadzorcą**, postęp i anulowanie, oceny znalezisk, metryki,
 zarządzanie profilami polityki i kopia bazy. Panel startuje bez logowania;

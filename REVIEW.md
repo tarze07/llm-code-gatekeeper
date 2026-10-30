@@ -13,12 +13,12 @@ Werdykt: **wartościowy, dobrze przemyślany fundament (G0–G3), nie gotowy pro
 > | P0 CODEOWNERS to atrapa | **zamknięte** — plik usunięty z repo bramy; wróci z osobnym kontem agentów (README) | `d3034c2` |
 > | P1 `allow_packages` tylko PyPI | **zamknięte** — normalizacja per ekosystem, forma `npm:`/`nuget:`/`pypi:`, literówka prefiksu łapana w `policy lint` | `a5c4ab2`, `a11756f` |
 > | P1 G2 tylko dla Pythona | **zamknięte** — `G2.*` dla TS/JS i C# | `351e4f3` i wcześniej |
-> | P1 sandbox bez kontenera, Linux-only | **otwarte** — `ContainerSandbox` odłożony | — |
+> | P1 sandbox bez kontenera, Linux-only | **zamknięte** — dodano backend kontenerowy `ContainerSandbox` (Docker/Podman) oraz obsługę Windows Job Objects w PR #3 | PR #3 (`feat/windows`) |
 > | P1 eslint/tsc fail-open | **zamknięte** — nieczytelny wynik narzędzia to `error`; brak configu przy `require_*` to `error` | `8f150df`, `3b8db25` |
 > | P1 `G1.static` przerywa na pierwszym błędzie | **zamknięte** | `8b4dbdd` |
 > | P2 podwójna rejestracja bramek | **zamknięte** — kolizja id to błąd | `520074b` |
 > | P2 dryf polityki | **zamknięte** — test `core/tests/test_policy_templates.py` | `03484f4` |
-> | P2 wersje pakietów | **częściowo** — `core>=0.1.0,<0.2` w packach i panelu; numery wersji nie wyrównane, brak PyPI | `cb69ee3` |
+> | P2 wersje pakietów | **zamknięte** — ujednolicone wydanie 0.2.0 we wszystkich pakietach, `core>=0.2.0,<0.3.0` w zależnościach, CHANGELOG i Trusted Publishing na PyPI | PR #21 |
 > | P2 budżet nie zabija wątku | **zamknięte** — bramki to procesy; po budżecie/anulowaniu giną wszyscy potomkowie przed usunięciem kopii (ograniczenia: `core/SECURITY.md`) | `989d8be` |
 > | P2 homoglify typosquatu | **zamknięte** — cyrylica, greka, IPA, NFKC | `1a70258` |
 > | P2 e2e importuje `core.sequence` | **zamknięte** — moduł usunięty | `4b7b303` |
