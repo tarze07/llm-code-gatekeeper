@@ -1,6 +1,6 @@
 # Kontrakt panelu (etap 0)
 
-Ten plik zamyka etap 0 z [`PLAN-WEB-UI.md`](../PLAN-WEB-UI.md) §9: ustala commit
+Ten plik zamyka etap 0 z [`PLAN-WEB-UI.md`](../docs/PLAN-WEB-UI.md) §9: ustala commit
 bazowy, format raportu, rozdzielenie zadania od decyzji i układ katalogu stanu.
 Etapy 2–6 mają się o niego opierać zamiast ustalać te rzeczy po raz drugi.
 

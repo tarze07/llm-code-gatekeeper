@@ -117,22 +117,13 @@ python -c "from importlib.metadata import entry_points as ep; print(sorted(e.nam
 
 ## Stan projektu
 
-Faza 1 (silnik pluginowy + rozdzielenie na core i trzy packi) jest **ukończona**. Kod żył przez chwilę w czterech osobnych repozytoriach; zostały scalone z powrotem w to jedno, z zachowaniem pełnej historii każdego pliku (`git log -- core/` pokazuje 24 commity core'a, nie jeden merge). Granica architektoniczna między core a packami jest w entry pointach, nie w liczbie repozytoriów.
+Wydanie **0.2.0** unifikuje cały ekosystem monorepo (szczegółowy opis zmian w [`CHANGELOG.md`](CHANGELOG.md)).
 
-Od Fazy 1 doszły: nowa bramka **`G1.complexity`** (złożoność cyklomatyczna, McCabe) z odpowiednikiem we wszystkich trzech pack'ach ([`core/PLAN-G1-complexity.md`](core/PLAN-G1-complexity.md)) oraz rodzina **`G2.cross_verify`/`test_sanity`/`diff_coverage`** dla C# (helper Roslyn, [`csharp/PLAN-G2.md`](csharp/PLAN-G2.md)) i dla TS/JS (helper ESTree + vitest/jest, [`ts/PLAN-G2.md`](ts/PLAN-G2.md)).
-
-Od 2026-09-04 **wszystkie trzy języki mają komplet G0–G3** — nie ma już języka, dla którego G2.* dawałoby `skipped` z braku toolchaina. Zakres per język jest jednak różny: Python i C# filtrują pojedyncze testy, TS/JS uruchamia całe pliki testowe (uzasadnienie: `ts/PLAN-G2.md` §3.1), a lista obsługiwanych runnerów to pytest / xUnit / vitest+jest — repo na mocha, NUnit czy MSTest dostanie `error`, nie cichy `pass`.
-
-Panel WWW (`web/`) domyka drogę od świeżej instalacji do pierwszej kontroli:
-profil polityki startowej powstaje jednym kliknięciem (panel wozi własną kopię
-`core/policy/` w danych pakietu, żeby profil raz aktywowany oceniał tym samym,
-czym oceniał wczoraj), projekt zakłada się razem ze ścieżką repozytorium
-i profilem, a wersję bazową i ocenianą wybiera się z list wypełnionych
-zawartością ocenianego repo — gałęzie lokalne i zdalne, tagi oraz ostatnie
-commity. Podgląd zakresu pokazuje commity liczone od **merge-base**, czyli to
-samo, co oceniany diff. Panel ma skórkę jasną i ciemną (domyślnie za
-ustawieniem systemu, bez JavaScriptu). Czego **nie** ma, mówi wprost
-[`web/CONTRACT.md`](web/CONTRACT.md) §11.
+- **Silnik reguł i bramki jakości (G0–G3)**: 11 kanonicznych bramek w `core/`, podwójny profil polityki (`gates.yaml` adopcja / `gates.enforcing.yaml` produkcja), izolacja procesów (Bubblewrap, kontenery Docker/Podman `gatekeeper-tools`, Windows Job Objects).
+- **Pakiety językowe**: Pełna obsługa Python (`python/`), TypeScript/JavaScript (`ts/`) oraz C# (`csharp/`) z narzędziami statycznymi, regułami SAST i weryfikacją krzyżową G2.* (pytest / vitest+jest / xUnit).
+- **Panel WWW (`web/`)**: Przeglądarka raportów, kolejka zadań, rejestr repozytoriów, panel triage'u werdyktów człowieka i zarządzanie profilami polityki (zgodnie ze specyfikacją [`docs/PLAN-WEB-UI.md`](docs/PLAN-WEB-UI.md)).
+- **Kalibracja empiryczna**: Zestaw 46 pull requestów benchmarkowych z precyzją blokowania 100% i raportem skuteczności per bramka ([`docs/CALIBRATION.md`](docs/CALIBRATION.md)).
+- **Archiwum i prezentacje**: Dokumenty robocze, audyty wdrożeń i prezentacje projektowe zebrane w [`docs/archive/`](docs/archive/) oraz [`docs/presentations/`](docs/presentations/).
 
 Przegląd stanu i znalezisk: [`REVIEW.md`](REVIEW.md). Zapis podziału na packi: [`PODSUMOWANIE.md`](PODSUMOWANIE.md).
 
